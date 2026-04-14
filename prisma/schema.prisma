@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique
+  password      String
+  role          String    @default("viewer")
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Merchant {
+  id              String            @id @default(cuid())
+  merchantId      String            @unique
+  businessName    String
+  contact         String
+  email           String
+  isActive        Boolean           @default(true)
+  createdBy       String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+}
+
+model MerchantPayment {
+  id            String    @id @default(cuid())
+  paymentId     String    @unique
+  merchantId    String
+  merchantName  String
+  vendorId      String
+  amount        Float
+  paymentMethod String
+  reference     String
+  comment       String?
+  recordedBy    String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+model Product {
+  id               String   @id @default(cuid())
+  productId        String   @unique
+  productLabel     String
+  /// Brand name (e.g., "Supreme", "Dettol")
+  brand            String?
+  /// Variant descriptor (e.g., "BLUE-50PCs", "500ml")
+  variant          String?
+  category         String
+  merchantId       String
+  merchantName     String
+  unit             String
+  minStock         Int      @default(10)
+  unitCost         Float
+  unitSellingPrice Float
+  commissionPercent Float
+  currentStock     Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Customer {
+  id              String    @id @default(cuid())
+  customerId      String    @unique
+  name            String
+  contact         String    @unique
+  email           String?
+  address         String?
+  createdBy       String?
+  totalOrders     Int       @default(0)
+  totalOrderValue Float     @default(0)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model InboundRecord {
+  id              String    @id @default(cuid())
+  inboundId       String    @unique
+  /// Vendor/supplier code (e.g., V001)
+  vendorId        String?
+  merchantId      String
+  merchantName    String
+  productName     String
+  productId       String
+  /// Brand name for display
+  brand           String?
+  /// Variant descriptor (color, size, weight)
+  variant         String?
+  qtyIn           Int
+  /// Per-unit cost price
+  unitPrice       Float?
+  /// Total inbound value (qtyIn x unitPrice)
+  inboundValue    Float?
+  expiryDate      DateTime?
+  receivedBy      String
+  /// Who physically placed the item in storage
+  storedBy        String?
+  /// Zone-Level-Pallet format (e.g., B-L3-P3)
+  storageLocation String?
+  status          String    @default("received")
+  userComment     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model OutboundRecord {
+  id                String    @id @default(cuid())
+  outboundId        String    @unique
+  customerName      String
+  customerContact   String
+  customerAddress   String?
+  productName       String
+  productId         String
+  qty               Int
+  assignedDriver    String?
+  vehicleNumber     String?
+  /// Group ID for runsheet — outbound records sharing the same runsheetId belong to one rider trip
+  runsheetId        String?
+  /// Stop sequence within the runsheet (1, 2, 3...)
+  stopSequence      Int?
+  /// Actual quantity delivered (may differ from qty if partial delivery)
+  actualDeliveredQty Int?
+  /// Cash on Delivery amount collected at this stop
+  codCollected      Float?
+  /// Reason if delivery failed, rejected, or partially returned
+  deliveryNotes     String?
+  status            String    @default("pending")
+  dispatchedAt      DateTime?
+  deliveredAt       DateTime?
+  /// Cancellation fields
+  cancellationReason  String?
+  cancelledAt         DateTime?
+  cancelledBy         String?
+  /// Delivery attempt tracking (max retries before permanent failure)
+  deliveryAttempts    Int       @default(0)
+  maxAttempts         Int       @default(5)
+  /// Reschedule fields
+  nextAttemptDate     DateTime?
+  lastAttemptReason   String?
+  lastAttemptDate     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model ReconciliationRecord {
+  id              String    @id @default(cuid())
+  type            String
+  referenceId     String?
+  expectedQty     Float
+  actualQty       Float
+  variance        Float
+  varianceReason  String?
+  reconciledBy    String
+  date            DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+}
+
+model RTVRecord {
+  id              String    @id @default(cuid())
+  rtvId           String    @unique
+  merchantId      String
+  merchantName    String
+  productId       String
+  productName     String
+  qty             Int
+  reason          String
+  status          String    @default("pending")
+  processedBy     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ShrinkageRecord {
+  id              String    @id @default(cuid())
+  shrinkageId     String    @unique
+  productId       String
+  productName     String
+  qty             Int
+  reason          String
+  reportedBy      String
+  status          String    @default("pending")
+  createdAt       DateTime  @default(now())
+}
+
+model Driver {
+  id            String    @id @default(cuid())
+  driverId      String    @unique
+  name          String
+  phone         String
+  vehicleNumber String?
+  licenseNumber String?
+  status        String    @default("active")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+/// Each physical unit tracked individually — the 'library book'
+model InventoryItem {
+  id                String    @id @default(cuid())
+  /// Unique item barcode/ID shown on labels
+  itemId            String    @unique
+  productId         String
+  productName       String
+  /// Brand name
+  brand             String?
+  /// Variant descriptor
+  variant           String?
+  /// Per-unit cost
+  unitPrice         Float?
+  merchantId        String
+  merchantName      String
+  /// Which inbound batch this item came from
+  inboundId         String?
+  /// Which outbound order this item is allocated to (null = in warehouse)
+  outboundId        String?
+  /// Current lifecycle status
+  status            String    @default("IN_WAREHOUSE")
+  /// Item condition: good, damaged, expired
+  condition         String    @default("good")
+  /// Tracking level: 'unit' for individual items, 'box' for sealed boxes
+  trackingLevel     String    @default("unit")
+  /// For boxes: how many units inside
+  boxQty            Int?
+  /// For individual items: which box they came from
+  parentItemId      String?
+  /// Warehouse zone / shelf location
+  storageLocation   String?
+  /// Expiry date if applicable
+  expiryDate        DateTime?
+  /// Which rider is currently handling this item
+  assignedRider     String?
+  /// Which runsheet this item is on
+  runsheetId        String?
+  /// Delivery attempt count for this item
+  attemptCount      Int       @default(0)
+  nextAttemptDate   DateTime?
+  /// Final outcome when lifecycle ends
+  finalOutcome      String?
+  /// Cancellation tracking
+  cancellationReason String?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  /// Audit trail — every event in this item's lifecycle
+  events            ItemEvent[]
+  /// Timestamps
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Every event in an item's lifecycle — the 'checkout card inside the front cover'
+model ItemEvent {
+  id                String    @id @default(cuid())
+  eventId           String    @unique
+  /// Which item this event belongs to
+  item              InventoryItem @relation(fields: [itemId], references: [itemId])
+  itemId            String
+  /// Event type: RECEIVED, STORED, PICKED, PACKED, DISPATCHED,
+  ///   DELIVERY_ATTEMPTED, DELIVERY_SUCCEEDED, DELIVERY_FAILED,
+  ///   RESCHEDULED, PARTIALLY_RETURNED, RETURNED_TO_RIDER,
+  ///   RETURNED_TO_WAREHOUSE, CANCELLED, DAMAGED, DISPOSED, RTV
+  eventType         String
+  /// Human-readable description
+  description       String?
+  /// Who performed this action
+  performedBy       String?
+  /// Which runsheet (if applicable)
+  runsheetId        String?
+  /// Which outbound order (if applicable)
+  outboundId        String?
+  /// Which inbound batch (if applicable)
+  inboundId         String?
+  /// Reason for failure / return / cancellation
+  reason            String?
+  /// Previous status before this event
+  previousStatus    String?
+  /// New status after this event
+  newStatus         String?
+  /// Additional metadata as JSON string
+  metadata          String?
+  createdAt         DateTime  @default(now())
+
+  @@index([itemId])
+}
+
+model AuditLog {
+  id              String    @id @default(cuid())
+  userId          String?
+  userName        String?
+  action          String
+  module          String
+  entityId        String?
+  details         String?
+  createdAt       DateTime  @default(now())
+}

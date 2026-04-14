@@ -1,0 +1,46 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { db } from '@/lib/db'
+
+export async function GET(req: NextRequest) {
+  try {
+    const search = req.nextUrl.searchParams.get('search') || ''
+    const records = await db.rTVRecord.findMany({
+      where: {
+        OR: [
+          { merchantName: { contains: search } },
+          { productName: { contains: search } },
+          { rtvId: { contains: search } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    return NextResponse.json(records)
+  } catch {
+    return NextResponse.json({ error: 'Failed to fetch RTV records' }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const count = await db.rTVRecord.count()
+    const rtvId = `RTV-${String(count + 1).padStart(3, '0')}`
+    const record = await db.rTVRecord.create({
+      data: { ...body, rtvId },
+    })
+    return NextResponse.json(record, { status: 201 })
+  } catch {
+    return NextResponse.json({ error: 'Failed to create RTV record' }, { status: 500 })
+  }
+}
+
+export async function PUT(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { id, ...data } = body
+    const record = await db.rTVRecord.update({ where: { id }, data })
+    return NextResponse.json(record)
+  } catch {
+    return NextResponse.json({ error: 'Failed to update RTV record' }, { status: 500 })
+  }
+}
