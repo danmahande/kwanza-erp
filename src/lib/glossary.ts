@@ -93,15 +93,15 @@ export const glossary: Record<string, GlossaryTerm> = {
   },
   deliveryType: {
     term: 'Delivery Type',
-    short: 'How a merchant\'s goods move from supplier to our warehouse to customer — dropship, consignment, or self-delivery.',
-    long: 'Delivery Type tells us who is responsible for moving the goods at each stage. DROP-SHIP means the merchant ships directly from their supplier to the customer — we never touch the stock, we just orchestrate. CONSIGNMENT means the merchant places stock in our warehouse but retains ownership until it sells — we hold it, they own it. SELF-DELIVERY means the merchant delivers stock to us themselves (their own truck, their own driver) and we then fulfil orders from that stock. The type changes how we bill storage, how we handle returns, and how we structure the tracking number.',
-    example: 'KFC uses CONSIGNMENT (they own the stock, we store and fulfil). An Instagram boutique might use DROP-SHIP (we never see the product, we just coordinate).',
+    short: 'How a merchant\'s goods move from supplier to customer — self-delivery, drop-ship, or consignment.',
+    long: 'Delivery Type tells us who is responsible for moving the goods at each stage. SELF-DELIVERY means the merchant fulfils orders themselves using their own drivers and resources — we never touch the stock or the delivery, we just coordinate. DROP-SHIP means the supplier ships the product to our warehouse on demand when an order is placed — we receive it just-in-time and fulfil the order from that delivery. CONSIGNMENT means the supplier places stock in our warehouse upfront but retains ownership until the goods sell — we hold it, they own it. The type changes how we bill storage, how we handle returns, and how we structure the tracking number.',
+    example: 'A small Instagram seller uses SELF-DELIVERY (their own rider drops off to the customer, we don\'t touch it). A KFC franchise uses DROP-SHIP (chicken arrives at our warehouse each morning based on the day\'s forecast orders, we dispatch). A Jumia vendor uses CONSIGNMENT (they place 1,000 units with us at the start of the month, we fulfil as orders come in, they own the stock until sold).',
   },
   trackingNumber: {
     term: 'Tracking Number',
     short: 'A code on every parcel that tells us where it came from and how it was fulfilled.',
-    long: 'Every parcel that moves through our warehouse gets a tracking number. The format encodes meaning: it starts with DS (dropship), WH (warehouse / self-delivery), or RT (return), then the order number, then a unit sequence. So WH-ORD-20260414-001-03 means: warehouse-fulfilled, order #1 from April 14, unit 3 of that order. This lets anyone scan a parcel and instantly know its story without looking it up.',
-    example: 'A driver scans DS-ORD-20260414-042-01 at delivery. We know instantly: this is a dropship order (we didn\'t store it), it\'s order 042, and it\'s the first (and maybe only) unit on that order.',
+    long: 'Every parcel that moves through our warehouse gets a tracking number. The format encodes meaning: it starts with SD (self-delivery — merchant fulfils themselves), DS (drop-ship — arrived on demand from supplier), CN (consignment — held in our warehouse on consignment), or RT (return), then the order number, then a unit sequence. So DS-DS-001-01 means: drop-ship fulfilled, order DS-001, unit 1 of that order. This lets anyone scan a parcel and instantly know its story without looking it up.',
+    example: 'A driver scans DS-ORD-20260414-042-01 at delivery. We know instantly: this is a drop-ship order (the supplier delivered it to our warehouse on demand), it\'s order 042, and it\'s the first (and maybe only) unit on that order.',
   },
   shortfall: {
     term: 'Shortfall',

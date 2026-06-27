@@ -521,9 +521,9 @@ export default function MerchantsModule() {
               onChange={e => setForm({ ...form, deliveryType: e.target.value })}
               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
             >
-              <option value="self-delivery">Self-Delivery (merchant delivers stock to us)</option>
-              <option value="drop-ship">Drop-Ship (we coordinate, never touch stock)</option>
-              <option value="consignment">Consignment (merchant owns stock, we store it)</option>
+              <option value="self-delivery">Self-Delivery (merchant fulfils the order themselves — we don't touch the stock)</option>
+              <option value="drop-ship">Drop-Ship (supplier delivers stock to our warehouse on demand when an order is placed)</option>
+              <option value="consignment">Consignment (supplier places stock with us upfront, owns it until sale)</option>
             </select>
           </div>
         </div>

@@ -265,7 +265,7 @@ export async function generateMerchantStatement(params: {
       netPayable,
       isPaid: false,
       status: 'issued',
-      lineItems: lineItems as unknown as Record<string, unknown>,
+      lineItems: JSON.stringify(lineItems),
       generatedBy,
     },
   })

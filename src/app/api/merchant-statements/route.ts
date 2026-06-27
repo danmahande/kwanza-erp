@@ -7,6 +7,15 @@ import {
 import { generateStatementExcel } from '@/lib/statement-excel'
 import { generateStatementPDF } from '@/lib/statement-pdf'
 
+type StatementLineItemShape = {
+  date: string
+  type: string
+  reference: string
+  description: string
+  debit: number
+  credit: number
+}
+
 /**
  * Merchant Statements API — Workflow 5
  *
@@ -48,9 +57,9 @@ export async function GET(req: NextRequest) {
         commissions: stmt.commissions,
         salesValue: stmt.salesValue,
         netPayable: stmt.netPayable,
-        lineItems: (stmt.lineItems as unknown as Record<string, unknown>[]) as unknown as Array<{
-          date: string; type: string; reference: string; description: string; debit: number; credit: number
-        }>,
+        lineItems: stmt.lineItems
+          ? (JSON.parse(stmt.lineItems) as StatementLineItemShape[])
+          : [],
       }
 
       const filePath = format === 'excel'
