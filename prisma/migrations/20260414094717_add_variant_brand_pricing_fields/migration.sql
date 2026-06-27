@@ -50,6 +50,8 @@ CREATE TABLE "Product" (
     "id" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "productLabel" TEXT NOT NULL,
+    "brand" TEXT,
+    "variant" TEXT,
     "category" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
@@ -87,13 +89,19 @@ CREATE TABLE "Customer" (
 CREATE TABLE "InboundRecord" (
     "id" TEXT NOT NULL,
     "inboundId" TEXT NOT NULL,
+    "vendorId" TEXT,
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
+    "brand" TEXT,
+    "variant" TEXT,
     "qtyIn" INTEGER NOT NULL,
+    "unitPrice" DOUBLE PRECISION,
+    "inboundValue" DOUBLE PRECISION,
     "expiryDate" TIMESTAMP(3),
     "receivedBy" TEXT NOT NULL,
+    "storedBy" TEXT,
     "storageLocation" TEXT,
     "status" TEXT NOT NULL DEFAULT 'received',
     "userComment" TEXT,
@@ -109,13 +117,28 @@ CREATE TABLE "OutboundRecord" (
     "outboundId" TEXT NOT NULL,
     "customerName" TEXT NOT NULL,
     "customerContact" TEXT NOT NULL,
+    "customerAddress" TEXT,
     "productName" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "qty" INTEGER NOT NULL,
     "assignedDriver" TEXT,
+    "vehicleNumber" TEXT,
+    "runsheetId" TEXT,
+    "stopSequence" INTEGER,
+    "actualDeliveredQty" INTEGER,
+    "codCollected" DOUBLE PRECISION,
+    "deliveryNotes" TEXT,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "dispatchedAt" TIMESTAMP(3),
     "deliveredAt" TIMESTAMP(3),
+    "cancellationReason" TEXT,
+    "cancelledAt" TIMESTAMP(3),
+    "cancelledBy" TEXT,
+    "deliveryAttempts" INTEGER NOT NULL DEFAULT 0,
+    "maxAttempts" INTEGER NOT NULL DEFAULT 5,
+    "nextAttemptDate" TIMESTAMP(3),
+    "lastAttemptReason" TEXT,
+    "lastAttemptDate" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -187,6 +210,60 @@ CREATE TABLE "Driver" (
 );
 
 -- CreateTable
+CREATE TABLE "InventoryItem" (
+    "id" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "productId" TEXT NOT NULL,
+    "productName" TEXT NOT NULL,
+    "brand" TEXT,
+    "variant" TEXT,
+    "unitPrice" DOUBLE PRECISION,
+    "merchantId" TEXT NOT NULL,
+    "merchantName" TEXT NOT NULL,
+    "inboundId" TEXT,
+    "outboundId" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'IN_WAREHOUSE',
+    "condition" TEXT NOT NULL DEFAULT 'good',
+    "trackingLevel" TEXT NOT NULL DEFAULT 'unit',
+    "boxQty" INTEGER,
+    "parentItemId" TEXT,
+    "storageLocation" TEXT,
+    "expiryDate" TIMESTAMP(3),
+    "assignedRider" TEXT,
+    "runsheetId" TEXT,
+    "attemptCount" INTEGER NOT NULL DEFAULT 0,
+    "nextAttemptDate" TIMESTAMP(3),
+    "finalOutcome" TEXT,
+    "cancellationReason" TEXT,
+    "cancelledAt" TIMESTAMP(3),
+    "cancelledBy" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "InventoryItem_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "ItemEvent" (
+    "id" TEXT NOT NULL,
+    "eventId" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "eventType" TEXT NOT NULL,
+    "description" TEXT,
+    "performedBy" TEXT,
+    "runsheetId" TEXT,
+    "outboundId" TEXT,
+    "inboundId" TEXT,
+    "reason" TEXT,
+    "previousStatus" TEXT,
+    "newStatus" TEXT,
+    "metadata" TEXT,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ItemEvent_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "AuditLog" (
     "id" TEXT NOT NULL,
     "userId" TEXT,
@@ -232,3 +309,15 @@ CREATE UNIQUE INDEX "ShrinkageRecord_shrinkageId_key" ON "ShrinkageRecord"("shri
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Driver_driverId_key" ON "Driver"("driverId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "InventoryItem_itemId_key" ON "InventoryItem"("itemId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "ItemEvent_eventId_key" ON "ItemEvent"("eventId");
+
+-- CreateIndex
+CREATE INDEX "ItemEvent_itemId_idx" ON "ItemEvent"("itemId");
+
+-- AddForeignKey
+ALTER TABLE "ItemEvent" ADD CONSTRAINT "ItemEvent_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "InventoryItem"("itemId") ON DELETE RESTRICT ON UPDATE CASCADE;

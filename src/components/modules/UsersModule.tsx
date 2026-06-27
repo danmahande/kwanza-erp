@@ -2,17 +2,15 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { MoreHorizontal, Plus, Pencil, UserCheck, UserX, Shield, Users as UsersIcon, UserMinus } from 'lucide-react'
+import { Shield, Users as UsersIcon, UserCheck, UserX, UserMinus, Pencil, Calendar, Lock } from 'lucide-react'
 import { toast } from 'sonner'
+import OfficeHeader from '@/components/shared/OfficeHeader'
+import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface UserRecord {
   id: string
@@ -36,18 +34,20 @@ const ROLES = [
 
 const roleColor = (role: string) => {
   switch (role) {
-    case 'super_admin': return { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200/60', gradient: 'from-red-500/10 to-rose-50' }
-    case 'admin': return { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200/60', gradient: 'from-orange-500/10 to-amber-50' }
-    case 'operations_manager': return { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200/60', gradient: 'from-blue-500/10 to-sky-50' }
-    case 'warehouse': return { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200/60', gradient: 'from-green-500/10 to-emerald-50' }
-    case 'finance': return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60', gradient: 'from-purple-500/10 to-violet-50' }
-    default: return { bg: 'bg-gray-50', text: 'text-gray-700', border: 'border-gray-200/60', gradient: 'from-gray-500/10 to-slate-50' }
+    case 'super_admin': return { bg: 'bg-red-50', text: 'text-red-700', ring: 'ring-red-200' }
+    case 'admin': return { bg: 'bg-orange-50', text: 'text-orange-700', ring: 'ring-orange-200' }
+    case 'operations_manager': return { bg: 'bg-sky-50', text: 'text-sky-700', ring: 'ring-sky-200' }
+    case 'procurement': return { bg: 'bg-amber-50', text: 'text-amber-700', ring: 'ring-amber-200' }
+    case 'warehouse': return { bg: 'bg-green-50', text: 'text-green-700', ring: 'ring-green-200' }
+    case 'finance': return { bg: 'bg-violet-50', text: 'text-violet-700', ring: 'ring-violet-200' }
+    case 'driver': return { bg: 'bg-cyan-50', text: 'text-cyan-700', ring: 'ring-cyan-200' }
+    default: return { bg: 'bg-gray-50', text: 'text-gray-700', ring: 'ring-gray-200' }
   }
 }
 
 const roleLabel = (role: string) => ROLES.find(r => r.value === role)?.label || role
 
-const COLORS = ['#FF6B35', '#1B2A4A', '#22C55E', '#3B82F6', '#8B5CF6', '#EC4899', '#F59E0B', '#14B8A6']
+const COLORS = ['#FF6B35', '#1B2A4A', '#22C55E', '#8B5CF6', '#EC4899', '#F59E0B', '#14B8A6', '#EF4444']
 
 export default function UsersModule() {
   const [data, setData] = useState<UserRecord[]>([])
@@ -62,6 +62,15 @@ export default function UsersModule() {
   useEffect(() => {
     fetch('/api/users').then(r => r.json()).then(setData)
   }, [])
+
+  const activeCount = data.filter(u => u.isActive).length
+  const inactiveCount = data.filter(u => !u.isActive).length
+
+  const stats = [
+    { label: 'Total Users', value: data.length, icon: UsersIcon, color: '#1B2A4A', bg: 'bg-slate-500/20', border: 'border-slate-400/30', gradient: 'from-slate-500/10 to-slate-500/5' },
+    { label: 'Active', value: activeCount, icon: UserCheck, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
+    { label: 'Inactive', value: inactiveCount, icon: UserMinus, color: '#EF4444', bg: 'bg-red-500/20', border: 'border-red-400/30', gradient: 'from-red-500/10 to-red-500/5' },
+  ]
 
   const handleSubmit = async () => {
     if (!form.name || !form.email) {
@@ -95,141 +104,193 @@ export default function UsersModule() {
     fetchData()
   }
 
-  const activeCount = data.filter(u => u.isActive).length
-  const inactiveCount = data.filter(u => !u.isActive).length
+  const openCreate = () => {
+    setEditing(null)
+    setForm({ name: '', email: '', password: '', role: 'viewer' })
+    setOpen(true)
+  }
 
-  const statCards = [
-    { title: 'Total Users', value: data.length, icon: UsersIcon, color: '#1B2A4A', bg: 'bg-slate-50', bgGradient: 'from-slate-500/10 to-gray-50', borderColor: 'border-slate-200/60' },
-    { title: 'Active Users', value: activeCount, icon: UserCheck, color: '#22C55E', bg: 'bg-green-50', bgGradient: 'from-green-500/10 to-emerald-50', borderColor: 'border-green-200/60' },
-    { title: 'Inactive Users', value: inactiveCount, icon: UserMinus, color: '#EF4444', bg: 'bg-red-50', bgGradient: 'from-red-500/10 to-rose-50', borderColor: 'border-red-200/60' },
-  ]
+  const handleClose = () => {
+    setOpen(false)
+    setEditing(null)
+    setForm({ name: '', email: '', password: '', role: 'viewer' })
+  }
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">User Management</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Manage system users and access roles</p>
-        </div>
-        <Button onClick={() => { setEditing(null); setForm({ name: '', email: '', password: '', role: 'viewer' }); setOpen(true) }} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-          <Plus size={18} className="mr-2" /> Add User
-        </Button>
-      </div>
+      <OfficeHeader
+        title="Users & Access Office"
+        description="Manage system users, roles, and access permissions"
+        icon={Shield}
+        stats={stats}
+        actionLabel="Add User"
+        onAction={openCreate}
+      />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-        {statCards.map((stat, i) => (
-          <motion.div
-            key={stat.title}
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, delay: i * 0.07 }}
-          >
-            <div className={`relative overflow-hidden rounded-2xl bg-gradient-to-br ${stat.bgGradient} border ${stat.borderColor} hover:shadow-lg hover:scale-[1.02] transition-all duration-300 cursor-default`}>
-              <div className="p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div className={`p-2.5 rounded-xl ${stat.bg} group-hover:scale-110 transition-transform duration-200`}>
-                    <stat.icon size={20} style={{ color: stat.color }} />
+      {/* Card Grid */}
+      {data.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <UsersIcon size={32} className="text-gray-300" />
+          </div>
+          <p className="text-gray-500 font-medium">No users found</p>
+          <p className="text-sm text-gray-400 mt-1">Add a new user to get started</p>
+        </motion.div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {data.map((item, i) => {
+            const rc = roleColor(item.role)
+            const initials = item.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+            const colorIdx = i % COLORS.length
+            return (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                whileHover={{ scale: 1.02, boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}
+                onClick={() => handleEdit(item)}
+                className="cursor-pointer bg-white rounded-2xl border border-gray-100 p-5 transition-all duration-300"
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-white shrink-0 ring-2 ring-white shadow-sm"
+                      style={{ backgroundColor: COLORS[colorIdx] }}
+                    >
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-lg font-bold text-gray-900 leading-tight truncate">{item.name}</h3>
+                      <p className="text-xs text-gray-400 truncate">{item.email}</p>
+                    </div>
                   </div>
-                  <Shield size={18} className="text-gray-300" />
+                  <Badge
+                    className={`text-[11px] font-semibold border-0 ${rc.bg} ${rc.text}`}
+                  >
+                    {roleLabel(item.role)}
+                  </Badge>
                 </div>
-                <p className="text-2xl font-extrabold text-gray-900 tracking-tight">{stat.value}</p>
-                <p className="text-xs text-gray-500 mt-1 uppercase tracking-wider font-medium">{stat.title}</p>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-[#FF6B35]/30 to-transparent" />
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div className="bg-white/80 backdrop-blur-sm border border-gray-100 hover:shadow-md transition-shadow rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-[#1B2A4A] hover:bg-[#1B2A4A]">
-                <TableHead className="text-white font-semibold">User</TableHead>
-                <TableHead className="text-white font-semibold">Email</TableHead>
-                <TableHead className="text-white font-semibold">Role</TableHead>
-                <TableHead className="text-white font-semibold">Status</TableHead>
-                <TableHead className="text-white font-semibold">Created</TableHead>
-                <TableHead className="text-white font-semibold text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data.map((item, i) => {
-                const rc = roleColor(item.role)
-                const initials = item.name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-                const colorIdx = i % COLORS.length
-                return (
-                  <TableRow key={item.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-gray-100/50 transition-colors`}>
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0" style={{ backgroundColor: COLORS[colorIdx] }}>
-                          {initials}
-                        </div>
-                        <span className="font-medium text-gray-900">{item.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-gray-500">{item.email}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${rc.bg} ${rc.text}`}>
-                        {roleLabel(item.role)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      {item.isActive ? (
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0 text-xs font-semibold">Active</Badge>
-                      ) : (
-                        <Badge className="bg-gray-100 text-gray-500 hover:bg-gray-100 border-0 text-xs font-semibold">Inactive</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</TableCell>
-                    <TableCell className="text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="rounded-lg hover:bg-gray-100"><MoreHorizontal size={16} /></Button></DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-40">
-                          <DropdownMenuItem onClick={() => handleEdit(item)} className="rounded-lg"><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => toggleActive(item)} className="rounded-lg">
-                            {item.isActive ? <><UserX size={14} className="mr-2 text-red-500" /><span className="text-red-600">Deactivate</span></> : <><UserCheck size={14} className="mr-2 text-green-500" /><span className="text-green-600">Activate</span></>}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-              {data.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="py-12 text-center"><UsersIcon size={32} className="mx-auto text-gray-300 mb-2" /><p className="text-sm text-gray-400">No users found</p></TableCell></TableRow>
-              )}
-            </TableBody>
-          </Table>
+                <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                  <div className="flex items-center gap-2">
+                    <Badge
+                      className={item.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[11px] font-semibold' : 'bg-gray-100 text-gray-500 hover:bg-gray-100 border-0 text-[11px] font-semibold'}
+                    >
+                      {item.isActive ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                  <span className="text-[11px] text-gray-400">{new Date(item.createdAt).toLocaleDateString()}</span>
+                </div>
+              </motion.div>
+            )
+          })}
         </div>
-      </div>
+      )}
 
-      {/* Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader><DialogTitle className="text-gray-900">{editing ? 'Edit User' : 'Add New User'}</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label className="text-gray-700">Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Full name" className="rounded-xl" /></div>
-            <div><Label className="text-gray-700">Email *</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="Email address" className="rounded-xl" /></div>
-            <div><Label className="text-gray-700">Password {editing ? '(leave blank to keep)' : '*'}</Label><Input type="password" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} placeholder={editing ? 'Leave blank to keep current' : 'Password'} className="rounded-xl" /></div>
-            <div>
-              <Label className="text-gray-700">Role *</Label>
-              <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select role" /></SelectTrigger>
-                <SelectContent>{ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
-              </Select>
+      {/* Detail / Create / Edit Slide-Over */}
+      <DetailSlideOver
+        open={open}
+        onClose={handleClose}
+        title={editing ? editing.name : 'New User'}
+        subtitle={editing ? `${editing.email} • ${roleLabel(editing.role)}` : 'Fill in the details to create a new user'}
+        width="lg"
+        footer={
+          editing ? (
+            <div className="flex items-center justify-between">
+              <Button
+                variant="outline"
+                onClick={() => toggleActive(editing)}
+                className={`${editing.isActive ? 'text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700' : 'text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700'} rounded-xl`}
+              >
+                {editing.isActive ? <><UserX size={16} className="mr-2" />Deactivate</> : <><UserCheck size={16} className="mr-2" />Activate</>}
+              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
+                <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Update User</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3 ml-auto">
+              <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
+              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Create User</Button>
+            </div>
+          )
+        }
+      >
+        {editing && (
+          <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Email</p>
+                <p className="text-gray-700">{editing.email}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Role</p>
+                <Badge className={`text-[11px] font-semibold border-0 ${roleColor(editing.role).bg} ${roleColor(editing.role).text}`}>
+                  {roleLabel(editing.role)}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Status</p>
+                <Badge className={editing.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[11px] font-semibold' : 'bg-gray-100 text-gray-500 hover:bg-gray-100 border-0 text-[11px] font-semibold'}>
+                  {editing.isActive ? 'Active' : 'Inactive'}
+                </Badge>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Created</p>
+                <p className="text-gray-700">{new Date(editing.createdAt).toLocaleDateString()}</p>
+              </div>
             </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">{editing ? 'Update' : 'Create'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        )}
+        <div className="space-y-5">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block">Name <span className="text-red-400">*</span></Label>
+            <Input
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              placeholder="Full name"
+              className="rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block">Email <span className="text-red-400">*</span></Label>
+            <Input
+              type="email"
+              value={form.email}
+              onChange={e => setForm({ ...form, email: e.target.value })}
+              placeholder="Email address"
+              className="rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block">
+              Password {editing ? '(leave blank to keep)' : '*'}
+            </Label>
+            <div className="relative">
+              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <Input
+                type="password"
+                value={form.password}
+                onChange={e => setForm({ ...form, password: e.target.value })}
+                placeholder={editing ? 'Leave blank to keep current' : 'Password'}
+                className="pl-10 rounded-xl"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block">Role <span className="text-red-400">*</span></Label>
+            <Select value={form.role} onValueChange={v => setForm({ ...form, role: v })}>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select role" /></SelectTrigger>
+              <SelectContent>{ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+        </div>
+      </DetailSlideOver>
     </motion.div>
   )
 }

@@ -2,14 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Search, User, Users, ShoppingCart, Banknote } from 'lucide-react'
+import { Search, User, Users, ShoppingCart, Banknote, Mail, Phone, MapPin, Package } from 'lucide-react'
 import { toast } from 'sonner'
+import OfficeHeader from '@/components/shared/OfficeHeader'
+import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface Customer {
   id: string
@@ -23,18 +22,6 @@ interface Customer {
   createdAt: string
 }
 
-const statCards = [
-  { label: 'Total Customers', color: 'orange', icon: Users, getValue: (d: Customer[]) => d.length },
-  { label: 'Total Orders', color: 'navy', icon: ShoppingCart, getValue: (d: Customer[]) => d.reduce((s, c) => s + c.totalOrders, 0) },
-  { label: 'Revenue', color: 'green', icon: Banknote, getValue: (d: Customer[]) => `KES ${d.reduce((s, c) => s + c.totalOrderValue, 0).toLocaleString()}` },
-]
-
-const colorMap: Record<string, { bg: string; badge: string; text: string; border: string }> = {
-  orange: { bg: 'bg-gradient-to-br from-orange-500/10 to-orange-50', badge: 'bg-orange-100 text-orange-600', text: 'text-orange-700', border: 'border-orange-200/60' },
-  navy: { bg: 'bg-gradient-to-br from-slate-500/10 to-slate-50', badge: 'bg-slate-100 text-slate-600', text: 'text-slate-700', border: 'border-slate-200/60' },
-  green: { bg: 'bg-gradient-to-br from-green-500/10 to-green-50', badge: 'bg-green-100 text-green-600', text: 'text-green-700', border: 'border-green-200/60' },
-}
-
 function getInitials(name: string) {
   return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
 }
@@ -42,18 +29,30 @@ function getInitials(name: string) {
 const avatarColors = [
   'bg-orange-100 text-orange-700',
   'bg-emerald-100 text-emerald-700',
-  'bg-blue-100 text-blue-700',
   'bg-violet-100 text-violet-700',
   'bg-pink-100 text-pink-700',
   'bg-amber-100 text-amber-700',
   'bg-cyan-100 text-cyan-700',
   'bg-rose-100 text-rose-700',
+  'bg-teal-100 text-teal-700',
+]
+
+const avatarBorderColors = [
+  'ring-orange-200',
+  'ring-emerald-200',
+  'ring-violet-200',
+  'ring-pink-200',
+  'ring-amber-200',
+  'ring-cyan-200',
+  'ring-rose-200',
+  'ring-teal-200',
 ]
 
 export default function CustomersModule() {
   const [data, setData] = useState<Customer[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [viewing, setViewing] = useState<Customer | null>(null)
   const [form, setForm] = useState({ name: '', contact: '', email: '', address: '' })
 
   const fetchData = () => {
@@ -63,6 +62,12 @@ export default function CustomersModule() {
   useEffect(() => {
     fetch(`/api/customers?search=${search}`).then(r => r.json()).then(setData)
   }, [search])
+
+  const stats = [
+    { label: 'Total Customers', value: data.length, icon: Users, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
+    { label: 'Total Orders', value: data.reduce((s, c) => s + c.totalOrders, 0), icon: ShoppingCart, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
+    { label: 'Revenue', value: `KES ${data.reduce((s, c) => s + c.totalOrderValue, 0).toLocaleString()}`, icon: Banknote, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
+  ]
 
   const handleSubmit = async () => {
     if (!form.name || !form.contact) {
@@ -76,121 +81,250 @@ export default function CustomersModule() {
     fetchData()
   }
 
+  const openCreate = () => {
+    setViewing(null)
+    setForm({ name: '', contact: '', email: '', address: '' })
+    setOpen(true)
+  }
+
+  const handleView = (item: Customer) => {
+    setViewing(item)
+    setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setViewing(null)
+    setForm({ name: '', contact: '', email: '', address: '' })
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Customers</h1>
-          <p className="text-sm text-gray-400">Manage your customer database</p>
+      <OfficeHeader
+        title="Customers Office"
+        description="Manage your customer database and relationships"
+        icon={Users}
+        stats={stats}
+        actionLabel="Add Customer"
+        onAction={openCreate}
+      >
+        <div className="relative flex-1 w-full sm:w-auto">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Search by name or phone..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-10 rounded-xl border-gray-200 bg-white"
+          />
         </div>
-        <Button onClick={() => { setForm({ name: '', contact: '', email: '', address: '' }); setOpen(true) }} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-          <Plus size={18} className="mr-2" /> Add Customer
-        </Button>
-      </div>
+      </OfficeHeader>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {statCards.map((card, i) => {
-          const colors = colorMap[card.color]
-          const Icon = card.icon
-          const value = card.getValue(data)
-          return (
-            <motion.div
-              key={card.label}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: i * 0.07 }}
-              className={`${colors.bg} border ${colors.border} rounded-2xl p-5`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1">{card.label}</p>
-                  <p className="text-2xl font-extrabold text-gray-900">{value}</p>
+      {/* Card Grid */}
+      {data.length === 0 ? (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex flex-col items-center justify-center py-20"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <User size={32} className="text-gray-300" />
+          </div>
+          <p className="text-gray-500 font-medium">No customers found</p>
+          <p className="text-sm text-gray-400 mt-1">Try adjusting your search or add a new customer</p>
+        </motion.div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {data.map((item, i) => {
+            const colorIdx = i % avatarColors.length
+            return (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: i * 0.05 }}
+                whileHover={{ scale: 1.02, boxShadow: '0 8px 30px rgba(0,0,0,0.08)' }}
+                onClick={() => handleView(item)}
+                className="cursor-pointer bg-white rounded-2xl border border-gray-100 p-5 transition-all duration-300"
+              >
+                <div className="flex items-center gap-3 mb-4">
+                  <div className={`w-11 h-11 rounded-xl ${avatarColors[colorIdx]} flex items-center justify-center text-sm font-bold shrink-0 ring-2 ${avatarBorderColors[colorIdx]}`}>
+                    {getInitials(item.name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-lg font-bold text-gray-900 leading-tight truncate">{item.name}</h3>
+                    <span className="text-xs font-mono text-gray-400">{item.customerId}</span>
+                  </div>
                 </div>
-                <div className={`w-10 h-10 rounded-xl ${colors.badge} flex items-center justify-center`}>
-                  <Icon size={20} />
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Phone size={14} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{item.contact}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <Mail size={14} className="text-gray-400 shrink-0" />
+                    <span className="truncate">{item.email || 'No email'}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-3 border-t border-gray-50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                      <ShoppingCart size={13} className="text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400">Orders</p>
+                      <p className="text-sm font-bold text-gray-900">{item.totalOrders}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-green-50 flex items-center justify-center">
+                      <Banknote size={13} className="text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] text-gray-400">Value</p>
+                      <p className="text-sm font-bold text-green-600">{item.totalOrderValue.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Detail / Create Slide-Over */}
+      <DetailSlideOver
+        open={open}
+        onClose={handleClose}
+        title={viewing ? viewing.name : 'New Customer'}
+        subtitle={viewing ? `ID: ${viewing.customerId}` : 'Fill in the details to create a new customer'}
+        width="lg"
+        footer={
+          viewing ? (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={handleClose} className="rounded-xl">Close</Button>
+            </div>
+          ) : (
+            <div className="flex gap-3 ml-auto">
+              <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
+              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
+                Create Customer
+              </Button>
+            </div>
+          )
+        }
+      >
+        {viewing ? (
+          <div className="space-y-6">
+            {/* Avatar Section */}
+            <div className="flex items-center gap-4">
+              <div className={`w-16 h-16 rounded-2xl ${avatarColors[data.indexOf(viewing) % avatarColors.length]} flex items-center justify-center text-xl font-bold ring-2 ${avatarBorderColors[data.indexOf(viewing) % avatarBorderColors.length]}`}>
+                {getInitials(viewing.name)}
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">{viewing.name}</h3>
+                <p className="text-sm text-gray-400 font-mono">{viewing.customerId}</p>
+              </div>
+            </div>
+
+            {/* Stats */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl bg-blue-50/50 border border-blue-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Package size={14} className="text-blue-600" />
+                  <span className="text-[11px] uppercase tracking-wider text-blue-500 font-medium">Total Orders</span>
+                </div>
+                <p className="text-2xl font-extrabold text-blue-700">{viewing.totalOrders}</p>
+              </div>
+              <div className="p-3 rounded-xl bg-green-50/50 border border-green-100">
+                <div className="flex items-center gap-2 mb-1">
+                  <Banknote size={14} className="text-green-600" />
+                  <span className="text-[11px] uppercase tracking-wider text-green-500 font-medium">Total Value</span>
+                </div>
+                <p className="text-2xl font-extrabold text-green-700">KES {viewing.totalOrderValue.toLocaleString()}</p>
+              </div>
+            </div>
+
+            {/* Contact Info */}
+            <div className="space-y-3">
+              <h4 className="text-xs uppercase tracking-wider text-gray-400 font-semibold">Contact Information</h4>
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <Phone size={16} className="text-gray-400" />
+                  <div>
+                    <p className="text-[11px] text-gray-400">Phone</p>
+                    <p className="text-sm font-medium text-gray-700">{viewing.contact}</p>
+                  </div>
+                </div>
+                {viewing.email && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                    <Mail size={16} className="text-gray-400" />
+                    <div>
+                      <p className="text-[11px] text-gray-400">Email</p>
+                      <p className="text-sm font-medium text-gray-700">{viewing.email}</p>
+                    </div>
+                  </div>
+                )}
+                {viewing.address && (
+                  <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                    <MapPin size={16} className="text-gray-400" />
+                    <div>
+                      <p className="text-[11px] text-gray-400">Address</p>
+                      <p className="text-sm font-medium text-gray-700">{viewing.address}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-50">
+                  <Users size={16} className="text-gray-400" />
+                  <div>
+                    <p className="text-[11px] text-gray-400">Customer Since</p>
+                    <p className="text-sm font-medium text-gray-700">{new Date(viewing.createdAt).toLocaleDateString()}</p>
+                  </div>
                 </div>
               </div>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      {/* Search Card */}
-      <div className="bg-white/80 backdrop-blur-sm border border-gray-100 rounded-2xl p-4">
-        <div className="relative">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input placeholder="Search by name or phone..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 border-gray-200" />
-        </div>
-      </div>
-
-      {/* Table */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow className="bg-[#1B2A4A] hover:bg-[#1B2A4A]">
-              <TableHead className="text-white font-semibold">ID</TableHead>
-              <TableHead className="text-white font-semibold">Name</TableHead>
-              <TableHead className="text-white font-semibold">Contact</TableHead>
-              <TableHead className="text-white font-semibold">Email</TableHead>
-              <TableHead className="text-white font-semibold">Address</TableHead>
-              <TableHead className="text-white font-semibold">Orders</TableHead>
-              <TableHead className="text-white font-semibold">Total Value</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data.map((item, i) => {
-              const avatarColor = avatarColors[i % avatarColors.length]
-              return (
-                <TableRow key={item.id} className={`${i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-gray-100/60 transition-colors`}>
-                  <TableCell className="font-mono text-sm">{item.customerId}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full ${avatarColor} flex items-center justify-center text-xs font-bold flex-shrink-0`}>
-                        {getInitials(item.name)}
-                      </div>
-                      <span className="font-medium">{item.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.contact}</TableCell>
-                  <TableCell className="text-gray-400">{item.email || '-'}</TableCell>
-                  <TableCell className="text-gray-400">{item.address || '-'}</TableCell>
-                  <TableCell><span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">{item.totalOrders}</span></TableCell>
-                  <TableCell className="font-semibold text-green-600">KES {item.totalOrderValue.toLocaleString()}</TableCell>
-                </TableRow>
-              )
-            })}
-            {data.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={7}>
-                  <div className="text-center py-12">
-                    <User size={40} className="mx-auto text-gray-300 mb-3" />
-                    <p className="text-sm text-gray-400">No customers found</p>
-                  </div>
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Add Customer Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Add New Customer</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Customer name" /></div>
-            <div><Label>Phone *</Label><Input value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} placeholder="Phone number" /></div>
-            <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="Email (optional)" /></div>
-            <div><Label>Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Address (optional)" /></div>
+            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Create</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        ) : (
+          <div className="space-y-5">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Name <span className="text-red-400">*</span></Label>
+              <Input
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Customer name"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Phone <span className="text-red-400">*</span></Label>
+              <Input
+                value={form.contact}
+                onChange={e => setForm({ ...form, contact: e.target.value })}
+                placeholder="Phone number"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Email</Label>
+              <Input
+                type="email"
+                value={form.email}
+                onChange={e => setForm({ ...form, email: e.target.value })}
+                placeholder="Email (optional)"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Address</Label>
+              <Input
+                value={form.address}
+                onChange={e => setForm({ ...form, address: e.target.value })}
+                placeholder="Address (optional)"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+        )}
+      </DetailSlideOver>
     </motion.div>
   )
 }

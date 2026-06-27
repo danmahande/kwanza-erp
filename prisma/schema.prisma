@@ -18,16 +18,34 @@ model User {
   updatedAt     DateTime  @updatedAt
 }
 
+/// Enum for product status to differentiate between various states
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  OUT_OF_STOCK
+  DISCONTINUED
+}
+
 model Merchant {
   id              String            @id @default(cuid())
   merchantId      String            @unique
   businessName    String
   contact         String
   email           String
+  /// Distinguish between drop-ship, consignment and self-delivery
+  deliveryType    String?           @default("self-delivery") // "drop-ship", "consignment", "self-delivery"
+  /// Cumulative values for reporting
+  totalInboundValue   Float         @default(0)
+  totalSalesValue     Float         @default(0)
+  totalShrinkageValue Float         @default(0)
+  totalReturnValue    Float         @default(0)
+  expectedPayment     Float         @default(0)
+  actualPayment       Float         @default(0)
+  pendingPayment      Float         @default(0)
   isActive        Boolean           @default(true)
   createdBy       String
   createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  updatedAt       DateTime  @updatedAt
 }
 
 model MerchantPayment {
@@ -40,14 +58,17 @@ model MerchantPayment {
   paymentMethod String
   reference     String
   comment       String?
+  /// Allow for deductions such as warehouse fees
+  deductions    Float     @default(0)
+  netAmount     Float     @default(0) // amount - deductions
   recordedBy    String
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
 
 model Product {
-  id               String   @id @default(cuid())
-  productId        String   @unique
+  id               String         @id @default(cuid())
+  productId        String         @unique
   productLabel     String
   /// Brand name (e.g., "Supreme", "Dettol")
   brand            String?
@@ -57,14 +78,24 @@ model Product {
   merchantId       String
   merchantName     String
   unit             String
-  minStock         Int      @default(10)
+  /// Product weight (e.g., "50g", "175g", "500ml")
+  weight           String?
+  minStock         Int            @default(10)
   unitCost         Float
   unitSellingPrice Float
   commissionPercent Float
-  currentStock     Int      @default(0)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  currentStock     Int            @default(0)
+  /// Enhanced product status enum
+  status           ProductStatus   @default(ACTIVE)
+  /// Detailed product description
+  description      String?
+  /// Product image URL
+  imageUrl         String?
+  /// Date when product was discontinued (if applicable)
+  discontinuedAt   DateTime?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime  @updatedAt
 }
 
 model Customer {
@@ -111,15 +142,37 @@ model InboundRecord {
   updatedAt       DateTime  @updatedAt
 }
 
+/// Updated OutboundRecord with tracking number and order number changes
 model OutboundRecord {
   id                String    @id @default(cuid())
   outboundId        String    @unique
+  /// Explicit order number (e.g., ORD-20260414-001)
+  orderNumber       String?
+  /// Tracking number for shipment tracking
+  trackingNumber    String?
+  /// Updated to support order number changes (e.g., DS to RT)
+  originalOrderNumber String?  // Original order number before change
+  /// User who created this order (e.g., U003, U004)
+  userId            String?
+  /// Vendor/supplier code (e.g., V001)
+  vendorId          String?
+  /// Vendor business name
+  businessName      String?
   customerName      String
   customerContact   String
+  customerEmail     String?
   customerAddress   String?
   productName       String
   productId         String
+  brand             String?
+  variant           String?
   qty               Int
+  /// Per-unit selling price
+  unitSellingPrice  Float?
+  /// Total sale amount for this order (qty x unitSellingPrice)
+  saleAmount        Float?
+  /// Who assigned this order/driver
+  assignedBy        String?
   assignedDriver    String?
   vehicleNumber     String?
   /// Group ID for runsheet — outbound records sharing the same runsheetId belong to one rider trip
@@ -163,24 +216,37 @@ model ReconciliationRecord {
   createdAt       DateTime  @default(now())
 }
 
+/// RTV Record with approval workflow
 model RTVRecord {
   id              String    @id @default(cuid())
   rtvId           String    @unique
+  /// Reference to original outbound order
+  originalOrderId String?
+  /// New order number for return (RT prefix)
+  returnOrderNumber String?
   merchantId      String
   merchantName    String
   productId       String
   productName     String
   qty             Int
   reason          String
+  /// Status for approval workflow
+  approvalStatus  String    @default("pending_approval") // "pending_approval", "approved", "rejected"
+  /// Agent who approved/rejected
+  approvedBy      String?
+  approvedAt      DateTime?
   status          String    @default("pending")
   processedBy     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
 
+/// Shrinkage Record (sub-component of RTV module)
 model ShrinkageRecord {
   id              String    @id @default(cuid())
   shrinkageId     String    @unique
+  /// Link to RTV if shrinkage is related to return
+  rtvId           String?
   productId       String
   productName     String
   qty             Int
@@ -188,18 +254,102 @@ model ShrinkageRecord {
   reportedBy      String
   status          String    @default("pending")
   createdAt       DateTime  @default(now())
+  /// Added for proper tracking
+  resolvedBy      String?
+  resolvedAt      DateTime?
+}
+
+/// After-Sales module for customer returns
+model AfterSalesRecord {
+  id              String    @id @default(cuid())
+  afterSalesId    String    @unique
+  /// Reference to customer return
+  originalOrderId String?
+  /// New order number for return process
+  returnOrderNumber String?
+  /// Customer who initiated return
+  customerId      String
+  customerName    String
+  /// Return reason
+  reason          String
+  /// Return status
+  returnStatus    String    @default("initiated") // "initiated", "in_review", "approved", "rejected", "processed"
+  /// Agent handling the return
+  agentId         String?
+  agentName       String?
+  /// Approval details
+  approvedBy      String?
+  approvedAt      DateTime?
+  /// Refund amount
+  refundAmount    Float?
+  /// Replacement product (if applicable)
+  replacementProductId String?
+  replacementProductName String?
+  /// Tracking number for return shipment
+  returnTrackingNumber String?
+  /// Resolution notes
+  resolutionNotes String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model Driver {
-  id            String    @id @default(cuid())
-  driverId      String    @unique
-  name          String
-  phone         String
-  vehicleNumber String?
-  licenseNumber String?
-  status        String    @default("active")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                String    @id @default(cuid())
+  driverId          String    @unique
+  name              String
+  phone             String
+  nationalId        String?
+  licenseNumber     String?
+  vehicleType       String?
+  vehicleNumber     String?
+  createdBy         String?
+  profileImage      String?
+  dateHired         DateTime?
+  salaryAmount      Float?
+  salaryPayDay      Int       @default(28)
+  status            String    @default("active")
+  damages           Float     @default(0)
+  loss              Float     @default(0)
+  expectedBankings  Float     @default(0)
+  banked            Float     @default(0)
+  trips             DriverTrip[]
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+/// Daily trip record for each driver — the 'route sheet'
+model DriverTrip {
+  id              String    @id @default(cuid())
+  tripId          String    @unique
+  driverId        String
+  driver          Driver    @relation(fields: [driverId], references: [driverId])
+  driverName      String
+  /// Trip date (not createdAt — the actual day of the trip)
+  tripDate        DateTime
+  /// Total stops/deliveries assigned
+  totalStops      Int       @default(0)
+  /// Successfully delivered
+  delivered        Int       @default(0)
+  /// Failed deliveries
+  failed          Int       @default(0)
+  /// Total COD collected
+  codCollected    Float     @default(0)
+  /// Total sale value
+  saleAmount      Float     @default(0)
+  /// Kilometres driven
+  distanceKm      Float?
+  /// GPS tracking enabled?
+  geoTracked      Boolean   @default(false)
+  /// Last known GPS coordinates (JSON string)
+  lastGeoLocation String?
+  /// Runsheet reference
+  runsheetId      String?
+  /// Notes / issues
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([driverId, tripDate])
 }
 
 /// Each physical unit tracked individually — the 'library book'
@@ -290,6 +440,31 @@ model ItemEvent {
   @@index([itemId])
 }
 
+/// Order Processing Module
+model OrderProcessing {
+  id                String    @id @default(cuid())
+  orderId           String    @unique
+  orderNumber       String    @unique  // e.g., DS001
+  orderDate         DateTime  @default(now())
+  customerId        String
+  customerName      String
+  customerInfo      String    // Full customer contact details
+  totalAmount       Float
+  paymentMethod     String    // Cash, M-Pesa, Bank Transfer, etc.
+  /// Status of order processing
+  status            String    @default("new_order") // "new_order", "processing", "shipped", "delivered", "returned"
+  /// Tracking number for the order
+  trackingNumber    String?   // Associated with either warehouse or dropship
+  /// Invoice details
+  invoiceGenerated  Boolean   @default(false)
+  invoiceNumber     String?
+  invoiceDate       DateTime?
+  /// Created by user
+  createdBy         String
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
 model AuditLog {
   id              String    @id @default(cuid())
   userId          String?
@@ -299,4 +474,41 @@ model AuditLog {
   entityId        String?
   details         String?
   createdAt       DateTime  @default(now())
+}
+
+model PaymentRecord {
+  id              String    @id @default(cuid())
+  paymentId       String    @unique
+  /// Vendor/merchant ID
+  vendorId        String
+  /// Vendor/merchant name
+  vendorName      String
+  /// Payment amount
+  amount          Float
+  /// Payment method
+  paymentMethod   String
+  /// Reference number
+  reference       String
+  /// Deduction details
+  deductions      Json?     /// Example: [{"type": "warehouse_fee", "amount": 500}]
+  /// Net payment amount (amount - deductions)
+  netAmount       Float
+  /// Payment date
+  paymentDate     DateTime  @default(now())
+  /// Recorded by
+  recordedBy      String
+  /// Payment status
+  status          String    @default("pending")
+  /// Comments
+  comment         String?
+  /// Year for filtering
+  year            Int       @default(0)
+  /// Month for filtering (1-12)
+  month           Int       @default(0)
+  /// Day for filtering (1-31)
+  day             Int       @default(0)
+  /// Created timestamp
+  createdAt       DateTime  @default(now())
+  /// Updated timestamp
+  updatedAt       DateTime  @updatedAt
 }

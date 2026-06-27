@@ -8,40 +8,44 @@ export async function GET(req: NextRequest) {
       where: {
         OR: [
           { productLabel: { contains: search } },
+          { brand: { contains: search } },
+          { variant: { contains: search } },
           { category: { contains: search } },
-          { productId: { contains: search } },
           { merchantName: { contains: search } },
         ],
       },
       orderBy: { createdAt: 'desc' },
     })
     return NextResponse.json(products)
-  } catch {
+  } catch (error) {
+    console.error('Error fetching products:', error)
     return NextResponse.json({ error: 'Failed to fetch products' }, { status: 500 })
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json()
+    const requestBody = await req.json()
     const count = await db.product.count()
     const productId = `PRD-${String(count + 1).padStart(3, '0')}`
     const product = await db.product.create({
-      data: { ...body, productId },
+      data: { ...requestBody, productId, isActive: true },
     })
     return NextResponse.json(product, { status: 201 })
-  } catch {
+  } catch (error) {
+    console.error('Error creating product:', error)
     return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
   }
 }
 
 export async function PUT(req: NextRequest) {
   try {
-    const body = await req.json()
-    const { id, ...data } = body
+    const putBody = await req.json()
+    const { id, ...data } = putBody
     const product = await db.product.update({ where: { id }, data })
     return NextResponse.json(product)
-  } catch {
+  } catch (error) {
+    console.error('Error updating product:', error)
     return NextResponse.json({ error: 'Failed to update product' }, { status: 500 })
   }
 }
@@ -52,7 +56,8 @@ export async function DELETE(req: NextRequest) {
     const id = searchParams.get('id')
     await db.product.delete({ where: { id: id! } })
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (error) {
+    console.error('Error deleting product:', error)
     return NextResponse.json({ error: 'Failed to delete product' }, { status: 500 })
   }
 }

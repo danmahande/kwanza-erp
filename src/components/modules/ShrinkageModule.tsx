@@ -2,23 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, AlertTriangle, Package, Clock, CheckCircle2, TrendingDown } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Search, Package, AlertTriangle, CheckCircle, Trash2, Edit3, PackageSearch, Clock } from 'lucide-react'
 import { toast } from 'sonner'
-
-interface Product { id: string; productId: string; productLabel: string; currentStock: number; unit: string }
+import OfficeHeader from '@/components/shared/OfficeHeader'
+import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import DataTable from '@/components/shared/DataTable'
 
 interface ShrinkageRecord {
   id: string
   shrinkageId: string
+  rtvId: string
   productId: string
   productName: string
   qty: number
@@ -26,53 +24,28 @@ interface ShrinkageRecord {
   reportedBy: string
   status: string
   createdAt: string
-}
-
-const statCards = [
-  { key: 'incidents', label: 'Total Incidents', color: 'red' as const },
-  { key: 'loss', label: 'Total Loss', color: 'red' as const },
-  { key: 'pending', label: 'Pending', color: 'amber' as const },
-  { key: 'resolved', label: 'Resolved', color: 'green' as const },
-] as const
-
-const colorMap = {
-  red: {
-    gradient: 'from-red-500/10 to-red-50',
-    border: 'border-red-200/60',
-    iconBg: 'bg-red-500/15',
-    iconColor: 'text-red-600',
-  },
-  amber: {
-    gradient: 'from-amber-500/10 to-amber-50',
-    border: 'border-amber-200/60',
-    iconBg: 'bg-amber-500/15',
-    iconColor: 'text-amber-600',
-  },
-  green: {
-    gradient: 'from-green-500/10 to-green-50',
-    border: 'border-green-200/60',
-    iconBg: 'bg-green-500/15',
-    iconColor: 'text-green-600',
-  },
-} as const
-
-const statIcons: Record<string, React.ReactNode> = {
-  incidents: <AlertTriangle size={20} />,
-  loss: <TrendingDown size={20} />,
-  pending: <Clock size={20} />,
-  resolved: <CheckCircle2 size={20} />,
+  resolvedBy: string
+  resolvedAt: string
 }
 
 export default function ShrinkageModule() {
   const [data, setData] = useState<ShrinkageRecord[]>([])
-  const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState({
-    productId: '', productName: '', qty: '', reason: '', reportedBy: '',
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [editing, setEditing] = useState<ShrinkageRecord | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [form, setForm] = useState({ 
+    rtvId: '', 
+    productId: '', 
+    productName: '', 
+    qty: 0, 
+    reason: '', 
+    reportedBy: '', 
+    status: 'pending',
+    resolvedBy: '',
+    resolvedAt: ''
   })
-
-  useEffect(() => { fetch('/api/products').then(r => r.json()).then(setProducts) }, [])
 
   const fetchData = () => {
     fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
@@ -82,162 +55,340 @@ export default function ShrinkageModule() {
     fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
   }, [search])
 
-  const handleProductSelect = (productId: string) => {
-    const p = products.find(p => p.productId === productId)
-    setForm({ ...form, productId, productName: p?.productLabel || '' })
-  }
+  const filteredData = data
+
+  const totalShrinkage = data.length
+  const pendingShrinkage = data.filter(s => s.status === 'pending').length
+  const resolvedShrinkage = data.filter(s => s.status === 'resolved').length
+
+  const stats = [
+    { label: 'Total Shrinkage', value: totalShrinkage, icon: Package, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
+    { label: 'Pending', value: pendingShrinkage, icon: Clock, color: '#F59E0B', bg: 'bg-amber-500/20', border: 'border-amber-400/30', gradient: 'from-amber-500/10 to-amber-500/5' },
+    { label: 'Resolved', value: resolvedShrinkage, icon: CheckCircle, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
+  ]
 
   const handleSubmit = async () => {
-    if (!form.productId || !form.qty || !form.reason || !form.reportedBy) {
+    if (!form.productName || !form.reason) {
       toast.error('Please fill all required fields')
       return
     }
-    await fetch('/api/shrinkage', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, qty: parseInt(form.qty) }),
-    })
-    toast.success('Shrinkage reported')
+    if (editing) {
+      await fetch('/api/shrinkage', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...form }) })
+      toast.success('Shrinkage record updated successfully')
+    } else {
+      await fetch('/api/shrinkage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
+      toast.success('Shrinkage record created successfully')
+    }
     setOpen(false)
-    setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
+    setEditing(null)
+    setForm({ 
+      rtvId: '', 
+      productId: '', 
+      productName: '', 
+      qty: 0, 
+      reason: '', 
+      reportedBy: '', 
+      status: 'pending',
+      resolvedBy: '',
+      resolvedAt: ''
+    })
     fetchData()
   }
 
-  const totalLoss = data.reduce((s, r) => s + r.qty, 0)
-
-  const statValues: Record<string, string | number> = {
-    incidents: data.length,
-    loss: `${totalLoss} units`,
-    pending: data.filter(r => r.status === 'pending').length,
-    resolved: data.filter(r => r.status === 'resolved').length,
+  const handleEdit = (item: ShrinkageRecord) => {
+    setEditing(item)
+    setForm({ 
+      rtvId: item.rtvId, 
+      productId: item.productId, 
+      productName: item.productName, 
+      qty: item.qty, 
+      reason: item.reason, 
+      reportedBy: item.reportedBy, 
+      status: item.status,
+      resolvedBy: item.resolvedBy || '',
+      resolvedAt: item.resolvedAt || ''
+    })
+    setOpen(true)
   }
+
+  const handleDelete = async () => {
+    if (deletingId) {
+      await fetch(`/api/shrinkage?id=${deletingId}`, { method: 'DELETE' })
+      toast.success('Shrinkage record deleted successfully')
+      setDeleteOpen(false)
+      setDeletingId(null)
+      fetchData()
+    }
+  }
+
+  const openCreate = () => {
+    setEditing(null)
+    setForm({ 
+      rtvId: '', 
+      productId: '', 
+      productName: '', 
+      qty: 0, 
+      reason: '', 
+      reportedBy: '', 
+      status: 'pending',
+      resolvedBy: '',
+      resolvedAt: ''
+    })
+    setOpen(true)
+  }
+
+  const handleClose = () => {
+    setOpen(false)
+    setEditing(null)
+    setForm({ 
+      rtvId: '', 
+      productId: '', 
+      productName: '', 
+      qty: 0, 
+      reason: '', 
+      reportedBy: '', 
+      status: 'pending',
+      resolvedBy: '',
+      resolvedAt: ''
+    })
+  }
+
+  // Function to determine status badge
+  const getStatusBadge = (record: ShrinkageRecord) => {
+    switch(record.status) {
+      case 'pending':
+        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 text-[11px]">Pending</Badge>
+      case 'resolved':
+        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[11px]">Resolved</Badge>
+      default:
+        return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-0 text-[11px]">Unknown</Badge>
+    }
+  }
+
+  // Define columns for the data table
+  const columns = [
+    { key: 'shrinkageId', label: 'Shrinkage ID', className: 'font-medium' },
+    { key: 'rtvId', label: 'RTV ID' },
+    { key: 'productName', label: 'Product' },
+    { key: 'qty', label: 'Quantity' },
+    { key: 'reason', label: 'Reason' },
+    { key: 'reportedBy', label: 'Reported By' },
+    { 
+      key: 'status', 
+      label: 'Status', 
+      render: (value: string, row: ShrinkageRecord) => getStatusBadge(row) 
+    },
+    { 
+      key: 'actions', 
+      label: 'Actions', 
+      className: 'text-right',
+      render: (_: any, row: ShrinkageRecord) => (
+        <div className="flex justify-end gap-1">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-7 w-7 p-0 rounded-lg"
+            onClick={() => handleEdit(row)}
+            title="Edit"
+          >
+            <Edit3 size={12} />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="h-7 w-7 p-0 rounded-lg text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
+            onClick={() => { setDeletingId(row.id); setDeleteOpen(true) }}
+            title="Delete"
+          >
+            <Trash2 size={12} />
+          </Button>
+        </div>
+      )
+    },
+  ]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Shrinkage</h1>
-          <p className="text-sm text-gray-400">Track and report inventory losses</p>
+      <OfficeHeader
+        title="Shrinkage Office"
+        description="Track and manage inventory shrinkage records"
+        icon={AlertTriangle}
+        stats={stats}
+        actionLabel="New Shrinkage"
+        onAction={openCreate}
+      >
+        <div className="relative flex-1 w-full sm:w-auto">
+          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Search shrinkage records..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-10 rounded-xl border-gray-200 bg-white"
+          />
         </div>
-        <Button onClick={() => { setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' }); setOpen(true) }} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-          <Plus size={18} className="mr-2" /> Report Shrinkage
-        </Button>
-      </div>
+      </OfficeHeader>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {statCards.map((stat, i) => {
-          const colors = colorMap[stat.color]
-          return (
-            <motion.div
-              key={stat.key}
-              initial={{ opacity: 0, y: 24 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.35, delay: i * 0.07 }}
-              className={`bg-gradient-to-br ${colors.gradient} border ${colors.border} rounded-2xl p-5`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{statValues[stat.key]}</p>
-                </div>
-                <div className={`w-10 h-10 rounded-xl ${colors.iconBg} flex items-center justify-center ${colors.iconColor}`}>
-                  {statIcons[stat.key]}
-                </div>
+      {/* Data Table */}
+      <DataTable
+        data={filteredData}
+        columns={columns}
+        keyExtractor={(row: ShrinkageRecord) => row.id}
+        pageSize={10}
+        emptyMessage="No shrinkage records found"
+        emptyIcon={<AlertTriangle size={48} className="mx-auto text-gray-300" />}
+      />
+
+      {/* Detail / Create / Edit Slide-Over */}
+      <DetailSlideOver
+        open={open}
+        onClose={handleClose}
+        title={editing ? `Shrinkage for ${editing.productName}` : 'New Shrinkage Record'}
+        subtitle={editing ? `ID: ${editing.shrinkageId}` : 'Fill in the details to create a new shrinkage record'}
+        width="lg"
+        footer={
+          <div className="flex items-center justify-between">
+            {editing && (
+              <Button
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-xl"
+                onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}
+              >
+                <Trash2 size={16} className="mr-2" />
+                Delete
+              </Button>
+            )}
+            <div className="flex gap-3 ml-auto">
+              <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
+              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
+                {editing ? 'Update Shrinkage' : 'Create Shrinkage'}
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {editing && (
+          <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Shrinkage ID</p>
+                <p className="font-mono text-gray-700">{editing.shrinkageId}</p>
               </div>
-            </motion.div>
-          )
-        })}
-      </div>
-
-      <div className="bg-white/80 backdrop-blur-sm border border-gray-100 hover:shadow-md transition-shadow rounded-2xl">
-        <div className="p-5">
-          <div className="relative mb-4">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input placeholder="Search shrinkage records..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 bg-gray-50/50 border-gray-200/60 focus:bg-white" />
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Status</p>
+                {getStatusBadge(editing)}
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">RTV ID</p>
+                <p className="font-mono text-gray-700">{editing.rtvId || 'N/A'}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Reported By</p>
+                <p className="text-gray-700">{editing.reportedBy}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Created</p>
+                <p className="text-gray-700">{new Date(editing.createdAt).toLocaleDateString()}</p>
+              </div>
+              <div>
+                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Quantity</p>
+                <p className="text-gray-700">{editing.qty}</p>
+              </div>
+            </div>
           </div>
-          <div className="overflow-hidden rounded-2xl border border-gray-100 overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-[#1B2A4A] hover:bg-[#1B2A4A]">
-                  <TableHead className="text-white font-semibold">ID</TableHead>
-                  <TableHead className="text-white font-semibold">Product</TableHead>
-                  <TableHead className="text-white font-semibold">Qty Lost</TableHead>
-                  <TableHead className="text-white font-semibold">Reason</TableHead>
-                  <TableHead className="text-white font-semibold">Reported By</TableHead>
-                  <TableHead className="text-white font-semibold">Status</TableHead>
-                  <TableHead className="text-white font-semibold">Date</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {data.map((item, i) => (
-                  <TableRow key={item.id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                    <TableCell className="font-mono text-sm">{item.shrinkageId}</TableCell>
-                    <TableCell className="font-medium flex items-center gap-2"><Package size={14} className="text-red-500" />{item.productName}</TableCell>
-                    <TableCell className="font-bold text-red-600">-{item.qty}</TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                        item.reason === 'damage' ? 'bg-red-50 text-red-700' :
-                        item.reason === 'theft' ? 'bg-purple-50 text-purple-700' :
-                        item.reason === 'expiry' ? 'bg-amber-50 text-amber-700' :
-                        'bg-gray-100 text-gray-700'
-                      }`}>
-                        {item.reason.charAt(0).toUpperCase() + item.reason.slice(1)}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-sm">{item.reportedBy}</TableCell>
-                    <TableCell>
-                      <Badge variant={item.status === 'resolved' ? 'default' : 'outline'} className={item.status === 'resolved' ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'border-amber-500 text-amber-700'}>
-                        {item.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</TableCell>
-                  </TableRow>
-                ))}
-                {data.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-sm text-gray-400 text-center py-12">
-                      <AlertTriangle size={32} className="mx-auto mb-2 opacity-40" />
-                      No shrinkage records found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+        )}
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">RTV ID</Label>
+              <Input
+                value={form.rtvId}
+                onChange={e => setForm({ ...form, rtvId: e.target.value })}
+                placeholder="Enter RTV ID (if applicable)"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Product Name <span className="text-red-400">*</span></Label>
+              <Input
+                value={form.productName}
+                onChange={e => setForm({ ...form, productName: e.target.value })}
+                placeholder="Enter product name"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Product ID</Label>
+              <Input
+                value={form.productId}
+                onChange={e => setForm({ ...form, productId: e.target.value })}
+                placeholder="Enter product ID"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Quantity</Label>
+              <Input
+                type="number"
+                value={form.qty}
+                onChange={e => setForm({ ...form, qty: parseInt(e.target.value) || 0 })}
+                placeholder="Enter quantity"
+                className="rounded-xl"
+              />
+            </div>
+          </div>
+          
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block">Reason <span className="text-red-400">*</span></Label>
+            <Input
+              value={form.reason}
+              onChange={e => setForm({ ...form, reason: e.target.value })}
+              placeholder="Enter reason for shrinkage"
+              className="rounded-xl"
+            />
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Reported By</Label>
+              <Input
+                value={form.reportedBy}
+                onChange={e => setForm({ ...form, reportedBy: e.target.value })}
+                placeholder="Enter name of reporter"
+                className="rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block">Status</Label>
+              <select
+                title="Shrinkage Status"
+                value={form.status}
+                onChange={e => setForm({ ...form, status: e.target.value })}
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B35]"
+              >
+                <option value="pending">Pending</option>
+                <option value="resolved">Resolved</option>
+              </select>
+            </div>
           </div>
         </div>
-      </div>
+      </DetailSlideOver>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Report Shrinkage</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Product *</Label>
-              <Select value={form.productId} onValueChange={handleProductSelect}>
-                <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                <SelectContent>{products.map(p => <SelectItem key={p.productId} value={p.productId}>{p.productLabel} (Stock: {p.currentStock})</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div><Label>Quantity Lost *</Label><Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} placeholder="0" /></div>
-            <div>
-              <Label>Reason *</Label>
-              <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
-                <SelectTrigger><SelectValue placeholder="Select reason" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="damage">Damage</SelectItem>
-                  <SelectItem value="theft">Theft</SelectItem>
-                  <SelectItem value="expiry">Expiry</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div><Label>Reported By *</Label><Input value={form.reportedBy} onChange={e => setForm({ ...form, reportedBy: e.target.value })} placeholder="Your name" /></div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Report</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Shrinkage Record</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. This will permanently delete the shrinkage record.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }
