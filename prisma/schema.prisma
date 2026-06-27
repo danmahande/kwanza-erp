@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -18,207 +18,16 @@ model User {
   updatedAt     DateTime  @updatedAt
 }
 
-/// Enum for product status to differentiate between various states
-enum ProductStatus {
-  ACTIVE
-  INACTIVE
-  OUT_OF_STOCK
-  DISCONTINUED
-}
-
 model Merchant {
   id              String            @id @default(cuid())
   merchantId      String            @unique
   businessName    String
   contact         String
   email           String
-  /// Distinguish between drop-ship, consignment and self-delivery
-  deliveryType    String?           @default("self-delivery") // "drop-ship", "consignment", "self-delivery"
-  /// Currency for all monetary values for this merchant (default UGX for Uganda)
-  currency        String            @default("UGX")
-  /// Cumulative values for reporting
-  totalInboundValue   Float         @default(0)
-  totalSalesValue     Float         @default(0)
-  totalShrinkageValue Float         @default(0)
-  totalReturnValue    Float         @default(0)
-  expectedPayment     Float         @default(0)
-  actualPayment       Float         @default(0)
-  pendingPayment      Float         @default(0)
-  /// Outstanding storage liability (accrued daily, settled on statement generation)
-  storageLiabilityBalance Float     @default(0)
   isActive        Boolean           @default(true)
   createdBy       String
   createdAt       DateTime          @default(now())
-  updatedAt       DateTime  @updatedAt
-}
-
-/// Per-merchant contracted rate card. One warehouse, many rate cards.
-/// All amounts in the merchant's currency (UGX by default).
-/// NOTE: no per-pallet storage fee — storage is charged per unit per day only.
-model MerchantRateCard {
-  id                    String   @id @default(cuid())
-  merchantId            String   // references Merchant.merchantId
-  /// Inbound receiving fee (UGX per unit received)
-  inboundReceivingPerUnit   Float @default(0)
-  /// Storage fee (UGX per unit per day). Accrues from the day after inbound until outbound.
-  storagePerUnitPerDay      Float @default(0)
-  /// Outbound pick fee (UGX per unit picked)
-  pickPerUnit               Float @default(0)
-  /// Outbound pack fee (UGX per order packed)
-  packPerOrder              Float @default(0)
-  /// Return processing fee (UGX per unit returned by customer)
-  returnProcessingPerUnit   Float @default(0)
-  /// Commission the 3PL earns on this merchant's sales (percent of saleAmount)
-  commissionPercent         Float @default(0)
-  /// Flat fee charged per COD order remitted
-  codRemittanceFeePerOrder  Float @default(0)
-  /// Penalty charged to driver (not merchant) for COD shortfall — recorded here for reference
-  codShortfallPenalty       Float @default(0)
-  /// Validity window
-  validFrom              DateTime  @default(now())
-  validTo                DateTime?
-  isActive               Boolean   @default(true)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
-
-  @@index([merchantId])
-}
-
-/// Storage liability — accrues daily per inbound unit until that unit is outbound or disposed.
-/// One row per inbound batch (not per unit — keeps the table small).
-/// Workflow 1: created on InboundRecord POST, updated by daily cron, settled on statement.
-model StorageLiability {
-  id                String    @id @default(cuid())
-  merchantId        String
-  merchantName      String
-  inboundId         String    // references InboundRecord.inboundId
-  productId         String
-  productName       String
-  /// Units currently in warehouse under this liability (decrements as units are outbound/disposed)
-  unitsRemaining    Int       @default(0)
-  /// Per-unit-per-day rate at time of inbound (UGX). Frozen so historical liability is stable.
-  ratePerUnitPerDay Float     @default(0)
-  /// First day the storage fee started accruing (day after inbound)
-  accrualStart      DateTime
-  /// Last day accrual was run up to
-  accrualThrough    DateTime?
-  /// Total accrued so far (UGX)
-  accruedAmount     Float     @default(0)
-  /// Settled amount (UGX) — set when a statement consumes this liability
-  settledAmount     Float     @default(0)
-  status            String    @default("active") // "active" | "settled" | "partially_settled"
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  @@index([merchantId])
-  @@index([inboundId])
-}
-
-/// Driver banking — daily deposit of COD cash collected.
-/// Workflow 2: closes the loop between driver collecting cash and merchant being paid.
-model DriverBanking {
-  id              String    @id @default(cuid())
-  bankingId       String    @unique
-  driverId        String
-  driverName      String
-  /// Total amount banked (UGX)
-  amount          Float
-  /// Bank or agent where the deposit was made
-  bankName        String?
-  /// Bank reference / slip number
-  bankReference   String?
-  /// URL of the uploaded bank slip photo
-  slipPhotoUrl    String?
-  /// Optional link to a runsheet this banking covers
-  runsheetId      String?
-  /// Status of reconciliation
-  status          String    @default("pending") // "pending" | "verified" | "shortfall" | "disputed"
-  /// Verified by (cashier name)
-  verifiedBy      String?
-  verifiedAt      DateTime?
-  /// Shortfall amount if deposit < expected (UGX)
-  shortfallAmount Float     @default(0)
-  /// Notes
-  notes           String?
-  bankedAt        DateTime  @default(now())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  @@index([driverId])
-  @@index([runsheetId])
-}
-
-/// Monthly merchant statement — the primary deliverable to merchants.
-/// Workflow 5: generated monthly, contains all line items, PDF + Excel versions.
-model MerchantStatement {
-  id                String    @id @default(cuid())
-  statementId       String    @unique
-  merchantId        String
-  merchantName      String
-  /// Period this statement covers (format: "YYYY-MM")
-  period            String
-  /// Opening balance carried from previous statement (UGX)
-  openingBalance    Float     @default(0)
-  /// Sum of inbound receiving fees for the period (UGX)
-  inboundFees       Float     @default(0)
-  /// Sum of storage fees accrued in the period (UGX)
-  storageFees       Float     @default(0)
-  /// Sum of pick/pack fees for outbound orders in the period (UGX)
-  outboundFees      Float     @default(0)
-  /// Sum of return processing fees (UGX)
-  returnFees        Float     @default(0)
-  /// Sum of shrinkage debits (UGX)
-  shrinkageDebits   Float     @default(0)
-  /// Total COD collected on behalf of merchant in the period (UGX)
-  codCollected      Float     @default(0)
-  /// COD remittance fees charged (UGX)
-  codFees           Float     @default(0)
-  /// Commissions earned by 3PL (UGX) — deducted from merchant payout
-  commissions       Float     @default(0)
-  /// Sales value of orders fulfilled in the period (UGX, before commissions)
-  salesValue        Float     @default(0)
-  /// Net amount payable to merchant (UGX) = salesValue - commissions - fees - shrinkageDebits + codCollected - codFees + openingBalance
-  netPayable        Float     @default(0)
-  /// Whether this statement has been paid out (linked PaymentBatch)
-  isPaid            Boolean   @default(false)
-  paidAt            DateTime?
-  /// File paths / URLs for generated documents
-  pdfUrl            String?
-  excelUrl          String?
-  /// Status
-  status            String    @default("draft") // "draft" | "issued" | "paid" | "disputed"
-  /// Line items JSON for full audit
-  lineItems         Json?
-  generatedBy       String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-
-  @@index([merchantId])
-  @@index([period])
-}
-
-/// Payment batch — groups multiple MerchantPayments into one payout run.
-/// Workflow 6: finance team selects statements, generates batch, marks as disbursed.
-model PaymentBatch {
-  id              String    @id @default(cuid())
-  batchId         String    @unique
-  /// Total amount disbursed in this batch (UGX)
-  totalAmount     Float     @default(0)
-  /// Number of merchants paid in this batch
-  merchantCount   Int       @default(0)
-  /// Payment method for the batch (bank transfer, mobile money, etc.)
-  paymentMethod   String    @default("bank_transfer")
-  /// Reference number from the bank / payment provider
-  bankReference   String?
-  /// Status
-  status          String    @default("draft") // "draft" | "submitted" | "disbursed" | "failed"
-  /// Date the batch was disbursed
-  disbursedAt     DateTime?
-  /// Notes
-  notes           String?
-  recordedBy      String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  updatedAt       DateTime          @updatedAt
 }
 
 model MerchantPayment {
@@ -231,29 +40,14 @@ model MerchantPayment {
   paymentMethod String
   reference     String
   comment       String?
-  /// Allow for deductions such as warehouse fees
-  deductions    Float     @default(0)
-  netAmount     Float     @default(0) // amount - deductions
   recordedBy    String
-  /// Link to the statement this payment settles (Workflow 6)
-  statementId   String?
-  /// Link to a payment batch (Workflow 6)
-  batchId       String?
-  /// Y/M/D fields for filtering (matches the unused PaymentRecord model's intent)
-  year          Int       @default(0)
-  month         Int       @default(0)
-  day           Int       @default(0)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
-
-  @@index([merchantId])
-  @@index([year, month])
-  @@index([batchId])
 }
 
 model Product {
-  id               String         @id @default(cuid())
-  productId        String         @unique
+  id               String   @id @default(cuid())
+  productId        String   @unique
   productLabel     String
   /// Brand name (e.g., "Supreme", "Dettol")
   brand            String?
@@ -265,22 +59,14 @@ model Product {
   unit             String
   /// Product weight (e.g., "50g", "175g", "500ml")
   weight           String?
-  minStock         Int            @default(10)
+  minStock         Int      @default(10)
   unitCost         Float
   unitSellingPrice Float
   commissionPercent Float
-  currentStock     Int            @default(0)
-  /// Enhanced product status enum
-  status           ProductStatus   @default(ACTIVE)
-  /// Detailed product description
-  description      String?
-  /// Product image URL
-  imageUrl         String?
-  /// Date when product was discontinued (if applicable)
-  discontinuedAt   DateTime?
-  isActive         Boolean        @default(true)
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime  @updatedAt
+  currentStock     Int      @default(0)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Customer {
@@ -327,18 +113,15 @@ model InboundRecord {
   updatedAt       DateTime  @updatedAt
 }
 
-/// Updated OutboundRecord with tracking number and order number changes
 model OutboundRecord {
   id                String    @id @default(cuid())
   outboundId        String    @unique
   /// Explicit order number (e.g., ORD-20260414-001)
   orderNumber       String?
-  /// Tracking number for shipment tracking
-  trackingNumber    String?
-  /// Updated to support order number changes (e.g., DS to RT)
-  originalOrderNumber String?  // Original order number before change
   /// User who created this order (e.g., U003, U004)
   userId            String?
+  /// Tracking number for shipment tracking
+  trackingNumber    String?
   /// Vendor/supplier code (e.g., V001)
   vendorId          String?
   /// Vendor business name
@@ -401,100 +184,31 @@ model ReconciliationRecord {
   createdAt       DateTime  @default(now())
 }
 
-/// RTV Record with approval workflow
 model RTVRecord {
   id              String    @id @default(cuid())
   rtvId           String    @unique
-  /// Reference to original outbound order
-  originalOrderId String?
-  /// New order number for return (RT prefix)
-  returnOrderNumber String?
   merchantId      String
   merchantName    String
   productId       String
   productName     String
   qty             Int
   reason          String
-  /// Status for approval workflow
-  approvalStatus  String    @default("pending_approval") // "pending_approval", "approved", "rejected"
-  /// Agent who approved/rejected
-  approvedBy      String?
-  approvedAt      DateTime?
   status          String    @default("pending")
   processedBy     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
 
-/// Shrinkage Record (sub-component of RTV module)
-/// Workflow 4: on resolution, can debit the merchant's account for the loss value.
 model ShrinkageRecord {
   id              String    @id @default(cuid())
   shrinkageId     String    @unique
-  /// Link to RTV if shrinkage is related to return
-  rtvId           String?
-  /// Merchant who owns the lost stock (for debit)
-  merchantId      String?
-  merchantName    String?
   productId       String
   productName     String
   qty             Int
-  /// Per-unit cost (UGX) — used to compute debit amount
-  unitCost        Float?
-  /// Total value of shrinkage (UGX) = qty × unitCost
-  totalValue      Float?
   reason          String
   reportedBy      String
   status          String    @default("pending")
-  /// Workflow 4: if true, the totalValue is debited to the merchant on resolution
-  debitMerchant   Boolean   @default(false)
-  /// Statement ID this shrinkage was debited on (set when settled)
-  settledOnStatementId String?
   createdAt       DateTime  @default(now())
-  /// Added for proper tracking
-  resolvedBy      String?
-  resolvedAt      DateTime?
-
-  @@index([merchantId])
-  @@index([rtvId])
-}
-
-/// After-Sales module for customer returns
-model AfterSalesRecord {
-  id              String    @id @default(cuid())
-  afterSalesId    String    @unique
-  /// Reference to customer return
-  originalOrderId String?
-  /// New order number for return process
-  returnOrderNumber String?
-  /// Customer who initiated return
-  customerId      String
-  customerName    String
-  /// Return reason
-  reason          String
-  /// Return status
-  returnStatus    String    @default("initiated") // "initiated", "in_review", "approved", "rejected", "processed"
-  /// Agent handling the return
-  agentId         String?
-  agentName       String?
-  /// Approval details
-  approvedBy      String?
-  approvedAt      DateTime?
-  /// Refund amount
-  refundAmount    Float?
-  /// Replacement product (if applicable)
-  replacementProductId String?
-  replacementProductName String?
-  /// Tracking number for return shipment
-  returnTrackingNumber String?
-  /// Workflow 3: list of itemIds being returned (JSON array of strings)
-  itemIds               Json?
-  /// Workflow 3: per-item disposition decision (JSON: [{itemId, disposition}])
-  dispositions          Json?
-  /// Resolution notes
-  resolutionNotes String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
 }
 
 model Driver {
@@ -621,9 +335,6 @@ model ItemEvent {
   ///   RESCHEDULED, PARTIALLY_RETURNED, RETURNED_TO_RIDER,
   ///   RETURNED_TO_WAREHOUSE, CANCELLED, DAMAGED, DISPOSED, RTV
   eventType         String
-  /// Workflow 3: disposition decided for returned units
-  /// RESTOCK | RTV | DISPOSE | LIQUIDATE — null for non-return events
-  disposition       String?
   /// Human-readable description
   description       String?
   /// Who performed this action
@@ -647,31 +358,6 @@ model ItemEvent {
   @@index([itemId])
 }
 
-/// Order Processing Module
-model OrderProcessing {
-  id                String    @id @default(cuid())
-  orderId           String    @unique
-  orderNumber       String    @unique  // e.g., DS001
-  orderDate         DateTime  @default(now())
-  customerId        String
-  customerName      String
-  customerInfo      String    // Full customer contact details
-  totalAmount       Float
-  paymentMethod     String    // Cash, M-Pesa, Bank Transfer, etc.
-  /// Status of order processing
-  status            String    @default("new_order") // "new_order", "processing", "shipped", "delivered", "returned"
-  /// Tracking number for the order
-  trackingNumber    String?   // Associated with either warehouse or dropship
-  /// Invoice details
-  invoiceGenerated  Boolean   @default(false)
-  invoiceNumber     String?
-  invoiceDate       DateTime?
-  /// Created by user
-  createdBy         String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
-}
-
 model AuditLog {
   id              String    @id @default(cuid())
   userId          String?
@@ -681,41 +367,4 @@ model AuditLog {
   entityId        String?
   details         String?
   createdAt       DateTime  @default(now())
-}
-
-model PaymentRecord {
-  id              String    @id @default(cuid())
-  paymentId       String    @unique
-  /// Vendor/merchant ID
-  vendorId        String
-  /// Vendor/merchant name
-  vendorName      String
-  /// Payment amount
-  amount          Float
-  /// Payment method
-  paymentMethod   String
-  /// Reference number
-  reference       String
-  /// Deduction details
-  deductions      Json?     /// Example: [{"type": "warehouse_fee", "amount": 500}]
-  /// Net payment amount (amount - deductions)
-  netAmount       Float
-  /// Payment date
-  paymentDate     DateTime  @default(now())
-  /// Recorded by
-  recordedBy      String
-  /// Payment status
-  status          String    @default("pending")
-  /// Comments
-  comment         String?
-  /// Year for filtering
-  year            Int       @default(0)
-  /// Month for filtering (1-12)
-  month           Int       @default(0)
-  /// Day for filtering (1-31)
-  day             Int       @default(0)
-  /// Created timestamp
-  createdAt       DateTime  @default(now())
-  /// Updated timestamp
-  updatedAt       DateTime  @updatedAt
 }

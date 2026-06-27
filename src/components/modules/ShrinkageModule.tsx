@@ -1,22 +1,23 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import { Search, Package, AlertTriangle, CheckCircle, Trash2, Edit3, PackageSearch, Clock } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
-import DataTable from '@/components/shared/DataTable'
+
+// ── Types ──
+interface Product { id: string; productId: string; productLabel: string; currentStock: number; unit: string }
 
 interface ShrinkageRecord {
   id: string
   shrinkageId: string
-  rtvId: string
   productId: string
   productName: string
   qty: number
@@ -24,371 +25,330 @@ interface ShrinkageRecord {
   reportedBy: string
   status: string
   createdAt: string
-  resolvedBy: string
-  resolvedAt: string
 }
 
+// ── Reason badge config ──
+const reasonConfig: Record<string, { label: string; bg: string; text: string; border: string }> = {
+  damage: { label: 'Damage',  bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200/60' },
+  theft:  { label: 'Theft',   bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60' },
+  expiry: { label: 'Expiry',  bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200/60' },
+  other:  { label: 'Other',   bg: 'bg-gray-100',  text: 'text-gray-600',   border: 'border-gray-200/60' },
+}
+
+const reasonBadge = (reason: string) => {
+  const c = reasonConfig[reason] || reasonConfig.other
+  return (
+    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border ${c.bg} ${c.text} ${c.border}`}>
+      {c.label}
+    </span>
+  )
+}
+
+// ── Status badge config ──
+const statusBadge = (status: string) => {
+  switch (status) {
+    case 'resolved': return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0">Resolved</Badge>
+    case 'pending':  return <Badge variant="outline" className="border-amber-400 text-amber-700 bg-amber-50/50 hover:bg-amber-50">Pending</Badge>
+    case 'investigating': return <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100 border-0">Investigating</Badge>
+    default:         return <Badge variant="secondary">{status}</Badge>
+  }
+}
+
+// ── Card animation ──
+const cardVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.97 },
+  visible: (i: number) => ({
+    opacity: 1, y: 0, scale: 1,
+    transition: { duration: 0.35, delay: i * 0.05, ease: [0.25, 0.46, 0.45, 0.94] as const },
+  }),
+}
+
+// ════════════════════════════════════════════
+// ── MAIN COMPONENT ──
+// ════════════════════════════════════════════
 export default function ShrinkageModule() {
   const [data, setData] = useState<ShrinkageRecord[]>([])
+  const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
-  const [open, setOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [editing, setEditing] = useState<ShrinkageRecord | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [form, setForm] = useState({ 
-    rtvId: '', 
-    productId: '', 
-    productName: '', 
-    qty: 0, 
-    reason: '', 
-    reportedBy: '', 
-    status: 'pending',
-    resolvedBy: '',
-    resolvedAt: ''
+
+  // Slide-over states
+  const [detailOpen, setDetailOpen] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<ShrinkageRecord | null>(null)
+
+  const [form, setForm] = useState({
+    productId: '', productName: '', qty: '', reason: '', reportedBy: '',
   })
 
-  const fetchData = () => {
+  // ── Fetch Data ──
+  useEffect(() => { fetch('/api/products').then(r => r.json()).then(setProducts) }, [])
+
+  const fetchData = useCallback(() => {
     fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
-  }
+  }, [search])
 
   useEffect(() => {
     fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
   }, [search])
 
-  const filteredData = data
-
-  const totalShrinkage = data.length
-  const pendingShrinkage = data.filter(s => s.status === 'pending').length
-  const resolvedShrinkage = data.filter(s => s.status === 'resolved').length
-
-  const stats = [
-    { label: 'Total Shrinkage', value: totalShrinkage, icon: Package, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Pending', value: pendingShrinkage, icon: Clock, color: '#F59E0B', bg: 'bg-amber-500/20', border: 'border-amber-400/30', gradient: 'from-amber-500/10 to-amber-500/5' },
-    { label: 'Resolved', value: resolvedShrinkage, icon: CheckCircle, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
-  ]
+  // ── Form Handlers ──
+  const handleProductSelect = (productId: string) => {
+    const p = products.find(p => p.productId === productId)
+    setForm({ ...form, productId, productName: p?.productLabel || '' })
+  }
 
   const handleSubmit = async () => {
-    if (!form.productName || !form.reason) {
+    if (!form.productId || !form.qty || !form.reason || !form.reportedBy) {
       toast.error('Please fill all required fields')
       return
     }
-    if (editing) {
-      await fetch('/api/shrinkage', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...form }) })
-      toast.success('Shrinkage record updated successfully')
-    } else {
-      await fetch('/api/shrinkage', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) })
-      toast.success('Shrinkage record created successfully')
-    }
-    setOpen(false)
-    setEditing(null)
-    setForm({ 
-      rtvId: '', 
-      productId: '', 
-      productName: '', 
-      qty: 0, 
-      reason: '', 
-      reportedBy: '', 
-      status: 'pending',
-      resolvedBy: '',
-      resolvedAt: ''
+    await fetch('/api/shrinkage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, qty: parseInt(form.qty) }),
     })
+    toast.success('Shrinkage reported')
+    setCreateOpen(false)
+    setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
     fetchData()
   }
 
-  const handleEdit = (item: ShrinkageRecord) => {
-    setEditing(item)
-    setForm({ 
-      rtvId: item.rtvId, 
-      productId: item.productId, 
-      productName: item.productName, 
-      qty: item.qty, 
-      reason: item.reason, 
-      reportedBy: item.reportedBy, 
-      status: item.status,
-      resolvedBy: item.resolvedBy || '',
-      resolvedAt: item.resolvedAt || ''
-    })
-    setOpen(true)
-  }
-
-  const handleDelete = async () => {
-    if (deletingId) {
-      await fetch(`/api/shrinkage?id=${deletingId}`, { method: 'DELETE' })
-      toast.success('Shrinkage record deleted successfully')
-      setDeleteOpen(false)
-      setDeletingId(null)
-      fetchData()
-    }
+  // ── Card click → detail ──
+  const openDetail = (record: ShrinkageRecord) => {
+    setSelectedRecord(record)
+    setDetailOpen(true)
   }
 
   const openCreate = () => {
-    setEditing(null)
-    setForm({ 
-      rtvId: '', 
-      productId: '', 
-      productName: '', 
-      qty: 0, 
-      reason: '', 
-      reportedBy: '', 
-      status: 'pending',
-      resolvedBy: '',
-      resolvedAt: ''
-    })
-    setOpen(true)
+    setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
+    setCreateOpen(true)
   }
 
-  const handleClose = () => {
-    setOpen(false)
-    setEditing(null)
-    setForm({ 
-      rtvId: '', 
-      productId: '', 
-      productName: '', 
-      qty: 0, 
-      reason: '', 
-      reportedBy: '', 
-      status: 'pending',
-      resolvedBy: '',
-      resolvedAt: ''
-    })
-  }
+  // ── Computed stats ──
+  const totalLoss = data.reduce((s, r) => s + r.qty, 0)
+  const pendingCount = data.filter(r => r.status === 'pending').length
+  const resolvedCount = data.filter(r => r.status === 'resolved').length
 
-  // Function to determine status badge
-  const getStatusBadge = (record: ShrinkageRecord) => {
-    switch(record.status) {
-      case 'pending':
-        return <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 text-[11px]">Pending</Badge>
-      case 'resolved':
-        return <Badge className="bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[11px]">Resolved</Badge>
-      default:
-        return <Badge className="bg-gray-100 text-gray-700 hover:bg-gray-100 border-0 text-[11px]">Unknown</Badge>
-    }
-  }
-
-  // Define columns for the data table
-  const columns = [
-    { key: 'shrinkageId', label: 'Shrinkage ID', className: 'font-medium' },
-    { key: 'rtvId', label: 'RTV ID' },
-    { key: 'productName', label: 'Product' },
-    { key: 'qty', label: 'Quantity' },
-    { key: 'reason', label: 'Reason' },
-    { key: 'reportedBy', label: 'Reported By' },
-    { 
-      key: 'status', 
-      label: 'Status', 
-      render: (value: string, row: ShrinkageRecord) => getStatusBadge(row) 
-    },
-    { 
-      key: 'actions', 
-      label: 'Actions', 
-      className: 'text-right',
-      render: (_: any, row: ShrinkageRecord) => (
-        <div className="flex justify-end gap-1">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 w-7 p-0 rounded-lg"
-            onClick={() => handleEdit(row)}
-            title="Edit"
-          >
-            <Edit3 size={12} />
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            className="h-7 w-7 p-0 rounded-lg text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700"
-            onClick={() => { setDeletingId(row.id); setDeleteOpen(true) }}
-            title="Delete"
-          >
-            <Trash2 size={12} />
-          </Button>
-        </div>
-      )
-    },
+  const stats = [
+    { label: 'Total Incidents', value: data.length,      icon: AlertTriangle, color: '#EF4444', bg: 'bg-red-500/15',     border: 'border-red-500/20',     gradient: 'from-red-500/10 to-red-500/5' },
+    { label: 'Total Loss',      value: `${totalLoss} units`, icon: TrendingDown, color: '#DC2626', bg: 'bg-red-500/15', border: 'border-red-500/20', gradient: 'from-red-600/10 to-red-600/5' },
+    { label: 'Pending',         value: pendingCount,      icon: Clock,          color: '#F59E0B', bg: 'bg-amber-500/15',   border: 'border-amber-500/20',   gradient: 'from-amber-500/10 to-amber-500/5' },
+    { label: 'Resolved',        value: resolvedCount,     icon: CheckCircle2,   color: '#22C55E', bg: 'bg-green-500/15',   border: 'border-green-500/20',   gradient: 'from-green-500/10 to-green-500/5' },
   ]
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
+      {/* ── Office Header ── */}
       <OfficeHeader
         title="Shrinkage Office"
-        description="Track and manage inventory shrinkage records"
+        description="Track and report inventory losses and discrepancies"
         icon={AlertTriangle}
         stats={stats}
-        actionLabel="New Shrinkage"
+        actionLabel="Report Shrinkage"
         onAction={openCreate}
       >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        {/* Search bar in toolbar */}
+        <div className="relative flex-1 max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <Input
             placeholder="Search shrinkage records..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
+            className="pl-9 h-10 bg-white border-gray-200 rounded-xl text-sm"
           />
+        </div>
+        <div className="flex items-center gap-2 text-xs text-gray-400">
+          <span>{data.length} records</span>
         </div>
       </OfficeHeader>
 
-      {/* Data Table */}
-      <DataTable
-        data={filteredData}
-        columns={columns}
-        keyExtractor={(row: ShrinkageRecord) => row.id}
-        pageSize={10}
-        emptyMessage="No shrinkage records found"
-        emptyIcon={<AlertTriangle size={48} className="mx-auto text-gray-300" />}
-      />
+      {/* ── Card Grid ── */}
+      {data.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {data.map((item, i) => (
+            <motion.div
+              key={item.id}
+              custom={i}
+              variants={cardVariants}
+              initial="hidden"
+              animate="visible"
+              whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.08)' }}
+              transition={{ duration: 0.2 }}
+              onClick={() => openDetail(item)}
+              className="cursor-pointer bg-white rounded-2xl border border-gray-100 p-5 hover:border-gray-200 transition-colors group"
+            >
+              {/* Card header: ID + date */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-xs text-gray-400 truncate">{item.shrinkageId}</p>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-gray-400 shrink-0 ml-2">
+                  <CalendarDays size={12} />
+                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </div>
+              </div>
 
-      {/* Detail / Create / Edit Slide-Over */}
-      <DetailSlideOver
-        open={open}
-        onClose={handleClose}
-        title={editing ? `Shrinkage for ${editing.productName}` : 'New Shrinkage Record'}
-        subtitle={editing ? `ID: ${editing.shrinkageId}` : 'Fill in the details to create a new shrinkage record'}
-        width="lg"
-        footer={
-          <div className="flex items-center justify-between">
-            {editing && (
-              <Button
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50 hover:text-red-700 rounded-xl"
-                onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}
-              >
-                <Trash2 size={16} className="mr-2" />
-                Delete
-              </Button>
-            )}
-            <div className="flex gap-3 ml-auto">
-              <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-                {editing ? 'Update Shrinkage' : 'Create Shrinkage'}
-              </Button>
-            </div>
+              {/* Product */}
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-7 h-7 rounded-lg bg-red-50 flex items-center justify-center shrink-0">
+                  <Package size={14} className="text-red-500" />
+                </div>
+                <span className="text-sm font-medium text-gray-700 truncate">{item.productName}</span>
+              </div>
+
+              {/* Quantity lost - prominent */}
+              <div className="bg-red-50/60 rounded-xl px-4 py-3 mb-3 text-center">
+                <p className="text-[10px] text-red-400 uppercase tracking-wider font-semibold mb-0.5">Qty Lost</p>
+                <p className="text-2xl font-extrabold text-red-600 tabular-nums leading-none">{item.qty}</p>
+              </div>
+
+              {/* Reason + Status row */}
+              <div className="flex items-center justify-between pt-3 border-t border-gray-50">
+                {reasonBadge(item.reason)}
+                {statusBadge(item.status)}
+              </div>
+
+              {/* Reported by */}
+              <div className="flex items-center gap-1.5 mt-3 text-[11px] text-gray-400">
+                <UserCircle size={12} />
+                <span className="truncate">{item.reportedBy}</span>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      ) : (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-col items-center justify-center py-20"
+        >
+          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+            <AlertTriangle size={28} className="text-gray-300" />
           </div>
-        }
+          <p className="text-sm font-medium text-gray-400">No shrinkage records found</p>
+          <p className="text-xs text-gray-300 mt-1">Report a loss to get started</p>
+        </motion.div>
+      )}
+
+      {/* ── Detail SlideOver ── */}
+      <DetailSlideOver
+        open={detailOpen}
+        onClose={() => setDetailOpen(false)}
+        title={selectedRecord?.shrinkageId || ''}
+        subtitle="Shrinkage Record Details"
+        width="lg"
       >
-        {editing && (
-          <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Shrinkage ID</p>
-                <p className="font-mono text-gray-700">{editing.shrinkageId}</p>
+        {selectedRecord && (
+          <div className="space-y-6">
+            {/* Status & Reason */}
+            <div className="flex items-center gap-3">
+              {statusBadge(selectedRecord.status)}
+              {reasonBadge(selectedRecord.reason)}
+            </div>
+
+            {/* Qty lost - hero */}
+            <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-2xl p-6 text-center border border-red-100">
+              <AlertOctagon size={24} className="text-red-400 mx-auto mb-2" />
+              <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold">Total Quantity Lost</p>
+              <p className="text-4xl font-extrabold text-red-600 tabular-nums mt-1">{selectedRecord.qty}</p>
+            </div>
+
+            {/* Detail fields */}
+            <div className="space-y-4">
+              <DetailField label="Product" value={selectedRecord.productName} />
+              <div className="grid grid-cols-2 gap-4">
+                <DetailField label="Reported By" value={selectedRecord.reportedBy} />
+                <DetailField label="Status" value={selectedRecord.status} />
               </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Status</p>
-                {getStatusBadge(editing)}
+              <div className="grid grid-cols-2 gap-4">
+                <DetailField label="Date Reported" value={new Date(selectedRecord.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} />
+                <DetailField label="Shrinkage ID" value={selectedRecord.shrinkageId} mono />
               </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">RTV ID</p>
-                <p className="font-mono text-gray-700">{editing.rtvId || 'N/A'}</p>
+            </div>
+
+            {/* Product Info */}
+            <div className="bg-gray-50/80 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Package size={14} className="text-red-500" />
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Details</span>
               </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Reported By</p>
-                <p className="text-gray-700">{editing.reportedBy}</p>
+              <p className="text-sm font-medium text-gray-800">{selectedRecord.productName}</p>
+              <p className="text-xs text-gray-400 mt-0.5">Product ID: {selectedRecord.productId}</p>
+            </div>
+
+            {/* Reporter Info */}
+            <div className="bg-gray-50/80 rounded-xl p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <UserCircle size={14} className="text-[#FF6B35]" />
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reported By</span>
               </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Created</p>
-                <p className="text-gray-700">{new Date(editing.createdAt).toLocaleDateString()}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Quantity</p>
-                <p className="text-gray-700">{editing.qty}</p>
-              </div>
+              <p className="text-sm font-medium text-gray-800">{selectedRecord.reportedBy}</p>
             </div>
           </div>
         )}
+      </DetailSlideOver>
+
+      {/* ── Create Shrinkage SlideOver ── */}
+      <DetailSlideOver
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Report Shrinkage"
+        subtitle="Record an inventory loss or discrepancy"
+        width="lg"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
+            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
+              Report
+            </Button>
+          </div>
+        }
+      >
         <div className="space-y-5">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">RTV ID</Label>
-              <Input
-                value={form.rtvId}
-                onChange={e => setForm({ ...form, rtvId: e.target.value })}
-                placeholder="Enter RTV ID (if applicable)"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">Product Name <span className="text-red-400">*</span></Label>
-              <Input
-                value={form.productName}
-                onChange={e => setForm({ ...form, productName: e.target.value })}
-                placeholder="Enter product name"
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">Product ID</Label>
-              <Input
-                value={form.productId}
-                onChange={e => setForm({ ...form, productId: e.target.value })}
-                placeholder="Enter product ID"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">Quantity</Label>
-              <Input
-                type="number"
-                value={form.qty}
-                onChange={e => setForm({ ...form, qty: parseInt(e.target.value) || 0 })}
-                placeholder="Enter quantity"
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-          
           <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Reason <span className="text-red-400">*</span></Label>
-            <Input
-              value={form.reason}
-              onChange={e => setForm({ ...form, reason: e.target.value })}
-              placeholder="Enter reason for shrinkage"
-              className="rounded-xl"
-            />
+            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product *</Label>
+            <Select value={form.productId} onValueChange={handleProductSelect}>
+              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
+              <SelectContent>
+                {products.map(p => (
+                  <SelectItem key={p.productId} value={p.productId}>
+                    {p.productLabel} (Stock: {p.currentStock})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">Reported By</Label>
-              <Input
-                value={form.reportedBy}
-                onChange={e => setForm({ ...form, reportedBy: e.target.value })}
-                placeholder="Enter name of reporter"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block">Status</Label>
-              <select
-                title="Shrinkage Status"
-                value={form.status}
-                onChange={e => setForm({ ...form, status: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#FF6B35]"
-              >
-                <option value="pending">Pending</option>
-                <option value="resolved">Resolved</option>
-              </select>
-            </div>
+          <div>
+            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity Lost *</Label>
+            <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="0" />
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason *</Label>
+            <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
+              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="damage">Damage</SelectItem>
+                <SelectItem value="theft">Theft</SelectItem>
+                <SelectItem value="expiry">Expiry</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reported By *</Label>
+            <Input value={form.reportedBy} onChange={e => setForm({ ...form, reportedBy: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="Your name" />
           </div>
         </div>
       </DetailSlideOver>
-
-      {/* Delete Confirmation */}
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Shrinkage Record</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone. This will permanently delete the shrinkage record.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </motion.div>
+  )
+}
+
+// ── Detail field helper ──
+function DetailField({ label, value, valueClass, mono }: { label: string; value: string; valueClass?: string; mono?: boolean }) {
+  return (
+    <div className="space-y-1">
+      <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">{label}</p>
+      <p className={`text-sm font-semibold text-gray-800 ${valueClass || ''} ${mono ? 'font-mono' : ''}`}>{value}</p>
+    </div>
   )
 }

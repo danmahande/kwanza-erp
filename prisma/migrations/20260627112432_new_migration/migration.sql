@@ -1,53 +1,47 @@
 -- CreateTable
 CREATE TABLE "User" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'viewer',
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "User_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Merchant" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "merchantId" TEXT NOT NULL,
     "businessName" TEXT NOT NULL,
     "contact" TEXT NOT NULL,
     "email" TEXT NOT NULL,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
     "createdBy" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Merchant_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "MerchantPayment" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "paymentId" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
     "vendorId" TEXT NOT NULL,
-    "amount" DOUBLE PRECISION NOT NULL,
+    "amount" REAL NOT NULL,
     "paymentMethod" TEXT NOT NULL,
     "reference" TEXT NOT NULL,
     "comment" TEXT,
     "recordedBy" TEXT NOT NULL,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "MerchantPayment_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Product" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "productId" TEXT NOT NULL,
     "productLabel" TEXT NOT NULL,
     "brand" TEXT,
@@ -56,21 +50,20 @@ CREATE TABLE "Product" (
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
     "unit" TEXT NOT NULL,
+    "weight" TEXT,
     "minStock" INTEGER NOT NULL DEFAULT 10,
-    "unitCost" DOUBLE PRECISION NOT NULL,
-    "unitSellingPrice" DOUBLE PRECISION NOT NULL,
-    "commissionPercent" DOUBLE PRECISION NOT NULL,
+    "unitCost" REAL NOT NULL,
+    "unitSellingPrice" REAL NOT NULL,
+    "commissionPercent" REAL NOT NULL,
     "currentStock" INTEGER NOT NULL DEFAULT 0,
     "isActive" BOOLEAN NOT NULL DEFAULT true,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Product_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "Customer" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "customerId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "contact" TEXT NOT NULL,
@@ -78,16 +71,14 @@ CREATE TABLE "Customer" (
     "address" TEXT,
     "createdBy" TEXT,
     "totalOrders" INTEGER NOT NULL DEFAULT 0,
-    "totalOrderValue" DOUBLE PRECISION NOT NULL DEFAULT 0,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "Customer_pkey" PRIMARY KEY ("id")
+    "totalOrderValue" REAL NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "InboundRecord" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "inboundId" TEXT NOT NULL,
     "vendorId" TEXT,
     "merchantId" TEXT NOT NULL,
@@ -97,73 +88,78 @@ CREATE TABLE "InboundRecord" (
     "brand" TEXT,
     "variant" TEXT,
     "qtyIn" INTEGER NOT NULL,
-    "unitPrice" DOUBLE PRECISION,
-    "inboundValue" DOUBLE PRECISION,
-    "expiryDate" TIMESTAMP(3),
+    "unitPrice" REAL,
+    "inboundValue" REAL,
+    "expiryDate" DATETIME,
     "receivedBy" TEXT NOT NULL,
     "storedBy" TEXT,
     "storageLocation" TEXT,
     "status" TEXT NOT NULL DEFAULT 'received',
     "userComment" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "InboundRecord_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "OutboundRecord" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "outboundId" TEXT NOT NULL,
+    "orderNumber" TEXT,
+    "userId" TEXT,
+    "trackingNumber" TEXT,
+    "vendorId" TEXT,
+    "businessName" TEXT,
     "customerName" TEXT NOT NULL,
     "customerContact" TEXT NOT NULL,
+    "customerEmail" TEXT,
     "customerAddress" TEXT,
     "productName" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
+    "brand" TEXT,
+    "variant" TEXT,
     "qty" INTEGER NOT NULL,
+    "unitSellingPrice" REAL,
+    "saleAmount" REAL,
+    "assignedBy" TEXT,
     "assignedDriver" TEXT,
     "vehicleNumber" TEXT,
     "runsheetId" TEXT,
     "stopSequence" INTEGER,
     "actualDeliveredQty" INTEGER,
-    "codCollected" DOUBLE PRECISION,
+    "codCollected" REAL,
     "deliveryNotes" TEXT,
     "status" TEXT NOT NULL DEFAULT 'pending',
-    "dispatchedAt" TIMESTAMP(3),
-    "deliveredAt" TIMESTAMP(3),
+    "dispatchedAt" DATETIME,
+    "deliveredAt" DATETIME,
     "cancellationReason" TEXT,
-    "cancelledAt" TIMESTAMP(3),
+    "cancelledAt" DATETIME,
     "cancelledBy" TEXT,
     "deliveryAttempts" INTEGER NOT NULL DEFAULT 0,
     "maxAttempts" INTEGER NOT NULL DEFAULT 5,
-    "nextAttemptDate" TIMESTAMP(3),
+    "nextAttemptDate" DATETIME,
     "lastAttemptReason" TEXT,
-    "lastAttemptDate" TIMESTAMP(3),
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "OutboundRecord_pkey" PRIMARY KEY ("id")
+    "lastAttemptDate" DATETIME,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "ReconciliationRecord" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "type" TEXT NOT NULL,
     "referenceId" TEXT,
-    "expectedQty" DOUBLE PRECISION NOT NULL,
-    "actualQty" DOUBLE PRECISION NOT NULL,
-    "variance" DOUBLE PRECISION NOT NULL,
+    "expectedQty" REAL NOT NULL,
+    "actualQty" REAL NOT NULL,
+    "variance" REAL NOT NULL,
     "varianceReason" TEXT,
     "reconciledBy" TEXT NOT NULL,
-    "date" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ReconciliationRecord_pkey" PRIMARY KEY ("id")
+    "date" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
 CREATE TABLE "RTVRecord" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "rtvId" TEXT NOT NULL,
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
@@ -173,15 +169,13 @@ CREATE TABLE "RTVRecord" (
     "reason" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
     "processedBy" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "RTVRecord_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "ShrinkageRecord" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "shrinkageId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
@@ -189,35 +183,64 @@ CREATE TABLE "ShrinkageRecord" (
     "reason" TEXT NOT NULL,
     "reportedBy" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'pending',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ShrinkageRecord_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
 CREATE TABLE "Driver" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "driverId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "phone" TEXT NOT NULL,
-    "vehicleNumber" TEXT,
+    "nationalId" TEXT,
     "licenseNumber" TEXT,
+    "vehicleType" TEXT,
+    "vehicleNumber" TEXT,
+    "createdBy" TEXT,
+    "profileImage" TEXT,
+    "dateHired" DATETIME,
+    "salaryAmount" REAL,
+    "salaryPayDay" INTEGER NOT NULL DEFAULT 28,
     "status" TEXT NOT NULL DEFAULT 'active',
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
+    "damages" REAL NOT NULL DEFAULT 0,
+    "loss" REAL NOT NULL DEFAULT 0,
+    "expectedBankings" REAL NOT NULL DEFAULT 0,
+    "banked" REAL NOT NULL DEFAULT 0,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
 
-    CONSTRAINT "Driver_pkey" PRIMARY KEY ("id")
+-- CreateTable
+CREATE TABLE "DriverTrip" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "tripId" TEXT NOT NULL,
+    "driverId" TEXT NOT NULL,
+    "driverName" TEXT NOT NULL,
+    "tripDate" DATETIME NOT NULL,
+    "totalStops" INTEGER NOT NULL DEFAULT 0,
+    "delivered" INTEGER NOT NULL DEFAULT 0,
+    "failed" INTEGER NOT NULL DEFAULT 0,
+    "codCollected" REAL NOT NULL DEFAULT 0,
+    "saleAmount" REAL NOT NULL DEFAULT 0,
+    "distanceKm" REAL,
+    "geoTracked" BOOLEAN NOT NULL DEFAULT false,
+    "lastGeoLocation" TEXT,
+    "runsheetId" TEXT,
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    CONSTRAINT "DriverTrip_driverId_fkey" FOREIGN KEY ("driverId") REFERENCES "Driver" ("driverId") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "InventoryItem" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "itemId" TEXT NOT NULL,
     "productId" TEXT NOT NULL,
     "productName" TEXT NOT NULL,
     "brand" TEXT,
     "variant" TEXT,
-    "unitPrice" DOUBLE PRECISION,
+    "unitPrice" REAL,
     "merchantId" TEXT NOT NULL,
     "merchantName" TEXT NOT NULL,
     "inboundId" TEXT,
@@ -228,24 +251,22 @@ CREATE TABLE "InventoryItem" (
     "boxQty" INTEGER,
     "parentItemId" TEXT,
     "storageLocation" TEXT,
-    "expiryDate" TIMESTAMP(3),
+    "expiryDate" DATETIME,
     "assignedRider" TEXT,
     "runsheetId" TEXT,
     "attemptCount" INTEGER NOT NULL DEFAULT 0,
-    "nextAttemptDate" TIMESTAMP(3),
+    "nextAttemptDate" DATETIME,
     "finalOutcome" TEXT,
     "cancellationReason" TEXT,
-    "cancelledAt" TIMESTAMP(3),
+    "cancelledAt" DATETIME,
     "cancelledBy" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
-    CONSTRAINT "InventoryItem_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "ItemEvent" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "eventId" TEXT NOT NULL,
     "itemId" TEXT NOT NULL,
     "eventType" TEXT NOT NULL,
@@ -258,23 +279,20 @@ CREATE TABLE "ItemEvent" (
     "previousStatus" TEXT,
     "newStatus" TEXT,
     "metadata" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "ItemEvent_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ItemEvent_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "InventoryItem" ("itemId") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 
 -- CreateTable
 CREATE TABLE "AuditLog" (
-    "id" TEXT NOT NULL,
+    "id" TEXT NOT NULL PRIMARY KEY,
     "userId" TEXT,
     "userName" TEXT,
     "action" TEXT NOT NULL,
     "module" TEXT NOT NULL,
     "entityId" TEXT,
     "details" TEXT,
-    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    CONSTRAINT "AuditLog_pkey" PRIMARY KEY ("id")
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex
@@ -311,6 +329,12 @@ CREATE UNIQUE INDEX "ShrinkageRecord_shrinkageId_key" ON "ShrinkageRecord"("shri
 CREATE UNIQUE INDEX "Driver_driverId_key" ON "Driver"("driverId");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "DriverTrip_tripId_key" ON "DriverTrip"("tripId");
+
+-- CreateIndex
+CREATE INDEX "DriverTrip_driverId_tripDate_idx" ON "DriverTrip"("driverId", "tripDate");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "InventoryItem_itemId_key" ON "InventoryItem"("itemId");
 
 -- CreateIndex
@@ -318,6 +342,3 @@ CREATE UNIQUE INDEX "ItemEvent_eventId_key" ON "ItemEvent"("eventId");
 
 -- CreateIndex
 CREATE INDEX "ItemEvent_itemId_idx" ON "ItemEvent"("itemId");
-
--- AddForeignKey
-ALTER TABLE "ItemEvent" ADD CONSTRAINT "ItemEvent_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "InventoryItem"("itemId") ON DELETE RESTRICT ON UPDATE CASCADE;

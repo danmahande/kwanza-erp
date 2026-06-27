@@ -1,5 +1,7 @@
-import { db } from '../src/lib/db'
+import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
+
+const db = new PrismaClient()
 
 async function main() {
   console.log('Seeding database...')
@@ -124,7 +126,7 @@ async function main() {
     { outboundId: 'OB0000006', orderNumber: 'ORD-20260414-0003', userId: 'U003', trackingNumber: 'TRK-20260414-0003', vendorId: 'V002', businessName: 'Dettol Hygiene Products', customerName: 'Jane Wanjiku', customerContact: '+254722001001', customerEmail: 'jane@email.com', customerAddress: 'Nairobi, Kilimani, Galana Rd', productName: 'Dettol Handwash 200ML-ORIGINAL', productId: 'P0005', brand: 'Dettol', variant: '200ML-ORIGINAL', qty: 8, unitSellingPrice: 260, saleAmount: 2080, assignedBy: 'admin@kwanza.com', assignedDriver: 'Samuel Kiprop', vehicleNumber: 'KCC 567K', runsheetId: 'RS-20260414-001', stopSequence: 3, status: 'pending' },
     { outboundId: 'OB0000007', orderNumber: 'ORD-20260414-0004', userId: 'U004', trackingNumber: 'TRK-20260414-0004', vendorId: 'V009', businessName: 'Bidco Africa', customerName: 'John Otieno', customerContact: '+254722001002', customerEmail: 'john@email.com', customerAddress: 'Nairobi, Westlands', productName: 'Bidco Cooking Oil 1L', productId: 'P0015', brand: 'Bidco', variant: '1L', qty: 12, unitSellingPrice: 380, saleAmount: 4560, assignedBy: 'warehouse@kwanza.com', status: 'pending' },
     { outboundId: 'OB0000008', orderNumber: 'ORD-20260414-0005', userId: 'U003', trackingNumber: 'TRK-20260414-0005', vendorId: 'V007', businessName: 'Eveready East Africa', customerName: 'Mary Akinyi', customerContact: '+254722001003', customerEmail: 'mary@email.com', customerAddress: 'Mombasa, Nyali', productName: 'Eveready Batteries AA-4PK', productId: 'P0013', brand: 'Eveready', variant: 'AA-4PK', qty: 10, unitSellingPrice: 200, saleAmount: 2000, assignedBy: 'admin@kwanza.com', status: 'pending' },
-    { outboundId: 'OB0000009', orderNumber: 'ORD-20260414-0006', userId: 'U004', trackingNumber: 'TRK-20260414-0006', vendorId: 'V003', businessName: 'Colgate-Palmolive EA', customerName: 'Peter Kamau', customerContact: '+254722001004', customerAddress: 'Nakuru, CBD', productName: 'Colgate Maximum Cavity Protection 150ML', productId: 'P0006', brand: 'Colgate', variant: '150ML', qty: 30, unitSellingPrice: 180, saleAmount: 5400, assignedBy: 'admin@kwanza.com', assignedDriver: 'James Mwangi', status: 'pending' },
+    { outboundId: 'OB0000009', orderNumber: 'ORD-20260414-0006', userId: 'U004', trackingNumber: 'TRK-20260414-0006', vendorId: 'V003', businessName: 'Colgate-Palmolive EA', customerName: 'Peter Kamau', customerContact: '+254722001004', customerEmail: 'peter@email.com', customerAddress: 'Nakuru, CBD', productName: 'Colgate Maximum Cavity Protection 150ML', productId: 'P0006', brand: 'Colgate', variant: '150ML', qty: 30, unitSellingPrice: 180, saleAmount: 5400, assignedBy: 'admin@kwanza.com', assignedDriver: 'James Mwangi', status: 'pending' },
     { outboundId: 'OB0000010', orderNumber: 'ORD-20260414-0007', userId: 'U003', trackingNumber: 'TRK-20260414-0007', vendorId: 'V001', businessName: 'Supreme Office Supplies Ltd', customerName: 'Grace Chebet', customerContact: '+254722001005', customerEmail: 'grace@email.com', customerAddress: 'Kisumu, Milimani', productName: 'Supreme A4 Copy Paper 80GSM-500SHTS', productId: 'P0002', brand: 'Supreme', variant: '80GSM-500SHTS', qty: 25, unitSellingPrice: 420, saleAmount: 10500, assignedBy: 'admin@kwanza.com', status: 'pending' },
   ]
 

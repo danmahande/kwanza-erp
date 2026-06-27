@@ -10,8 +10,9 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
-  LayoutDashboard, Store, CreditCard, Users, Package, ArrowDownRight, ArrowUpRight, ClipboardList, ScanBarcode,
-  Scale, RotateCcw, Settings, UserCog, Truck, PackageX, ShoppingCart, ChevronRight, LogOut, X, Menu
+  LayoutDashboard, Store, CreditCard, Users, Package, ArrowDownRight, ArrowUpRight,
+  Scale, RotateCcw, AlertTriangle, UserCog, Truck, Settings, LogOut, Menu, X,
+  ChevronRight, ClipboardList, ScanBarcode,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 
@@ -24,16 +25,14 @@ import InboundModule from '@/components/modules/InboundModule'
 import OutboundModule from '@/components/modules/OutboundModule'
 import ReconciliationModule from '@/components/modules/ReconciliationModule'
 import RTVModule from '@/components/modules/RTVModule'
+import ShrinkageModule from '@/components/modules/ShrinkageModule'
 import UsersModule from '@/components/modules/UsersModule'
 import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
 import RunsheetModule from '@/components/modules/RunsheetModule'
 import ItemTrackerModule from '@/components/modules/ItemTrackerModule'
-import ProductsModule from '@/components/modules/ProductsModule'
-import AfterSalesModule from '@/components/modules/AfterSalesModule'
-import OrderProcessingModule from '@/components/modules/OrderProcessingModule'
-import ShrinkageModule from '@/components/modules/ShrinkageModule'
-type ModuleKey = 'dashboard' | 'merchants' | 'payments' | 'customers' | 'inventory' | 'inbound' | 'outbound' | 'runsheet' | 'item_tracker' | 'reconciliation' | 'rtv' | 'shrinkage' | 'users' | 'drivers' | 'settings' | 'products' | 'after_sales' | 'order_processing'
+
+type ModuleKey = 'dashboard' | 'merchants' | 'payments' | 'customers' | 'inventory' | 'inbound' | 'outbound' | 'runsheet' | 'item_tracker' | 'reconciliation' | 'rtv' | 'shrinkage' | 'users' | 'drivers' | 'settings'
 
 interface NavItem {
   key: ModuleKey
@@ -61,16 +60,14 @@ const navItems: NavItem[] = [
   { key: 'merchants', label: 'Merchants', icon: Store, section: 'Management' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Management' },
   { key: 'customers', label: 'Customers', icon: Users, section: 'Management' },
-  { key: 'products', label: 'Products', icon: Package, section: 'Management' },
   { key: 'inventory', label: 'Inventory', icon: Package, section: 'Operations' },
   { key: 'inbound', label: 'Inbound', icon: ArrowDownRight, section: 'Operations' },
   { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Operations' },
   { key: 'runsheet', label: 'Runsheets', icon: ClipboardList, section: 'Operations' },
   { key: 'item_tracker', label: 'Item Tracker', icon: ScanBarcode, section: 'Operations' },
   { key: 'reconciliation', label: 'Reconciliation', icon: Scale, section: 'Operations' },
-  { key: 'rtv', label: 'RTV & Shrinkage', icon: RotateCcw, section: 'Operations' },
-  { key: 'after_sales', label: 'After Sales', icon: PackageX, section: 'Operations' },
-  { key: 'order_processing', label: 'Order Processing', icon: ShoppingCart, section: 'Operations' },
+  { key: 'rtv', label: 'RTV', icon: RotateCcw, section: 'Operations' },
+  { key: 'shrinkage', label: 'Shrinkage', icon: AlertTriangle, section: 'Operations' },
   { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Resources' },
   { key: 'users', label: 'Users', icon: UserCog, section: 'Resources' },
   { key: 'settings', label: 'Settings', icon: Settings, section: 'System' },
@@ -81,7 +78,6 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   merchants: MerchantsModule,
   payments: PaymentsModule,
   customers: CustomersModule,
-  products: ProductsModule,
   inventory: InventoryModule,
   inbound: InboundModule,
   outbound: OutboundModule,
@@ -90,8 +86,6 @@ const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   reconciliation: ReconciliationModule,
   rtv: RTVModule,
   shrinkage: ShrinkageModule,
-  after_sales: AfterSalesModule,
-  order_processing: OrderProcessingModule,
   users: UsersModule,
   drivers: DriversModule,
   settings: SettingsModule,
