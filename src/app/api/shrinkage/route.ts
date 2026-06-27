@@ -4,16 +4,21 @@ import { db } from '@/lib/db'
 export async function GET(req: NextRequest) {
   try {
     const search = req.nextUrl.searchParams.get('search') || ''
+    const merchantId = req.nextUrl.searchParams.get('merchantId')
+
+    const where: Record<string, unknown> = {
+      OR: [
+        { shrinkageId: { contains: search } },
+        { rtvId: { contains: search } },
+        { productName: { contains: search } },
+        { reason: { contains: search } },
+        { reportedBy: { contains: search } },
+      ],
+    }
+    if (merchantId) where.merchantId = merchantId
+
     const shrinkageRecords = await db.shrinkageRecord.findMany({
-      where: {
-        OR: [
-          { shrinkageId: { contains: search } },
-          { rtvId: { contains: search } },
-          { productName: { contains: search } },
-          { reason: { contains: search } },
-          { reportedBy: { contains: search } },
-        ],
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     })
     return NextResponse.json(shrinkageRecords)
@@ -28,23 +33,49 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const count = await db.shrinkageRecord.count()
     const shrinkageId = `SH-${String(count + 1).padStart(4, '0')}`
-    
-    // If no RTV ID is provided, this is a standalone shrinkage report
-    // If RTV ID is provided, this is linked to an RTV record
+
+    // ===========================================================================
+    // Workflow 4: compute total value (qty × unitCost) so we can debit merchant
+    // on resolution. Look up the merchant and product if not provided.
+    // ===========================================================================
+    let merchantId = body.merchantId
+    let merchantName = body.merchantName
+    let unitCost = body.unitCost ? parseFloat(String(body.unitCost)) : null
+
+    if (body.productId && (!merchantId || !unitCost)) {
+      const product = await db.product.findUnique({
+        where: { productId: body.productId },
+        select: { merchantId: true, merchantName: true, unitCost: true },
+      })
+      if (product) {
+        if (!merchantId) merchantId = product.merchantId
+        if (!merchantName) merchantName = product.merchantName
+        if (unitCost === null) unitCost = product.unitCost
+      }
+    }
+
+    const qty = parseInt(String(body.qty)) || 0
+    const totalValue = unitCost ? qty * unitCost : null
+
     const shrinkageRecord = await db.shrinkageRecord.create({
-      data: { 
-        ...body, 
+      data: {
+        ...body,
         shrinkageId,
+        merchantId,
+        merchantName,
+        unitCost,
+        totalValue,
         status: body.status || 'pending',
+        debitMerchant: body.debitMerchant ?? false,
       },
     })
-    
+
     // If this shrinkage is linked to an RTV, update the RTV record accordingly
     if (body.rtvId) {
       const rtvRecord = await db.rTVRecord.findUnique({
         where: { id: body.rtvId }
       });
-      
+
       if (rtvRecord) {
         // Update RTV record to reflect shrinkage details
         await db.rTVRecord.update({
@@ -56,7 +87,7 @@ export async function POST(req: NextRequest) {
         });
       }
     }
-    
+
     return NextResponse.json(shrinkageRecord, { status: 201 })
   } catch (error) {
     console.error('Error creating shrinkage record:', error)
@@ -68,22 +99,41 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json()
     const { id, ...data } = body
-    
-    // Handle resolution workflow
+
+    // ===========================================================================
+    // Workflow 4: on resolution with debitMerchant=true, update the merchant's
+    // totalShrinkageValue cumulative figure so it shows up on their next statement.
+    // ===========================================================================
     if (data.status === 'resolved' && !data.resolvedBy) {
-      // Set the resolver and resolution time
-      data.resolvedBy = 'current_user'; // In real app, this would come from session
-      data.resolvedAt = new Date();
+      data.resolvedBy = 'current_user' // TODO: replace with real session
+      data.resolvedAt = new Date()
     }
-    
-    const shrinkageRecord = await db.shrinkageRecord.update({ 
-      where: { id }, 
+
+    // If resolving and debitMerchant is true, increment the merchant's shrinkage total
+    if (data.status === 'resolved' && (data.debitMerchant || body.debitMerchant)) {
+      const existing = await db.shrinkageRecord.findUnique({ where: { id } })
+      if (existing && existing.merchantId && existing.totalValue) {
+        try {
+          await db.merchant.update({
+            where: { merchantId: existing.merchantId },
+            data: {
+              totalShrinkageValue: { increment: existing.totalValue },
+            },
+          })
+        } catch (merchantErr) {
+          console.error('Merchant shrinkage debit failed (non-blocking):', merchantErr)
+        }
+      }
+    }
+
+    const shrinkageRecord = await db.shrinkageRecord.update({
+      where: { id },
       data: {
         ...data,
         updatedAt: new Date(),
       }
     })
-    
+
     return NextResponse.json(shrinkageRecord)
   } catch (error) {
     console.error('Error updating shrinkage record:', error)

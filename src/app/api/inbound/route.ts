@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { createStorageLiabilityOnInbound } from '@/lib/storage-liability'
 
 export async function GET(req: NextRequest) {
   try {
@@ -50,6 +51,22 @@ export async function POST(req: NextRequest) {
         inboundValue,
       },
     })
+
+    // Workflow 1: create a StorageLiability row so storage fees start accruing
+    // from tomorrow. Non-blocking — if it fails, the inbound still succeeded.
+    try {
+      await createStorageLiabilityOnInbound({
+        merchantId: body.merchantId,
+        merchantName: body.merchantName,
+        inboundId,
+        productId: body.productId,
+        productName: body.productName,
+        qtyIn: parseInt(String(body.qtyIn)) || 0,
+        inboundDate: new Date(),
+      })
+    } catch (liabilityErr) {
+      console.error('Storage liability creation failed (non-blocking):', liabilityErr)
+    }
 
     // Auto-create InventoryItems for each unit received (librarian tracking)
     try {
