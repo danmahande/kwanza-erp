@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,13 +11,19 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  PackageX, Search, Plus, CheckCircle2, XCircle, RotateCcw, Cpu,
+  PackageX, Search, Plus, CheckCircle2, XCircle, RotateCcw, Cpu, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import {
+  WorkflowActions, NextStepBanner, StatusStepper, WorkflowStatusBadge,
+} from '@/components/shared/workflow'
+import { getStage } from '@/lib/workflow'
+
+const MODULE = 'after_sales'
 
 interface RMA {
   id: string
@@ -66,16 +72,64 @@ export default function AfterSalesModule() {
   })
   const [dispositions, setDispositions] = useState<Array<{ itemId: string; disposition: string }>>([])
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     fetch(`/api/after-sales?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
-  }
+  }, [search])
 
   useEffect(() => {
     fetchData()
     fetch('/api/order-processing').then(r => r.json()).then(d => setOrders(Array.isArray(d) ? d : []))
   }, [])
 
-  useEffect(() => { fetchData() }, [search])
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Phase 1-2-4: filter chips + expandable rows
+  const [activeFilter, setActiveFilter] = useState('all')
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const FILTER_CHIPS = [
+    { key: 'all', label: 'All', statuses: [] as string[] },
+    { key: 'initiated', label: 'Initiated', statuses: ['initiated'] },
+    { key: 'received', label: 'Received', statuses: ['received'] },
+    { key: 'in_review', label: 'In Review', statuses: ['in_review'] },
+    { key: 'approved', label: 'Approved', statuses: ['approved'] },
+    { key: 'processed', label: 'Processed', statuses: ['processed'] },
+    { key: 'rejected', label: '⚠️ Rejected', statuses: ['rejected'] },
+  ]
+
+  const filteredRmas = activeFilter === 'all'
+    ? data
+    : data.filter(r => {
+        const chip = FILTER_CHIPS.find(c => c.key === activeFilter)
+        return chip?.statuses.includes(r.returnStatus)
+      })
+
+  const toggleExpand = (id: string) => {
+    const next = new Set(expandedRows)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setExpandedRows(next)
+  }
+
+  const handleTransition = async (rma: RMA, toStatus: string) => {
+    try {
+      const res = await fetch('/api/workflow-transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: MODULE, id: rma.id, toStatus, performedBy: 'admin' }),
+      })
+      if (res.ok) {
+        const stage = getStage(MODULE, toStatus)
+        toast.success(`${stage?.label || toStatus} ✓`)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update status')
+      }
+    } catch {
+      toast.error('Failed to update status')
+    }
+  }
 
   const stats = [
     { label: 'Total RMAs', value: data.length, icon: PackageX, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
@@ -208,13 +262,44 @@ export default function AfterSalesModule() {
         </div>
       </OfficeHeader>
 
-      {data.length === 0 ? (
+      {/* Filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-gray-400" />
+        {FILTER_CHIPS.map(chip => {
+          const isActive = activeFilter === chip.key
+          const count = chip.statuses.length === 0
+            ? data.length
+            : data.filter(r => chip.statuses.includes(r.returnStatus)).length
+          return (
+            <button
+              key={chip.key}
+              onClick={() => setActiveFilter(chip.key)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                ${isActive
+                  ? 'bg-[#FF6B35] text-white shadow-sm'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }
+              `}
+            >
+              {chip.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                isActive ? 'bg-white/20' : 'bg-gray-100'
+              }`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {filteredRmas.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
             <PackageX size={32} className="text-gray-300" />
           </div>
-          <p className="text-gray-500 font-medium">No RMAs yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create a customer return to start the disposition workflow</p>
+          <p className="text-gray-500 font-medium">No RMAs match this filter</p>
+          <p className="text-sm text-gray-400 mt-1">Try a different filter or create a new RMA</p>
         </motion.div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -222,51 +307,100 @@ export default function AfterSalesModule() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">RMA ID</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Return Order #</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Reason</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Refund</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
+                  <th className="px-3 py-3 w-8"></th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">RMA ID</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Return Order #</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Customer</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Reason</th>
+                  <th className="text-right px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Refund</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Progress</th>
+                  <th className="text-right px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((r, i) => (
-                  <motion.tr
-                    key={r.id}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: i * 0.02 }}
-                    className="border-b border-gray-50 hover:bg-gray-50"
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{r.afterSalesId}</td>
-                    <td className="px-4 py-3 font-mono text-xs font-semibold text-gray-900">{r.returnOrderNumber || '—'}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{r.customerName}</p>
-                      <p className="text-xs text-gray-400">{r.customerId}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs max-w-xs truncate">{r.reason}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{r.refundAmount ? formatCurrency(r.refundAmount) : '—'}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge className={`text-[10px] ${statusColor(r.returnStatus)}`}>{r.returnStatus.replace('_', ' ')}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {r.returnStatus === 'initiated' || r.returnStatus === 'in_review' ? (
-                        <div className="flex items-center justify-end gap-1">
-                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-green-700" onClick={() => openDisposition(r)}>
-                            <CheckCircle2 size={12} className="mr-1" /> Approve
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-7 text-[11px] text-red-700" onClick={() => handleReject(r)}>
-                            <XCircle size={12} className="mr-1" /> Reject
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
+                {filteredRmas.map((r, i) => {
+                  const isExpanded = expandedRows.has(r.id)
+                  return (
+                    <>
+                      <motion.tr
+                        key={r.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(i * 0.01, 0.5) }}
+                        className="border-b border-gray-50 hover:bg-gray-50"
+                      >
+                        <td className="px-3 py-3 cursor-pointer" onClick={() => toggleExpand(r.id)}>
+                          {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-xs text-gray-700">{r.afterSalesId}</td>
+                        <td className="px-3 py-3 font-mono text-xs font-semibold text-gray-900">{r.returnOrderNumber || '—'}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-gray-900">{r.customerName}</p>
+                          <p className="text-xs text-gray-400">{r.customerId}</p>
+                        </td>
+                        <td className="px-3 py-3 text-gray-600 text-xs max-w-xs truncate">{r.reason}</td>
+                        <td className="px-3 py-3 text-right text-gray-700">{r.refundAmount ? formatCurrency(r.refundAmount) : '—'}</td>
+                        <td className="px-3 py-3">
+                          <StatusStepper module={MODULE} currentStatus={r.returnStatus} size="sm" />
+                        </td>
+                        <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <WorkflowActions
+                              module={MODULE}
+                              currentStatus={r.returnStatus}
+                              onTransition={(to) => {
+                                if (to === 'approved') {
+                                  openDisposition(r)
+                                } else {
+                                  handleTransition(r, to)
+                                }
+                              }}
+                              size="sm"
+                            />
+                          </div>
+                        </td>
+                      </motion.tr>
+                      {isExpanded && (
+                        <tr key={`${r.id}-expanded`} className="bg-gray-50/50">
+                          <td colSpan={8} className="px-6 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Original Order</p>
+                                <p className="text-gray-700 font-mono">{r.originalOrderId || '—'}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mt-2 mb-1">Agent</p>
+                                <p className="text-gray-700">{r.agentName || 'Unassigned'}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Item IDs <InfoTip term="disposition" size={11} /></p>
+                                <p className="text-gray-700 font-mono text-[10px]">
+                                  {r.itemIds ? JSON.parse(r.itemIds).join(', ') : 'No specific items'}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Created</p>
+                                <p className="text-gray-500">{new Date(r.createdAt).toLocaleString()}</p>
+                                {r.approvedAt && <p className="text-gray-500">Approved: {new Date(r.approvedAt).toLocaleString()}</p>}
+                              </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <NextStepBanner
+                                module={MODULE}
+                                currentStatus={r.returnStatus}
+                                onAdvance={(to) => {
+                                  if (to === 'approved') {
+                                    openDisposition(r)
+                                  } else {
+                                    handleTransition(r, to)
+                                  }
+                                }}
+                              />
+                            </div>
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                  </motion.tr>
-                ))}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           </div>

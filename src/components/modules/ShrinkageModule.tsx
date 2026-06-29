@@ -11,6 +11,10 @@ import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, Cale
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
+import { getStage } from '@/lib/workflow'
+
+const MODULE = 'shrinkage'
 
 // ── Types ──
 interface Product { id: string; productId: string; productLabel: string; currentStock: number; unit: string }
@@ -118,6 +122,30 @@ export default function ShrinkageModule() {
     setDetailOpen(true)
   }
 
+  // Workflow transition (Phase 1-2-4)
+  const handleTransition = async (record: ShrinkageRecord, toStatus: string) => {
+    try {
+      const res = await fetch('/api/workflow-transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: MODULE, id: record.id, toStatus, performedBy: 'admin' }),
+      })
+      if (res.ok) {
+        const stage = getStage(MODULE, toStatus)
+        toast.success(`${stage?.label || toStatus} ✓`)
+        fetchData()
+        if (selectedRecord?.id === record.id) {
+          setSelectedRecord({ ...selectedRecord, status: toStatus })
+        }
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update status')
+      }
+    } catch {
+      toast.error('Failed to update status')
+    }
+  }
+
   const openCreate = () => {
     setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
     setCreateOpen(true)
@@ -211,6 +239,19 @@ export default function ShrinkageModule() {
               <div className="flex items-center gap-1.5 mt-3 text-[11px] text-gray-400">
                 <UserCircle size={12} />
                 <span className="truncate">{item.reportedBy}</span>
+              </div>
+
+              {/* Workflow actions */}
+              <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                <StatusStepper module={MODULE} currentStatus={item.status} size="sm" />
+                <div className="mt-2">
+                  <WorkflowActions
+                    module={MODULE}
+                    currentStatus={item.status}
+                    onTransition={(to) => handleTransition(item, to)}
+                    size="sm"
+                  />
+                </div>
               </div>
             </motion.div>
           ))}

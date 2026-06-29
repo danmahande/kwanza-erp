@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,13 +11,19 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  ShoppingCart, Search, Plus, Printer, Download, Trash2,
+  ShoppingCart, Search, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import {
+  WorkflowActions, NextStepBanner, StatusStepper, WorkflowStatusBadge,
+} from '@/components/shared/workflow'
+import { getStage } from '@/lib/workflow'
+
+const MODULE = 'order_processing'
 
 interface Order {
   id: string
@@ -76,9 +82,9 @@ export default function OrderProcessingModule() {
     createdBy: 'admin',
   })
 
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     fetch(`/api/order-processing?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
-  }
+  }, [search])
 
   useEffect(() => {
     fetchData()
@@ -86,7 +92,100 @@ export default function OrderProcessingModule() {
     fetch('/api/products').then(r => r.json()).then(d => setProducts(Array.isArray(d) ? d : []))
   }, [])
 
-  useEffect(() => { fetchData() }, [search])
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Phase 1-2-4 additions: filter chips, bulk actions, expandable rows
+  const [activeFilter, setActiveFilter] = useState('all')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
+
+  const FILTER_CHIPS = [
+    { key: 'all', label: 'All', statuses: [] as string[] },
+    { key: 'new', label: 'New Orders', statuses: ['new_order'] },
+    { key: 'processing', label: 'Processing', statuses: ['processing'] },
+    { key: 'shipped', label: 'Shipped', statuses: ['shipped'] },
+    { key: 'delivered', label: 'Delivered', statuses: ['delivered'] },
+    { key: 'exceptions', label: '⚠️ Exceptions', statuses: ['returned', 'cancelled', 'failed'] },
+  ]
+
+  const filteredOrders = activeFilter === 'all'
+    ? data
+    : data.filter(o => {
+        const chip = FILTER_CHIPS.find(c => c.key === activeFilter)
+        return chip?.statuses.includes(o.status)
+      })
+
+  const toggleExpand = (id: string) => {
+    const next = new Set(expandedRows)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setExpandedRows(next)
+  }
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setSelectedIds(next)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === filteredOrders.length) setSelectedIds(new Set())
+    else setSelectedIds(new Set(filteredOrders.map(o => o.id)))
+  }
+
+  const handleTransition = async (order: Order, toStatus: string) => {
+    try {
+      const res = await fetch('/api/workflow-transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: MODULE, id: order.id, toStatus, performedBy: 'admin' }),
+      })
+      if (res.ok) {
+        const stage = getStage(MODULE, toStatus)
+        toast.success(`${stage?.label || toStatus} ✓`)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update status')
+      }
+    } catch {
+      toast.error('Failed to update status')
+    }
+  }
+
+  const handleBulkTransition = async (toStatus: string) => {
+    if (selectedIds.size === 0) return
+    try {
+      const res = await fetch('/api/workflow-transition', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: MODULE, ids: Array.from(selectedIds), toStatus, performedBy: 'admin' }),
+      })
+      const result = await res.json()
+      if (res.ok) {
+        toast.success(`${result.count} orders advanced to ${toStatus}`)
+        setSelectedIds(new Set())
+        fetchData()
+      } else {
+        toast.error(result.error || 'Failed to bulk update')
+      }
+    } catch {
+      toast.error('Failed to bulk update')
+    }
+  }
+
+  const selectedOrders = filteredOrders.filter(o => selectedIds.has(o.id))
+  const bulkActions: Array<{ toStatus: string; label: string }> = []
+  if (selectedOrders.every(o => o.status === 'new_order')) {
+    bulkActions.push({ toStatus: 'processing', label: 'Start Processing All' })
+  }
+  if (selectedOrders.every(o => o.status === 'processing')) {
+    bulkActions.push({ toStatus: 'shipped', label: 'Mark All Shipped' })
+  }
+  if (selectedOrders.every(o => o.status === 'shipped')) {
+    bulkActions.push({ toStatus: 'delivered', label: 'Mark All Delivered' })
+  }
 
   const filteredProducts = form.merchantId
     ? products.filter(p => p.merchantId === form.merchantId)
@@ -234,13 +333,86 @@ export default function OrderProcessingModule() {
         </div>
       </OfficeHeader>
 
-      {data.length === 0 ? (
+      {/* Filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-gray-400" />
+        {FILTER_CHIPS.map(chip => {
+          const isActive = activeFilter === chip.key
+          const count = chip.statuses.length === 0
+            ? data.length
+            : data.filter(o => chip.statuses.includes(o.status)).length
+          return (
+            <button
+              key={chip.key}
+              onClick={() => setActiveFilter(chip.key)}
+              className={`
+                flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all
+                ${isActive
+                  ? 'bg-[#FF6B35] text-white shadow-sm'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                }
+              `}
+            >
+              {chip.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${
+                isActive ? 'bg-white/20' : 'bg-gray-100'
+              }`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Bulk action bar */}
+      <AnimatePresence>
+        {selectedIds.size > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="p-3 rounded-xl bg-blue-50 border border-blue-200 flex items-center gap-3 flex-wrap"
+          >
+            <span className="text-sm font-medium text-blue-900">
+              {selectedIds.size} selected
+            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              {bulkActions.length > 0 ? (
+                bulkActions.map(action => (
+                  <Button
+                    key={action.toStatus}
+                    size="sm"
+                    onClick={() => handleBulkTransition(action.toStatus)}
+                    className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-lg h-7 text-xs"
+                  >
+                    {action.label}
+                  </Button>
+                ))
+              ) : (
+                <span className="text-xs text-blue-700">
+                  Mixed statuses — select orders in the same stage to bulk-advance them
+                </span>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelectedIds(new Set())}
+                className="h-7 text-xs rounded-lg"
+              >
+                Clear
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {filteredOrders.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
             <ShoppingCart size={32} className="text-gray-300" />
           </div>
-          <p className="text-gray-500 font-medium">No orders yet</p>
-          <p className="text-sm text-gray-400 mt-1">Create the first order — an outbound record will be spawned automatically</p>
+          <p className="text-gray-500 font-medium">No orders match this filter</p>
+          <p className="text-sm text-gray-400 mt-1">Try a different filter or create a new order</p>
         </motion.div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -248,53 +420,113 @@ export default function OrderProcessingModule() {
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Order #</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Date</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Customer</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Tracking <InfoTip term="trackingNumber" size={11} /></th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Total</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Payment</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
+                  <th className="px-3 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === filteredOrders.length && filteredOrders.length > 0}
+                      onChange={toggleSelectAll}
+                      className="h-4 w-4 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
+                    />
+                  </th>
+                  <th className="px-3 py-3 w-8"></th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Order #</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Date</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Customer</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Tracking <InfoTip term="trackingNumber" size={11} /></th>
+                  <th className="text-right px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Total</th>
+                  <th className="text-left px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Progress</th>
+                  <th className="text-right px-3 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {data.map((o, i) => (
-                  <motion.tr
-                    key={o.id}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: i * 0.02 }}
-                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => { setViewing(o); setViewOpen(true) }}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-mono text-xs font-semibold text-gray-900">{o.orderNumber}</p>
-                      <p className="text-[10px] text-gray-400 font-mono">{o.orderId}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{new Date(o.orderDate).toLocaleDateString()}</td>
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{o.customerName}</p>
-                      <p className="text-xs text-gray-400">{o.customerId}</p>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{o.trackingNumber || '—'}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-900">{formatCurrency(o.totalAmount)}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{o.paymentMethod}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge className={`text-[10px] ${statusColor(o.status)}`}>{o.status.replace('_', ' ')}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePrintInvoice(o)} title="Print invoice">
-                          <Printer size={14} className="text-gray-600" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownloadInvoice(o)} title="Download invoice">
-                          <Download size={14} className="text-gray-600" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
+                {filteredOrders.map((o, i) => {
+                  const isExpanded = expandedRows.has(o.id)
+                  const isSelected = selectedIds.has(o.id)
+                  return (
+                    <>
+                      <motion.tr
+                        key={o.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(i * 0.01, 0.5) }}
+                        className={`border-b border-gray-50 hover:bg-gray-50 ${isSelected ? 'bg-orange-50' : ''}`}
+                      >
+                        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(o.id)}
+                            className="h-4 w-4 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
+                          />
+                        </td>
+                        <td className="px-3 py-3 cursor-pointer" onClick={() => toggleExpand(o.id)}>
+                          {isExpanded ? <ChevronDown size={14} className="text-gray-400" /> : <ChevronRight size={14} className="text-gray-400" />}
+                        </td>
+                        <td className="px-3 py-3">
+                          <p className="font-mono text-xs font-semibold text-gray-900">{o.orderNumber}</p>
+                          <p className="text-[10px] text-gray-400 font-mono">{o.orderId}</p>
+                        </td>
+                        <td className="px-3 py-3 text-gray-600 text-xs">{new Date(o.orderDate).toLocaleDateString()}</td>
+                        <td className="px-3 py-3">
+                          <p className="font-medium text-gray-900">{o.customerName}</p>
+                          <p className="text-xs text-gray-400">{o.customerId}</p>
+                        </td>
+                        <td className="px-3 py-3 font-mono text-xs text-gray-600">{o.trackingNumber || '—'}</td>
+                        <td className="px-3 py-3 text-right font-semibold text-gray-900">{formatCurrency(o.totalAmount)}</td>
+                        <td className="px-3 py-3">
+                          <StatusStepper module={MODULE} currentStatus={o.status} size="sm" />
+                        </td>
+                        <td className="px-3 py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1 flex-wrap">
+                            <WorkflowActions
+                              module={MODULE}
+                              currentStatus={o.status}
+                              onTransition={(to) => handleTransition(o, to)}
+                              size="sm"
+                            />
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePrintInvoice(o)} title="Print invoice">
+                              <Printer size={12} className="text-gray-600" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownloadInvoice(o)} title="Download invoice">
+                              <Download size={12} className="text-gray-600" />
+                            </Button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                      {isExpanded && (
+                        <tr key={`${o.id}-expanded`} className="bg-gray-50/50">
+                          <td colSpan={9} className="px-6 py-4">
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Payment</p>
+                                <p className="text-gray-700">{o.paymentMethod}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mt-2 mb-1">Customer Info</p>
+                                <p className="text-gray-700">{o.customerInfo}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Invoice</p>
+                                <p className="text-gray-700">{o.invoiceGenerated ? `Generated ${o.invoiceNumber || ''}` : 'Not generated'}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mt-2 mb-1">Created By</p>
+                                <p className="text-gray-700">{o.createdBy}</p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Created</p>
+                                <p className="text-gray-500">{new Date(o.createdAt).toLocaleString()}</p>
+                              </div>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-gray-200">
+                              <NextStepBanner
+                                module={MODULE}
+                                currentStatus={o.status}
+                                onAdvance={(to) => handleTransition(o, to)}
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -420,6 +652,36 @@ export default function OrderProcessingModule() {
               <p className="text-3xl font-bold text-gray-900">{formatCurrency(viewing.totalAmount)}</p>
               <p className="text-xs text-gray-500 mt-1">{viewing.paymentMethod}</p>
             </div>
+
+            {/* Workflow stepper + next-step banner */}
+            <div className="space-y-3">
+              <div className="p-3 rounded-xl bg-white border border-gray-100">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Progress</p>
+                <StatusStepper module={MODULE} currentStatus={viewing.status} size="md" />
+              </div>
+              <NextStepBanner
+                module={MODULE}
+                currentStatus={viewing.status}
+                onAdvance={(to) => {
+                  handleTransition(viewing, to)
+                  // Refresh the viewing object so the slide-over updates
+                  setViewing({ ...viewing, status: to })
+                }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <WorkflowActions
+                  module={MODULE}
+                  currentStatus={viewing.status}
+                  onTransition={(to) => {
+                    handleTransition(viewing, to)
+                    setViewing({ ...viewing, status: to })
+                  }}
+                  size="default"
+                  variant="stacked"
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Order ID</p>

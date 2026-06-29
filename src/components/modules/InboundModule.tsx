@@ -21,6 +21,10 @@ import OfficeHeader from '@/components/shared/OfficeHeader'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
+import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
+import { getStage } from '@/lib/workflow'
+
+const MODULE = 'inbound'
 
 // ── Types ──
 interface Merchant { id: string; merchantId: string; businessName: string }
@@ -428,6 +432,30 @@ export default function InboundModule() {
     } catch { toast.error('Failed to delete') }
   }
 
+  // Workflow transition (Phase 1-2-4)
+  const handleTransition = async (record: InboundRecord, toStatus: string) => {
+    try {
+      const res = await fetch('/api/workflow-transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ module: MODULE, id: record.id, toStatus, performedBy: 'admin' }),
+      })
+      if (res.ok) {
+        const stage = getStage(MODULE, toStatus)
+        toast.success(`${stage?.label || toStatus} ✓`)
+        fetchData()
+        if (selectedRecord?.id === record.id) {
+          setSelectedRecord({ ...selectedRecord, status: toStatus })
+        }
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to update status')
+      }
+    } catch {
+      toast.error('Failed to update status')
+    }
+  }
+
   // ── KPI ──
   const totalValue = data.reduce((s, r) => s + (r.inboundValue || 0), 0)
   const thisMonth = data.filter(r => { const d = new Date(r.createdAt); const now = new Date(); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear() }).length
@@ -594,6 +622,19 @@ export default function InboundModule() {
                     {expiry && <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium ${expiry.color}`}>{expiry.label}</span>}
                   </div>
                   <div className="flex items-center gap-1"><User size={10} />{record.receivedBy}</div>
+                </div>
+
+                {/* Workflow actions */}
+                <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                  <StatusStepper module={MODULE} currentStatus={record.status} size="sm" />
+                  <div className="mt-2">
+                    <WorkflowActions
+                      module={MODULE}
+                      currentStatus={record.status}
+                      onTransition={(to) => handleTransition(record, to)}
+                      size="sm"
+                    />
+                  </div>
                 </div>
               </motion.div>
             )
