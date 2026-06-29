@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logAudit } from '@/lib/audit'
 
 /**
  * After-Sales (RMA) API — Workflow 3: Customer Returns + Disposition
@@ -236,6 +237,16 @@ export async function PUT(req: NextRequest) {
       await db.afterSalesRecord.update({
         where: { id },
         data: { dispositions: JSON.stringify(body.dispositions) },
+      })
+    }
+
+    // Audit the approval or status change
+    if (data.returnStatus) {
+      await logAudit({
+        action: data.returnStatus === 'approved' ? 'APPROVE' : data.returnStatus === 'rejected' ? 'REJECT' : 'STATUS_CHANGE',
+        module: 'after_sales',
+        entityId: afterSalesRecord.afterSalesId,
+        details: `RMA ${afterSalesRecord.afterSalesId} status set to ${data.returnStatus} for ${afterSalesRecord.customerName}`,
       })
     }
 

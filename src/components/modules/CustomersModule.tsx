@@ -102,11 +102,9 @@ export default function CustomersModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
       <OfficeHeader
         title="Customers Office"
-        description="Manage your customer database and relationships"
+        description="Customers are auto-created from Order Processing. Manual creation is disabled per business rule."
         icon={Users}
         stats={stats}
-        actionLabel="Add Customer"
-        onAction={openCreate}
       >
         <div className="relative flex-1 w-full sm:w-auto">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />

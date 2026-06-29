@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const activeDrivers = totalDrivers
 
     // ── Inventory Metrics ──
-    const allProducts = await db.product.findMany({ where: { isActive: true }, select: { currentStock: true, unitCost: true, unitSellingPrice: true, minStock: true, commissionPercent: true, productLabel: true } })
+    const allProducts = await db.product.findMany({ where: { isActive: true }, select: { currentStock: true, unitCost: true, unitSellingPrice: true, minStock: true, commissionPercent: true, productLabel: true, createdAt: true } })
     const lowStockProducts = allProducts.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).length
     const criticalStockProducts = allProducts.filter(p => p.currentStock === 0).length
     const healthyStockProducts = allProducts.filter(p => p.currentStock > p.minStock).length
@@ -89,32 +89,97 @@ export async function GET(request: NextRequest) {
     // ── Product Categories ──
     const categories = await db.product.groupBy({ by: ['category'], _count: { category: true } })
 
-    // ── Revenue by Month (last 6 months - simulated with real current data) ──
+    // ── Revenue by Month (last 6 months - REAL data from outbound records) ──
     const revenueByMonth: Array<{ month: string; revenue: number; commissions: number }> = []
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     for (let i = 5; i >= 0; i--) {
-      const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999)
+      const monthAgg = await db.outboundRecord.aggregate({
+        where: { createdAt: { gte: monthStart, lte: monthEnd } },
+        _sum: { saleAmount: true },
+      })
+      const monthRevenue = monthAgg._sum.saleAmount ?? 0
+      // Commissions: sum of (saleAmount * product.commissionPercent / 100) — simplified here as a global % from products
+      const monthProducts = await db.product.findMany({
+        where: { createdAt: { lte: monthEnd } },
+        select: { commissionPercent: true },
+      })
+      const avgCommission = monthProducts.length > 0
+        ? monthProducts.reduce((s, p) => s + p.commissionPercent, 0) / monthProducts.length / 100
+        : 0
       revenueByMonth.push({
-        month: monthNames[d.getMonth()],
-        revenue: i === 0 ? (totalRevenue || 25000 + Math.random() * 20000) : Math.round(22000 + Math.random() * 25000),
-        commissions: i === 0 ? Math.round(totalCommission || 3000 + Math.random() * 2000) : Math.round(2000 + Math.random() * 3000),
+        month: monthNames[monthStart.getMonth()],
+        revenue: Math.round(monthRevenue),
+        commissions: Math.round(monthRevenue * avgCommission),
       })
     }
 
-    // ── Warehouse Throughput (last 7 days - simulated) ──
-    const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const throughputData = dayNames.map(day => ({
-      day,
-      inbound: Math.round(20 + Math.random() * 80),
-      outbound: Math.round(15 + Math.random() * 70),
-    }))
+    // ── Warehouse Throughput (last 7 days - REAL data) ──
+    const throughputData: Array<{ day: string; inbound: number; outbound: number }> = []
+    const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    for (let i = 6; i >= 0; i--) {
+      const dayStart = new Date(now)
+      dayStart.setDate(dayStart.getDate() - i)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(dayStart)
+      dayEnd.setHours(23, 59, 59, 999)
+      const inboundAgg = await db.inboundRecord.aggregate({
+        where: { createdAt: { gte: dayStart, lte: dayEnd } },
+        _sum: { qtyIn: true },
+      })
+      const outboundAgg = await db.outboundRecord.aggregate({
+        where: { createdAt: { gte: dayStart, lte: dayEnd } },
+        _sum: { qty: true },
+      })
+      throughputData.push({
+        day: dayNamesShort[dayStart.getDay()],
+        inbound: inboundAgg._sum.qtyIn ?? 0,
+        outbound: outboundAgg._sum.qty ?? 0,
+      })
+    }
 
-    // ── Comparison data (simulated % change from previous period) ──
+    // ── Comparison data (REAL % change: this month vs last month) ──
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+
+    const thisMonthRevAgg = await db.outboundRecord.aggregate({
+      where: { createdAt: { gte: thisMonthStart } },
+      _sum: { saleAmount: true },
+    })
+    const lastMonthRevAgg = await db.outboundRecord.aggregate({
+      where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } },
+      _sum: { saleAmount: true },
+    })
+    const thisMonthRev = thisMonthRevAgg._sum.saleAmount ?? 0
+    const lastMonthRev = lastMonthRevAgg._sum.saleAmount ?? 0
+    const revenueChange = lastMonthRev > 0 ? Math.round(((thisMonthRev - lastMonthRev) / lastMonthRev) * 100) : 0
+
+    const thisMonthOrders = await db.outboundRecord.count({ where: { createdAt: { gte: thisMonthStart } } })
+    const lastMonthOrders = await db.outboundRecord.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } } })
+    const ordersChange = lastMonthOrders > 0 ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 100) : 0
+
+    // Stock value change: compare current stock value to stock value a month ago (approximation: same as today since we don't track historical)
+    // For now, compute stock value today vs stock value of products created before this month
+    const stockValueToday = allProducts.reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
+    const oldProductsStockValue = allProducts
+      .filter(p => p.createdAt < thisMonthStart)
+      .reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
+    const stockValueChange = oldProductsStockValue > 0
+      ? Math.round(((stockValueToday - oldProductsStockValue) / oldProductsStockValue) * 100)
+      : 0
+
+    // Avg order value change
+    const thisMonthAvg = thisMonthOrders > 0 ? thisMonthRev / thisMonthOrders : 0
+    const lastMonthAvg = lastMonthOrders > 0 ? lastMonthRev / lastMonthOrders : 0
+    const avgOrderChange = lastMonthAvg > 0 ? Math.round(((thisMonthAvg - lastMonthAvg) / lastMonthAvg) * 100) : 0
+
     const comparison = {
-      revenueChange: Math.round((Math.random() - 0.3) * 30),  // -9% to +21%
-      ordersChange: Math.round((Math.random() - 0.2) * 25),
-      stockValueChange: Math.round((Math.random() - 0.4) * 20),
-      avgOrderChange: Math.round((Math.random() - 0.3) * 15),
+      revenueChange,
+      ordersChange,
+      stockValueChange,
+      avgOrderChange,
     }
 
     // ── Build Alerts ──

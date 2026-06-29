@@ -52,9 +52,9 @@ export default function PaymentsModule() {
   }, [search])
 
   const stats = [
-    { label: 'Total Payments', value: `KES ${data.reduce((s, p) => s + p.amount, 0).toLocaleString()}`, icon: Wallet, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
+    { label: 'Total Payments', value: `UGX ${data.reduce((s, p) => s + p.amount, 0).toLocaleString()}`, icon: Wallet, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
     { label: 'Total Records', value: data.length, icon: Receipt, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Average Payment', value: `KES ${data.length > 0 ? Math.round(data.reduce((s, p) => s + p.amount, 0) / data.length).toLocaleString() : 0}`, icon: TrendingUp, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
+    { label: 'Average Payment', value: `UGX ${data.length > 0 ? Math.round(data.reduce((s, p) => s + p.amount, 0) / data.length).toLocaleString() : 0}`, icon: TrendingUp, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
   ]
 
   const handleMerchantSelect = (merchantId: string) => {
@@ -172,7 +172,7 @@ export default function PaymentsModule() {
                 </span>
               </div>
               <h3 className="text-lg font-bold text-gray-900 mb-1 leading-tight">{item.merchantName}</h3>
-              <p className="text-2xl font-extrabold text-green-600 mb-3">KES {item.amount.toLocaleString()}</p>
+              <p className="text-2xl font-extrabold text-green-600 mb-3">UGX {item.amount.toLocaleString()}</p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-sm text-gray-500">
                   <Banknote size={14} className="text-gray-400 shrink-0" />
@@ -197,7 +197,7 @@ export default function PaymentsModule() {
         open={open}
         onClose={handleClose}
         title={editing ? `Payment ${editing.paymentId}` : 'Record New Payment'}
-        subtitle={editing ? `${editing.merchantName} • KES ${editing.amount.toLocaleString()}` : 'Fill in the payment details below'}
+        subtitle={editing ? `${editing.merchantName} • UGX ${editing.amount.toLocaleString()}` : 'Fill in the payment details below'}
         width="lg"
         footer={
           <div className="flex items-center justify-between">
@@ -233,7 +233,7 @@ export default function PaymentsModule() {
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Amount</p>
-                <p className="font-semibold text-green-600">KES {editing.amount.toLocaleString()}</p>
+                <p className="font-semibold text-green-600">UGX {editing.amount.toLocaleString()}</p>
               </div>
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Date</p>
@@ -251,7 +251,7 @@ export default function PaymentsModule() {
             </Select>
           </div>
           <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Amount (KES) <span className="text-red-400">*</span></Label>
+            <Label className="text-gray-700 font-medium mb-1.5 block">Amount (UGX) <span className="text-red-400">*</span></Label>
             <Input
               type="number"
               value={form.amount}

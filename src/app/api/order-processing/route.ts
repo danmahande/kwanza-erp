@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { decrementStorageLiability } from '@/lib/storage-liability'
+import { logAudit } from '@/lib/audit'
+import { formatCurrency } from '@/lib/currency'
 
 /**
  * Order Processing API — Workflow 2: Order → Outbound Cascade
@@ -213,6 +215,13 @@ export async function POST(req: NextRequest) {
     } catch (cascadeErr) {
       console.error('Outbound cascade failed (non-blocking):', cascadeErr)
     }
+
+    await logAudit({
+      action: 'CREATE',
+      module: 'order_processing',
+      entityId: orderNumber,
+      details: `Created order ${orderNumber} for customer ${body.customerName} (${formatCurrency(body.totalAmount || 0)})`,
+    })
 
     return NextResponse.json(orderProcessing, { status: 201 })
   } catch (error) {

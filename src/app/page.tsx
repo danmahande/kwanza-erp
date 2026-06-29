@@ -10,34 +10,26 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import {
-  LayoutDashboard, Store, CreditCard, Users, Package, ArrowDownRight, ArrowUpRight,
-  Scale, RotateCcw, AlertTriangle, UserCog, Truck, Settings, LogOut, Menu, X,
-  ChevronRight, ClipboardList, ScanBarcode, FileText, Wallet, ShoppingCart, PackageX,
+  LayoutDashboard, Store, CreditCard, Users, Package, ArrowUpRight,
+  RotateCcw, UserCog, Truck, Settings, LogOut, Menu, X,
+  ChevronRight, ClipboardList,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 
 import DashboardModule from '@/components/modules/DashboardModule'
 import MerchantsModule from '@/components/modules/MerchantsModule'
-import PaymentsModule from '@/components/modules/PaymentsModule'
+import PaymentsParentModule from '@/components/modules/PaymentsParentModule'
 import CustomersModule from '@/components/modules/CustomersModule'
-import InventoryModule from '@/components/modules/InventoryModule'
-import InboundModule from '@/components/modules/InboundModule'
-import OutboundModule from '@/components/modules/OutboundModule'
-import ReconciliationModule from '@/components/modules/ReconciliationModule'
-import RTVModule from '@/components/modules/RTVModule'
-import ShrinkageModule from '@/components/modules/ShrinkageModule'
+import ProductsModule from '@/components/modules/ProductsModule'
+import InventoryParentModule from '@/components/modules/InventoryParentModule'
+import OutboundParentModule from '@/components/modules/OutboundParentModule'
+import ReturnsParentModule from '@/components/modules/ReturnsParentModule'
 import UsersModule from '@/components/modules/UsersModule'
 import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
-import RunsheetModule from '@/components/modules/RunsheetModule'
-import ItemTrackerModule from '@/components/modules/ItemTrackerModule'
-import StatementsModule from '@/components/modules/StatementsModule'
-import CODReconciliationModule from '@/components/modules/CODReconciliationModule'
-import PaymentBatchesModule from '@/components/modules/PaymentBatchesModule'
-import OrderProcessingModule from '@/components/modules/OrderProcessingModule'
-import AfterSalesModule from '@/components/modules/AfterSalesModule'
+import AuditLogModule from '@/components/modules/AuditLogModule'
 
-type ModuleKey = 'dashboard' | 'merchants' | 'payments' | 'customers' | 'inventory' | 'inbound' | 'outbound' | 'runsheet' | 'item_tracker' | 'reconciliation' | 'rtv' | 'shrinkage' | 'users' | 'drivers' | 'settings' | 'order_processing' | 'after_sales' | 'statements' | 'cod_reconciliation' | 'payment_batches'
+type ModuleKey = 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'drivers' | 'users' | 'settings' | 'audit_log'
 
 interface NavItem {
   key: ModuleKey
@@ -65,45 +57,29 @@ const navItems: NavItem[] = [
   { key: 'merchants', label: 'Merchants', icon: Store, section: 'Management' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Management' },
   { key: 'customers', label: 'Customers', icon: Users, section: 'Management' },
+  { key: 'products', label: 'Products', icon: Package, section: 'Management' },
   { key: 'inventory', label: 'Inventory', icon: Package, section: 'Operations' },
-  { key: 'inbound', label: 'Inbound', icon: ArrowDownRight, section: 'Operations' },
   { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Operations' },
-  { key: 'order_processing', label: 'Order Processing', icon: ShoppingCart, section: 'Operations' },
-  { key: 'runsheet', label: 'Runsheets', icon: ClipboardList, section: 'Operations' },
-  { key: 'item_tracker', label: 'Item Tracker', icon: ScanBarcode, section: 'Operations' },
-  { key: 'reconciliation', label: 'Reconciliation', icon: Scale, section: 'Operations' },
-  { key: 'after_sales', label: 'After-Sales (RMA)', icon: PackageX, section: 'Operations' },
-  { key: 'rtv', label: 'RTV', icon: RotateCcw, section: 'Operations' },
-  { key: 'shrinkage', label: 'Shrinkage', icon: AlertTriangle, section: 'Operations' },
-  { key: 'statements', label: 'Statements', icon: FileText, section: 'Finance' },
-  { key: 'payment_batches', label: 'Payment Batches', icon: CreditCard, section: 'Finance' },
-  { key: 'cod_reconciliation', label: 'COD Reconciliation', icon: Wallet, section: 'Finance' },
+  { key: 'returns', label: 'Returns', icon: RotateCcw, section: 'Operations' },
   { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Resources' },
-  { key: 'users', label: 'Users', icon: UserCog, section: 'Resources' },
+  { key: 'users', label: 'Users', icon: UserCog, section: 'System' },
   { key: 'settings', label: 'Settings', icon: Settings, section: 'System' },
+  { key: 'audit_log', label: 'Audit Log', icon: ClipboardList, section: 'System' },
 ]
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
   dashboard: DashboardModule,
   merchants: MerchantsModule,
-  payments: PaymentsModule,
+  payments: PaymentsParentModule,
   customers: CustomersModule,
-  inventory: InventoryModule,
-  inbound: InboundModule,
-  outbound: OutboundModule,
-  order_processing: OrderProcessingModule,
-  runsheet: RunsheetModule,
-  item_tracker: ItemTrackerModule,
-  reconciliation: ReconciliationModule,
-  after_sales: AfterSalesModule,
-  rtv: RTVModule,
-  shrinkage: ShrinkageModule,
-  statements: StatementsModule,
-  payment_batches: PaymentBatchesModule,
-  cod_reconciliation: CODReconciliationModule,
-  users: UsersModule,
+  products: ProductsModule,
+  inventory: InventoryParentModule,
+  outbound: OutboundParentModule,
+  returns: ReturnsParentModule,
   drivers: DriversModule,
+  users: UsersModule,
   settings: SettingsModule,
+  audit_log: AuditLogModule,
 }
 
 // Auth context - simple cookie-based auth (no NextAuth)

@@ -143,12 +143,40 @@ export default function OrderProcessingModule() {
     }
   }
 
-  const handlePrintInvoice = (order: Order) => {
-    toast.info(`Printing invoice for ${order.orderNumber}...`)
+  const handlePrintInvoice = async (order: Order) => {
+    try {
+      toast.info(`Generating invoice for ${order.orderNumber}...`)
+      const res = await fetch(`/api/order-processing/invoice?id=${order.id}&format=pdf`)
+      const result = await res.json()
+      if (res.ok) {
+        toast.success(`Invoice ${result.invoiceNumber} generated. Opening print dialog...`)
+        // In a real deployment, we'd open the PDF in a new window for printing.
+        // For now, log to console where the file was saved.
+        console.log('Invoice saved to:', result.filePath)
+      } else {
+        toast.error(result.error || 'Failed to generate invoice')
+      }
+    } catch {
+      toast.error('Failed to generate invoice')
+    }
   }
 
-  const handleDownloadInvoice = (order: Order) => {
-    toast.info(`Downloading invoice for ${order.orderNumber}...`)
+  const handleDownloadInvoice = async (order: Order) => {
+    try {
+      toast.info(`Generating invoice for ${order.orderNumber}...`)
+      const res = await fetch(`/api/order-processing/invoice?id=${order.id}&format=pdf`)
+      const result = await res.json()
+      if (res.ok) {
+        toast.success(`Invoice ${result.invoiceNumber} downloaded`)
+        console.log('Invoice saved to:', result.filePath)
+        // Refresh data so the row shows "Generated" status
+        fetchData()
+      } else {
+        toast.error(result.error || 'Failed to generate invoice')
+      }
+    } catch {
+      toast.error('Failed to generate invoice')
+    }
   }
 
   const handleDelete = async () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { logAudit } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,6 +29,12 @@ export async function POST(req: NextRequest) {
     const merchant = await db.merchant.create({
       data: { ...body, merchantId },
     })
+    await logAudit({
+      action: 'CREATE',
+      module: 'merchants',
+      entityId: merchantId,
+      details: `Created merchant ${merchant.businessName} (${merchantId})`,
+    })
     return NextResponse.json(merchant, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create merchant' }, { status: 500 })
@@ -39,6 +46,12 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const { id, ...data } = body
     const merchant = await db.merchant.update({ where: { id }, data })
+    await logAudit({
+      action: 'UPDATE',
+      module: 'merchants',
+      entityId: merchant.merchantId,
+      details: `Updated merchant ${merchant.businessName}`,
+    })
     return NextResponse.json(merchant)
   } catch {
     return NextResponse.json({ error: 'Failed to update merchant' }, { status: 500 })

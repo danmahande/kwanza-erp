@@ -552,13 +552,12 @@ export default function OutboundModule() {
         </motion.div>
       ) : (
         <DataTable
-          data={paginatedData as unknown as Record<string, unknown>[]}
+          data={paginatedData}
           columns={tableColumns}
-          keyExtractor={(row) => (row as unknown as OutboundRecord).id}
-          onRowClick={(row) => { const r = row as unknown as OutboundRecord; setSelectedRecord(r); setDetailOpen(true) }}
+          keyExtractor={(row) => row.id}
+          onRowClick={(row) => { setSelectedRecord(row); setDetailOpen(true) }}
           rowClassName={(row) => {
-            const r = row as unknown as OutboundRecord
-            return selectedIds.has(r.id) ? 'bg-[#FF6B35]/5' : ''
+            return selectedIds.has(row.id) ? 'bg-[#FF6B35]/5' : ''
           }}
           pageSize={100}
         />
