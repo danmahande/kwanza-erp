@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -242,25 +243,22 @@ export default function AfterSalesModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
         title="After-Sales (RMA)"
-        description="Customer returns. Approve returns and decide disposition per item: restock, RTV, dispose, or liquidate."
-        icon={PackageX}
-        stats={stats}
+        description="Customer returns — approve and decide disposition per item"
+        kpiCells={[
+          { label: 'TOTAL RMAs', value: data.length },
+          { label: 'PENDING', value: data.filter(r => r.returnStatus === 'initiated' || r.returnStatus === 'in_review').length },
+          { label: 'APPROVED', value: data.filter(r => r.returnStatus === 'approved' || r.returnStatus === 'processed').length },
+          { label: 'REFUND VALUE', value: formatCurrencyCompact(data.reduce((s, r) => s + (r.refundAmount || 0), 0)) },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by RMA ID, customer, or reason..."
         actionLabel="New RMA"
         onAction={openCreate}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by RMA ID, return order #, customer, or reason..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">

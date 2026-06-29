@@ -13,6 +13,7 @@ import {
 import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { formatCurrency } from '@/lib/currency'
 
@@ -186,25 +187,22 @@ export default function ProductsModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
         title="Products"
-        description="Manage the product catalog. Each product belongs to a merchant."
-        icon={Package}
-        stats={stats}
+        description="Product catalog. Each product belongs to a merchant."
+        kpiCells={[
+          { label: 'TOTAL', value: totalProducts },
+          { label: 'ACTIVE', value: activeProducts },
+          { label: 'LOW STOCK', value: lowStockProducts, highlight: lowStockProducts > 0, highlightColor: 'red' },
+          { label: 'STOCK VALUE', value: formatCurrency(totalStockValue) },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search products..."
         actionLabel="Add Product"
         onAction={openCreate}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
       {data.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">

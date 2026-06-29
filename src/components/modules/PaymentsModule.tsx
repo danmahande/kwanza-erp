@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Search, CreditCard, Wallet, Receipt, TrendingUp, Trash2, Calendar, Building2, Banknote } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface Merchant { id: string; merchantId: string; businessName: string }
@@ -120,25 +121,21 @@ export default function PaymentsModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
-        title="Payments Office"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
+        title="Payments"
         description="Track and manage all merchant payments"
-        icon={CreditCard}
-        stats={stats}
+        kpiCells={[
+          { label: 'TOTAL PAID', value: `UGX ${data.reduce((s, p) => s + p.amount, 0).toLocaleString()}` },
+          { label: 'RECORDS', value: data.length },
+          { label: 'AVERAGE', value: `UGX ${data.length > 0 ? Math.round(data.reduce((s, p) => s + p.amount, 0) / data.length).toLocaleString() : 0}` },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search payments..."
         actionLabel="Record Payment"
         onAction={openCreate}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search payments..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
       {/* Card Grid */}
       {data.length === 0 ? (

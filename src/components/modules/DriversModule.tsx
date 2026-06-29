@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
@@ -408,22 +409,22 @@ export default function DriversModule() {
   }
 
   return (
-    <div className="space-y-4">
-      {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Drivers Office"
+    <div className="space-y-3">
+      <OpsHeader
+        title="Drivers"
         description="Manage delivery fleet, driver assignments, and performance"
-        icon={Truck}
-        stats={stats}
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'ACTIVE', value: data.filter(d => d.status === 'active').length },
+          { label: 'EXPECTED BANKINGS', value: `UGX ${data.reduce((s, d) => s + (d.expectedBankings || 0), 0).toLocaleString()}` },
+          { label: 'BANKED', value: `UGX ${data.reduce((s, d) => s + (d.banked || 0), 0).toLocaleString()}` },
+        ]}
+        searchValue={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search drivers, phone, ID..."
         actionLabel="Add Driver"
         onAction={openCreate}
       >
-        {/* Toolbar */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input ref={searchInputRef} placeholder="Search drivers, phone, ID..." value={search} onChange={e => handleSearchChange(e.target.value)}
-            className="pl-9 h-9 rounded-xl border-gray-200 text-sm bg-white" />
-        </div>
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={DRIVER_STATUSES} counts={statusCounts} />
         <ViewToggle value={viewMode} onChange={setViewMode} />
         <Button variant="outline" size="sm" className="rounded-xl border-gray-200 h-9 text-xs font-medium gap-1.5" onClick={handleExportAll}>
@@ -433,7 +434,7 @@ export default function DriversModule() {
           <SelectTrigger className="h-9 w-[100px] rounded-xl border-gray-200 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>{PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>)}</SelectContent>
         </Select>
-      </OfficeHeader>
+      </OpsHeader>
 
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />

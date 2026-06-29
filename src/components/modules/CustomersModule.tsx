@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Search, User, Users, ShoppingCart, Banknote, Mail, Phone, MapPin, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface Customer {
@@ -99,23 +100,20 @@ export default function CustomersModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
-        title="Customers Office"
-        description="Customers are auto-created from Order Processing. Manual creation is disabled per business rule."
-        icon={Users}
-        stats={stats}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by name or phone..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
+        title="Customers"
+        description="Auto-created from Order Processing. Manual creation disabled per business rule."
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'WITH ORDERS', value: data.filter(c => c.totalOrders > 0).length },
+          { label: 'TOTAL ORDERS', value: data.reduce((s, c) => s + (c.totalOrders || 0), 0) },
+          { label: 'LIFETIME VALUE', value: `UGX ${data.reduce((s, c) => s + (c.totalOrderValue || 0), 0).toLocaleString()}` },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by name or phone..."
+      />
 
       {/* Card Grid */}
       {data.length === 0 ? (
@@ -212,7 +210,7 @@ export default function CustomersModule() {
         }
       >
         {viewing ? (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Avatar Section */}
             <div className="flex items-center gap-4">
               <div className={`w-16 h-16 rounded-2xl ${avatarColors[data.indexOf(viewing) % avatarColors.length]} flex items-center justify-center text-xl font-bold ring-2 ${avatarBorderColors[data.indexOf(viewing) % avatarBorderColors.length]}`}>

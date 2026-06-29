@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { ClipboardList, Search, Filter } from 'lucide-react'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import { format } from 'date-fns'
 
 interface AuditLog {
@@ -49,37 +50,32 @@ export default function AuditLogModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
         title="Audit Log"
-        description="Every state change in the system is recorded here. Use for compliance and dispute resolution."
-        icon={ClipboardList}
-        stats={stats}
+        description="Every state change recorded — for compliance and dispute resolution"
+        kpiCells={[
+          { label: 'TOTAL EVENTS', value: data.length },
+          { label: 'LAST 24H', value: data.filter(l => Date.now() - new Date(l.createdAt).getTime() < 86400000).length },
+          { label: 'LAST 7 DAYS', value: data.filter(l => Date.now() - new Date(l.createdAt).getTime() < 604800000).length },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by action, user, or details..."
       >
         <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder="Search by action, user, or details..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="pl-10 rounded-xl border-gray-200 bg-white"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <Filter size={16} className="text-gray-400" />
-            <select
-              value={moduleFilter}
-              onChange={e => setModuleFilter(e.target.value)}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              {moduleOptions.map(m => (
-                <option key={m} value={m}>{m === 'all' ? 'All modules' : m}</option>
-              ))}
-            </select>
-          </div>
+          <Filter size={14} className="text-gray-400" />
+          <select
+            value={moduleFilter}
+            onChange={e => setModuleFilter(e.target.value)}
+            className="rounded-md border border-gray-200 bg-white px-2 py-1 text-xs h-7"
+          >
+            {moduleOptions.map(m => (
+              <option key={m} value={m}>{m === 'all' ? 'All modules' : m}</option>
+            ))}
+          </select>
         </div>
-      </OfficeHeader>
+      </OpsHeader>
 
       {data.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">

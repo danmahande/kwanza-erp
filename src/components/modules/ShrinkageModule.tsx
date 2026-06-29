@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
@@ -164,30 +165,22 @@ export default function ShrinkageModule() {
   ]
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Shrinkage Office"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
+        title="Shrinkage"
         description="Track and report inventory losses and discrepancies"
-        icon={AlertTriangle}
-        stats={stats}
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'PENDING', value: data.filter(r => r.status === 'pending').length, highlight: true, highlightColor: 'orange' },
+          { label: 'INVESTIGATING', value: data.filter(r => r.status === 'investigating').length },
+          { label: 'RESOLVED', value: data.filter(r => r.status === 'resolved').length },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search shrinkage records..."
         actionLabel="Report Shrinkage"
         onAction={openCreate}
-      >
-        {/* Search bar in toolbar */}
-        <div className="relative flex-1 max-w-md">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search shrinkage records..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-9 h-10 bg-white border-gray-200 rounded-xl text-sm"
-          />
-        </div>
-        <div className="flex items-center gap-2 text-xs text-gray-400">
-          <span>{data.length} records</span>
-        </div>
-      </OfficeHeader>
+      />
 
       {/* ── Card Grid ── */}
       {data.length > 0 ? (
@@ -279,7 +272,7 @@ export default function ShrinkageModule() {
         width="lg"
       >
         {selectedRecord && (
-          <div className="space-y-6">
+          <div className="space-y-3">
             {/* Status & Reason */}
             <div className="flex items-center gap-3">
               {statusBadge(selectedRecord.status)}

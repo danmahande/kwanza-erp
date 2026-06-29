@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -313,25 +314,21 @@ export default function OrderProcessingModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
         title="Order Processing"
-        description="New orders enter here. Each order spawns an outbound record automatically (forward-moving flow)."
-        icon={ShoppingCart}
-        stats={stats}
+        description="Each order spawns an outbound record automatically"
+        kpiCells={[
+          { label: 'TOTAL ORDERS', value: data.length },
+          { label: 'NEW', value: data.filter(o => o.status === 'new_order').length },
+          { label: 'TOTAL VALUE', value: formatCurrencyCompact(data.reduce((s, o) => s + o.totalAmount, 0)) },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by order, customer, or tracking..."
         actionLabel="New Order"
         onAction={openCreate}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by order number, customer, or tracking..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">

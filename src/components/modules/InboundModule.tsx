@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
@@ -501,22 +502,23 @@ export default function InboundModule() {
   // ── RENDER ──
   // ════════════════════════════════════════
   return (
-    <div className="space-y-4">
-      {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Inbound Office"
+    <div className="space-y-3">
+      <OpsHeader
+        title="Inbound"
         description="Receive and manage incoming inventory"
-        icon={ArrowDownRight}
-        stats={stats}
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'RECEIVED', value: data.filter(r => r.status === 'received').length },
+          { label: 'PUT AWAY', value: data.filter(r => r.status === 'put_away').length },
+          { label: 'STORED', value: data.filter(r => r.status === 'stored').length },
+          { label: 'UNITS', value: data.reduce((s, r) => s + r.qtyIn, 0) },
+        ]}
+        searchValue={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search inbound records..."
         actionLabel="Receive Inventory"
         onAction={() => { resetForm(); setOpen(true) }}
       >
-        {/* Toolbar */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input ref={searchInputRef} placeholder="Search inbound records..." value={search} onChange={e => handleSearchChange(e.target.value)}
-            className="pl-9 h-9 rounded-xl border-gray-200 text-sm bg-white" />
-        </div>
         <SearchableFilter label="Vendor" options={vendors} selected={filterVendor.length > 1 ? filterVendor : filterVendor[0] || null} onSelect={handleFilterVendorChange} counts={vendorCounts} multi />
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={INBOUND_STATUSES} counts={statusCounts} />
         <DateRangeFilter value={filterDateRange} onChange={setFilterDateRange} />
@@ -525,7 +527,7 @@ export default function InboundModule() {
           <SelectTrigger className="h-9 w-[100px] rounded-xl border-gray-200 text-xs"><SelectValue /></SelectTrigger>
           <SelectContent>{PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>)}</SelectContent>
         </Select>
-      </OfficeHeader>
+      </OpsHeader>
 
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />

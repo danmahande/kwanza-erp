@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -266,23 +267,20 @@ export default function OutboundModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-4">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
+      <OpsHeader
         title="Outbound Records"
-        description="Forward-moving workflow: Pick → Pack → Dispatch → Deliver. Click an action button to advance."
-        icon={ArrowUpRight}
-        stats={stats}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by order, customer, or tracking..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+        description="Forward-moving workflow: Pick → Pack → Dispatch → Deliver"
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'READY TO PICK', value: counts.ready_to_pick || 0 },
+          { label: 'PACKED', value: counts.packed || 0 },
+          { label: 'EXCEPTIONS', value: counts.exceptions || 0, highlight: (counts.exceptions || 0) > 0, highlightColor: 'red' },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by order, customer, or tracking..."
+      />
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
