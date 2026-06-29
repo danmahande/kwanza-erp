@@ -17,6 +17,7 @@ import {
 import { toast, Toaster } from 'sonner'
 
 import DashboardModule from '@/components/modules/DashboardModule'
+import HubTodayModule from '@/components/modules/HubTodayModule'
 import MerchantsModule from '@/components/modules/MerchantsModule'
 import PaymentsParentModule from '@/components/modules/PaymentsParentModule'
 import CustomersModule from '@/components/modules/CustomersModule'
@@ -29,7 +30,7 @@ import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
 import AuditLogModule from '@/components/modules/AuditLogModule'
 
-type ModuleKey = 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'drivers' | 'users' | 'settings' | 'audit_log'
+type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'drivers' | 'users' | 'settings' | 'audit_log'
 
 interface NavItem {
   key: ModuleKey
@@ -53,6 +54,7 @@ interface AuthContextType {
 }
 
 const navItems: NavItem[] = [
+  { key: 'hub_today', label: 'Today at the Hub', icon: LayoutDashboard, section: 'Overview' },
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Overview' },
   { key: 'merchants', label: 'Merchants', icon: Store, section: 'Management' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Management' },
@@ -68,6 +70,7 @@ const navItems: NavItem[] = [
 ]
 
 const moduleComponents: Record<ModuleKey, React.ComponentType> = {
+  hub_today: HubTodayModule,
   dashboard: DashboardModule,
   merchants: MerchantsModule,
   payments: PaymentsParentModule,
@@ -232,7 +235,7 @@ function LoginPage() {
 // Main App Content
 function AppContent() {
   const { user, loading, logout } = useAuth()
-  const [activeModule, setActiveModule] = useState<ModuleKey>('dashboard')
+  const [activeModule, setActiveModule] = useState<ModuleKey>('hub_today')
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Inject sidebar scrollbar-hiding style into <head> — can't be cached separately
