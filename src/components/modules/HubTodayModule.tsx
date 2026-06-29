@@ -1,21 +1,69 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Package, ArrowDownRight, ArrowUpRight, Truck, CheckCircle2, RotateCcw,
-  AlertTriangle, Wallet, Lock, RefreshCw, ChevronRight, MapPin, User,
-  ClipboardList, Boxes,
+  Search, ScanLine, ChevronRight, ChevronDown, Lock, RefreshCw,
+  AlertTriangle, CheckCircle2, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+
+// ── Types ──
+interface StationItem {
+  id?: string
+  inboundId?: string
+  outboundId?: string
+  orderNumber?: string
+  afterSalesId?: string
+  name?: string  // rider name (used by riders list)
+  customerName?: string
+  productName?: string
+  merchantName?: string
+  customerAddress?: string
+  qty?: number
+  qtyIn?: number
+  status?: string
+  returnStatus?: string
+  runsheetId?: string | null
+  assignedDriver?: string | null
+  codCollected?: number | null
+  saleAmount?: number | null
+  deliveryNotes?: string | null
+  deliveryAttempts?: number
+  dispatchedAt?: string
+  deliveredAt?: string
+  createdAt?: string
+  bankedAt?: string
+  reason?: string
+  refundAmount?: number | null
+  shrinkageId?: string
+  bankingId?: string
+  driverName?: string
+  amount?: number
+  phone?: string
+  expectedBankings?: number
+  banked?: number
+  dispatchedToday?: number
+  deliveredToday?: number
+  pendingBankings?: number
+}
+
+interface Station {
+  count: number
+  items: StationItem[]
+  label: string
+  description: string
+  action: string
+  targetModule: string
+}
 
 interface HubData {
   date: string
@@ -29,23 +77,14 @@ interface HubData {
     returns: Station
   }
   exceptions: {
-    failedDeliveries: Array<Record<string, unknown>>
-    pendingShrinkage: Array<Record<string, unknown>>
+    failedDeliveries: StationItem[]
+    pendingShrinkage: StationItem[]
     count: number
   }
-  riders: Array<{
-    driverId: string
-    name: string
-    phone: string
-    expectedBankings: number
-    banked: number
-    dispatchedToday: number
-    deliveredToday: number
-    pendingBankings: number
-  }>
+  riders: StationItem[]
   pendingBankings: {
     count: number
-    items: Array<Record<string, unknown>>
+    items: StationItem[]
     totalAmount: number
   }
   dayClose: {
@@ -61,126 +100,412 @@ interface HubData {
   }
 }
 
-interface Station {
-  count: number
-  items: Array<Record<string, unknown>>
-  label: string
-  description: string
-  action: string
-  targetModule: string
-}
+type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
-interface StationCardProps {
-  station: Station
-  stationKey: string
-  icon: typeof Package
-  color: string
-  bgColor: string
-  borderColor: string
-  gradient: string
-  onExpand: () => void
-  isExpanded: boolean
-}
+const STATIONS: { key: StationKey; label: string; pillClass: string }[] = [
+  { key: 'intake',    label: 'INTAKE',    pillClass: 'text-blue-600' },
+  { key: 'sort',      label: 'SORT & PACK', pillClass: 'text-orange-600' },
+  { key: 'stage',     label: 'STAGING',   pillClass: 'text-purple-600' },
+  { key: 'dispatch',  label: 'DISPATCH',  pillClass: 'text-yellow-700' },
+  { key: 'inTransit', label: 'IN TRANSIT', pillClass: 'text-cyan-600' },
+  { key: 'delivered', label: 'DELIVERED', pillClass: 'text-green-700' },
+  { key: 'returns',   label: 'RETURNS',   pillClass: 'text-red-600' },
+]
 
-const STATION_META: Record<string, { icon: typeof Package; color: string; bgColor: string; borderColor: string; gradient: string }> = {
-  intake:     { icon: ArrowDownRight, color: '#3B82F6', bgColor: 'bg-blue-500/20',     borderColor: 'border-blue-400/30',     gradient: 'from-blue-500/10 to-blue-500/5' },
-  sort:       { icon: Boxes,          color: '#FF6B35', bgColor: 'bg-orange-500/20',   borderColor: 'border-orange-400/30',   gradient: 'from-orange-500/10 to-orange-500/5' },
-  stage:      { icon: ClipboardList,  color: '#8B5CF6', bgColor: 'bg-purple-500/20',   borderColor: 'border-purple-400/30',   gradient: 'from-purple-500/10 to-purple-500/5' },
-  dispatch:   { icon: Truck,          color: '#F59E0B', bgColor: 'bg-yellow-500/20',   borderColor: 'border-yellow-400/30',   gradient: 'from-yellow-500/10 to-yellow-500/5' },
-  inTransit:  { icon: ArrowUpRight,   color: '#06B6D4', bgColor: 'bg-cyan-500/20',     borderColor: 'border-cyan-400/30',     gradient: 'from-cyan-500/10 to-cyan-500/5' },
-  delivered:  { icon: CheckCircle2,   color: '#22C55E', bgColor: 'bg-green-500/20',    borderColor: 'border-green-400/30',    gradient: 'from-green-500/10 to-green-500/5' },
-  returns:    { icon: RotateCcw,      color: '#EF4444', bgColor: 'bg-red-500/20',      borderColor: 'border-red-400/30',      gradient: 'from-red-500/10 to-red-500/5' },
-}
-
-function StationCard({ station, stationKey, icon: Icon, color, bgColor, borderColor, gradient, onExpand, isExpanded }: StationCardProps) {
-  const items = station.items || []
+// ── Status pill: colored dot + 2-letter code ──
+function StatusPill({ status, station }: { status: string; station: StationKey }) {
+  const map: Record<string, { dot: string; code: string; label: string }> = {
+    // outbound statuses
+    pending:    { dot: 'bg-gray-400',   code: 'PD', label: 'Pending' },
+    picking:    { dot: 'bg-blue-500',   code: 'PK', label: 'Picking' },
+    picked:     { dot: 'bg-blue-600',   code: 'PD', label: 'Picked' },
+    packing:    { dot: 'bg-orange-500', code: 'PG', label: 'Packing' },
+    packed:     { dot: 'bg-orange-600', code: 'PC', label: 'Packed' },
+    dispatched: { dot: 'bg-cyan-500',   code: 'DP', label: 'Dispatched' },
+    delivered:  { dot: 'bg-green-600',  code: 'DL', label: 'Delivered' },
+    failed:     { dot: 'bg-red-500',    code: 'FL', label: 'Failed' },
+    returned:   { dot: 'bg-red-600',    code: 'RT', label: 'Returned' },
+    cancelled:  { dot: 'bg-gray-500',   code: 'CL', label: 'Cancelled' },
+    // inbound
+    received:   { dot: 'bg-blue-500',   code: 'RC', label: 'Received' },
+    put_away:   { dot: 'bg-yellow-500', code: 'PA', label: 'Put Away' },
+    stored:     { dot: 'bg-green-600',  code: 'ST', label: 'Stored' },
+    // rma
+    initiated:  { dot: 'bg-blue-400',   code: 'IN', label: 'Initiated' },
+    in_review:  { dot: 'bg-yellow-500', code: 'RV', label: 'In Review' },
+    approved:   { dot: 'bg-green-500',  code: 'AP', label: 'Approved' },
+    rejected:   { dot: 'bg-red-500',    code: 'RJ', label: 'Rejected' },
+    processed:  { dot: 'bg-green-600',  code: 'PR', label: 'Processed' },
+  }
+  const s = map[status] || { dot: 'bg-gray-400', code: '??', label: status }
   return (
-    <motion.div
-      layout
-      className={`bg-white rounded-2xl border ${borderColor} overflow-hidden shadow-sm hover:shadow-md transition-shadow`}
-    >
-      <button
-        onClick={onExpand}
-        className={`w-full p-4 text-left bg-gradient-to-br ${gradient}`}
-      >
-        <div className="flex items-start justify-between mb-2">
-          <div className={`w-10 h-10 rounded-xl ${bgColor} flex items-center justify-center`}>
-            <Icon size={20} style={{ color }} />
-          </div>
-          <span className="text-3xl font-bold text-gray-900">{station.count}</span>
-        </div>
-        <h3 className="font-semibold text-gray-900 text-sm">{station.label}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">{station.description}</p>
-        {station.count > 0 && (
-          <div className="mt-2 flex items-center gap-1 text-xs font-medium" style={{ color }}>
-            {station.action}
-            <ChevronRight size={12} />
-          </div>
-        )}
-      </button>
-
-      <AnimatePresence>
-        {isExpanded && items.length > 0 && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="border-t border-gray-100"
-          >
-            <div className="max-h-80 overflow-y-auto">
-              {items.slice(0, 10).map((item, idx) => {
-                const orderNumber = String(item.orderNumber || '')
-                const inboundId = String(item.inboundId || '')
-                const outboundId = String(item.outboundId || '')
-                const afterSalesId = String(item.afterSalesId || '')
-                const customerName = String(item.customerName || '')
-                const productName = String(item.productName || '')
-                const merchantName = String(item.merchantName || '')
-                const qty = String(item.qty || '')
-                const qtyIn = String(item.qtyIn || '')
-                const codCollected = item.codCollected ? Number(item.codCollected) : 0
-                const saleAmount = item.saleAmount ? Number(item.saleAmount) : 0
-                return (
-                  <div key={idx} className="px-4 py-2 border-b border-gray-50 hover:bg-gray-50 flex items-center justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      {orderNumber && <p className="font-mono text-xs font-semibold text-gray-900">{orderNumber}</p>}
-                      {inboundId && <p className="font-mono text-xs font-semibold text-gray-900">{inboundId}</p>}
-                      {outboundId && !orderNumber && <p className="font-mono text-xs font-semibold text-gray-900">{outboundId}</p>}
-                      {afterSalesId && <p className="font-mono text-xs font-semibold text-gray-900">{afterSalesId}</p>}
-                      <p className="text-xs text-gray-500 truncate">
-                        {customerName || productName || merchantName}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400 shrink-0">
-                      {qty && <span className="font-mono">×{qty}</span>}
-                      {qtyIn && <span className="font-mono">×{qtyIn}</span>}
-                      {codCollected ? (
-                        <span className="text-green-600 font-medium">{formatCurrencyCompact(codCollected)}</span>
-                      ) : saleAmount ? (
-                        <span className="text-gray-600">{formatCurrencyCompact(saleAmount)}</span>
-                      ) : null}
-                    </div>
-                  </div>
-                )
-              })}
-              {items.length > 10 && (
-                <p className="px-4 py-2 text-xs text-gray-400 text-center">
-                  + {items.length - 10} more
-                </p>
-              )}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.div>
+    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-gray-700" title={s.label}>
+      <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+      {s.code}
+    </span>
   )
 }
 
+// ── Row tint based on status ──
+function rowTint(status: string): string {
+  if (['delivered', 'stored', 'processed'].includes(status)) return 'bg-green-50/40'
+  if (['dispatched'].includes(status)) return 'bg-cyan-50/40'
+  if (['failed', 'returned', 'rejected', 'cancelled'].includes(status)) return 'bg-red-50/40'
+  if (['packed', 'put_away', 'in_review'].includes(status)) return 'bg-orange-50/40'
+  if (['picking', 'packing', 'received', 'initiated'].includes(status)) return 'bg-blue-50/40'
+  return ''
+}
+
+// ── KPI Ribbon ── (replaces the 4-card totals strip — single dense bar, no icons, no gradients)
+function KpiRibbon({ totals, exceptionsCount, ridersCount, codPending }: {
+  totals: HubData['totals']
+  exceptionsCount: number
+  ridersCount: number
+  codPending: number
+}) {
+  const cells = [
+    { label: 'INBOUND', value: String(totals.inboundToday) },
+    { label: 'OUTBOUND', value: String(totals.outboundToday) },
+    { label: 'DELIVERED', value: String(totals.outboundToday > 0 ? '—' : '0') },
+    { label: 'EXCEPTIONS', value: String(exceptionsCount), highlight: exceptionsCount > 0 },
+    { label: 'COD', value: formatCurrencyCompact(totals.codCollectedToday) },
+    { label: 'SALES', value: formatCurrencyCompact(totals.salesToday) },
+    { label: 'RIDERS', value: String(ridersCount) },
+    { label: 'COD PENDING', value: formatCurrencyCompact(codPending), highlight: codPending > 0 },
+  ]
+  return (
+    <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
+      {cells.map((c, i) => (
+        <div
+          key={c.label}
+          className={`flex-1 px-3 py-2 flex flex-col justify-center border-r border-white/10 ${c.highlight ? 'bg-red-500/20' : ''} ${i === cells.length - 1 ? 'border-r-0' : ''}`}
+        >
+          <span className="text-[9px] text-blue-200/60 uppercase tracking-wider font-medium">{c.label}</span>
+          <span className="font-mono font-bold text-base tabular-nums">{c.value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Dense Table for a station ──
+function StationTable({
+  station,
+  stationKey,
+  expandedId,
+  onToggleExpand,
+}: {
+  station: Station
+  stationKey: StationKey
+  expandedId: string | null
+  onToggleExpand: (id: string) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [sortBy, setSortBy] = useState<'time' | 'amount' | 'status'>('time')
+
+  const filtered = useMemo(() => {
+    let items = station.items || []
+    if (search) {
+      const q = search.toLowerCase()
+      items = items.filter(it =>
+        String(it.orderNumber || it.outboundId || it.inboundId || it.afterSalesId || '').toLowerCase().includes(q) ||
+        String(it.customerName || '').toLowerCase().includes(q) ||
+        String(it.productName || '').toLowerCase().includes(q) ||
+        String(it.assignedDriver || '').toLowerCase().includes(q)
+      )
+    }
+    items = [...items].sort((a, b) => {
+      if (sortBy === 'amount') {
+        return Number(b.codCollected || b.saleAmount || 0) - Number(a.codCollected || a.saleAmount || 0)
+      }
+      if (sortBy === 'status') {
+        return String(a.status || a.returnStatus || '').localeCompare(String(b.status || b.returnStatus || ''))
+      }
+      // time: newest first
+      const aTime = new Date(a.dispatchedAt || a.deliveredAt || a.createdAt || 0).getTime()
+      const bTime = new Date(b.dispatchedAt || b.deliveredAt || b.createdAt || 0).getTime()
+      return bTime - aTime
+    })
+    return items
+  }, [station.items, search, sortBy])
+
+  if (filtered.length === 0) {
+    return (
+      <div className="py-12 text-center text-gray-400 text-sm">
+        No items in this queue.
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      {/* Inline filters */}
+      <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/50">
+        <div className="relative flex-1 max-w-xs">
+          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Input
+            placeholder="Filter this queue..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="pl-7 h-7 text-xs rounded-md"
+          />
+        </div>
+        <div className="flex items-center gap-1 text-xs">
+          <span className="text-gray-400">Sort:</span>
+          {(['time', 'amount', 'status'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setSortBy(s)}
+              className={`px-2 py-0.5 rounded text-[11px] ${sortBy === s ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+            >
+              {s === 'time' ? 'Time' : s === 'amount' ? 'Amount' : 'Status'}
+            </button>
+          ))}
+        </div>
+        <span className="ml-auto text-[11px] text-gray-400 font-mono">
+          {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
+        </span>
+      </div>
+
+      {/* Dense table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
+              <th className="text-left px-3 py-1.5 font-semibold w-32">ID</th>
+              <th className="text-left px-3 py-1.5 font-semibold">Customer / Product</th>
+              {stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch' ? (
+                <th className="text-left px-3 py-1.5 font-semibold w-28">Driver</th>
+              ) : null}
+              {stationKey === 'intake' ? (
+                <th className="text-left px-3 py-1.5 font-semibold w-28">Merchant</th>
+              ) : null}
+              <th className="text-right px-3 py-1.5 font-semibold w-16">Qty</th>
+              <th className="text-right px-3 py-1.5 font-semibold w-28">Amount</th>
+              <th className="text-left px-3 py-1.5 font-semibold w-20">Status</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((item, idx) => {
+              const id = String(item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || `item-${idx}`)
+              const isExpanded = expandedId === id
+              const status = String(item.status || item.returnStatus || '')
+              const amount = Number(item.codCollected || item.saleAmount || item.refundAmount || 0)
+              return (
+                <>
+                  <tr
+                    key={id}
+                    onClick={() => onToggleExpand(id)}
+                    className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${rowTint(status)} ${isExpanded ? 'bg-blue-50' : ''}`}
+                    style={{ height: '32px' }}
+                  >
+                    <td className="px-3 py-1 font-mono font-semibold text-gray-900 text-[11px]">
+                      {item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || '—'}
+                    </td>
+                    <td className="px-3 py-1 text-gray-700 truncate max-w-xs">
+                      {item.customerName || item.productName || '—'}
+                    </td>
+                    {(stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch') && (
+                      <td className="px-3 py-1 text-gray-600 text-[11px]">{item.assignedDriver || '—'}</td>
+                    )}
+                    {stationKey === 'intake' && (
+                      <td className="px-3 py-1 text-gray-600 text-[11px] truncate">{item.merchantName || '—'}</td>
+                    )}
+                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-700">
+                      {item.qty || item.qtyIn || '—'}
+                    </td>
+                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-900 font-medium">
+                      {amount > 0 ? formatCurrencyCompact(amount) : '—'}
+                    </td>
+                    <td className="px-3 py-1">
+                      <StatusPill status={status} station={stationKey} />
+                    </td>
+                    <td className="px-2 text-gray-400">
+                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr key={`${id}-detail`} className="bg-white border-b border-gray-200">
+                      <td colSpan={8} className="px-6 py-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Customer</p>
+                            <p className="text-gray-900 font-medium">{item.customerName || '—'}</p>
+                            {item.customerAddress && <p className="text-gray-500 text-[11px] mt-0.5">{item.customerAddress}</p>}
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product / Item</p>
+                            <p className="text-gray-900">{item.productName || '—'}</p>
+                            {item.merchantName && <p className="text-gray-500 text-[11px] mt-0.5">{item.merchantName}</p>}
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Driver / Runsheet</p>
+                            <p className="text-gray-900">{item.assignedDriver || 'Unassigned'}</p>
+                            {item.runsheetId && <p className="text-gray-500 text-[11px] font-mono mt-0.5">{item.runsheetId}</p>}
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Money</p>
+                            <p className="text-gray-900">
+                              {item.codCollected ? `COD ${formatCurrency(Number(item.codCollected))}` : item.saleAmount ? formatCurrency(Number(item.saleAmount)) : '—'}
+                            </p>
+                            {item.refundAmount && <p className="text-red-600 text-[11px] mt-0.5">Refund: {formatCurrency(Number(item.refundAmount))}</p>}
+                          </div>
+                        </div>
+                        {(item.dispatchedAt || item.deliveredAt || item.createdAt) && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Timeline</p>
+                            <div className="flex items-center gap-3 text-[11px] text-gray-600 flex-wrap">
+                              {item.createdAt && <span>Created: {new Date(item.createdAt).toLocaleString('en-UG')}</span>}
+                              {item.dispatchedAt && <span>→ Dispatched: {new Date(item.dispatchedAt).toLocaleString('en-UG')}</span>}
+                              {item.deliveredAt && <span>→ Delivered: {new Date(item.deliveredAt).toLocaleString('en-UG')}</span>}
+                            </div>
+                          </div>
+                        )}
+                        {item.deliveryNotes && (
+                          <div className="mt-2 p-2 rounded bg-red-50 border border-red-100 text-[11px] text-red-700">
+                            ⚠ {item.deliveryNotes}
+                          </div>
+                        )}
+                        {item.reason && (
+                          <div className="mt-2 p-2 rounded bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
+                            Reason: {item.reason}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ── Right-rail mini-tables ──
+function RidersPanel({ riders }: { riders: StationItem[] }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">Riders</span>
+        <span className="text-[11px] text-gray-500 font-mono">{riders.length} active</span>
+      </div>
+      <table className="w-full text-[11px]">
+        <thead className="text-gray-400 text-[9px] uppercase">
+          <tr>
+            <th className="text-left px-3 py-1 font-semibold">Name</th>
+            <th className="text-right px-2 py-1 font-semibold">Disp</th>
+            <th className="text-right px-2 py-1 font-semibold">Del</th>
+            <th className="text-right px-3 py-1 font-semibold">Bank</th>
+          </tr>
+        </thead>
+        <tbody>
+          {riders.length === 0 ? (
+            <tr><td colSpan={4} className="px-3 py-3 text-center text-gray-400">No active riders</td></tr>
+          ) : riders.slice(0, 10).map((r, i) => (
+            <tr key={i} className="border-t border-gray-50 hover:bg-gray-50" style={{ height: '28px' }}>
+              <td className="px-3 py-1 text-gray-900 font-medium truncate max-w-[120px]">{r.name || '—'}</td>
+              <td className="px-2 py-1 text-right font-mono tabular-nums text-gray-700">{r.dispatchedToday ?? 0}</td>
+              <td className="px-2 py-1 text-right font-mono tabular-nums text-green-700">{r.deliveredToday ?? 0}</td>
+              <td className={`px-3 py-1 text-right font-mono tabular-nums ${(r.pendingBankings ?? 0) > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}`}>
+                {r.pendingBankings ?? 0}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CodPanel({ bankings }: { bankings: { count: number; items: StationItem[]; totalAmount: number } }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">
+          Pending COD <InfoTip term="codBanked" size={11} />
+        </span>
+        <span className="text-[11px] font-mono font-bold text-orange-700">{formatCurrencyCompact(bankings.totalAmount)}</span>
+      </div>
+      <table className="w-full text-[11px]">
+        <thead className="text-gray-400 text-[9px] uppercase">
+          <tr>
+            <th className="text-left px-3 py-1 font-semibold">Banking</th>
+            <th className="text-left px-2 py-1 font-semibold">Driver</th>
+            <th className="text-right px-3 py-1 font-semibold">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bankings.count === 0 ? (
+            <tr><td colSpan={3} className="px-3 py-3 text-center text-gray-400">All verified</td></tr>
+          ) : bankings.items.slice(0, 10).map((b, i) => (
+            <tr key={i} className="border-t border-gray-50 hover:bg-orange-50/30" style={{ height: '28px' }}>
+              <td className="px-3 py-1 font-mono text-gray-600">{b.bankingId || '—'}</td>
+              <td className="px-2 py-1 text-gray-700 truncate max-w-[80px]">{b.driverName || '—'}</td>
+              <td className="px-3 py-1 text-right font-mono tabular-nums font-bold text-orange-700">
+                {formatCurrencyCompact(Number(b.amount || 0))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function ExceptionsPanel({ exceptions }: { exceptions: HubData['exceptions'] }) {
+  if (exceptions.count === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-green-200 px-3 py-2 flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-green-600" />
+        <span className="text-[11px] text-green-700 font-medium">No exceptions. All clear.</span>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider flex items-center gap-1">
+          <AlertTriangle size={12} /> Exceptions
+        </span>
+        <span className="text-[11px] text-red-700 font-mono font-bold">{exceptions.count}</span>
+      </div>
+      <table className="w-full text-[11px]">
+        <tbody>
+          {exceptions.failedDeliveries.slice(0, 5).map((item, i) => (
+            <tr key={`f-${i}`} className="border-t border-red-50 bg-red-50/20 hover:bg-red-50/40" style={{ height: '28px' }}>
+              <td className="px-3 py-1 font-mono text-gray-700">{item.orderNumber || item.outboundId}</td>
+              <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.customerName}</td>
+              <td className="px-3 py-1 text-right">
+                <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-semibold">FAILED</span>
+              </td>
+            </tr>
+          ))}
+          {exceptions.pendingShrinkage.slice(0, 5).map((item, i) => (
+            <tr key={`s-${i}`} className="border-t border-red-50 bg-orange-50/20 hover:bg-orange-50/40" style={{ height: '28px' }}>
+              <td className="px-3 py-1 font-mono text-gray-700">{item.shrinkageId}</td>
+              <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.productName} ×{item.qty}</td>
+              <td className="px-3 py-1 text-right">
+                <span className="inline-block px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-semibold">SHRINK</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Main Component ──
 export default function HubTodayModule() {
   const [data, setData] = useState<HubData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [expandedStation, setExpandedStation] = useState<string | null>(null)
+  const [activeStation, setActiveStation] = useState<StationKey>('sort')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [scanInput, setScanInput] = useState('')
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [dayCloseData, setDayCloseData] = useState<{
     canClose: boolean
@@ -193,11 +518,16 @@ export default function HubTodayModule() {
   } | null>(null)
 
   const fetchData = useCallback(async () => {
-    setLoading(true)
     try {
       const res = await fetch('/api/hub-today')
       const d = await res.json()
       setData(d)
+      // Auto-pick the first station with items
+      if (d.stations) {
+        const firstWithItems = (['intake', 'sort', 'stage', 'dispatch', 'inTransit', 'delivered', 'returns'] as StationKey[])
+          .find(k => d.stations[k]?.count > 0)
+        if (firstWithItems) setActiveStation(firstWithItems)
+      }
     } catch {
       toast.error('Failed to load hub data')
     } finally {
@@ -207,10 +537,18 @@ export default function HubTodayModule() {
 
   useEffect(() => {
     fetchData()
-    // Auto-refresh every 30 seconds
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  const handleScan = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!scanInput.trim()) return
+    // Scan handler: find the parcel and advance it to the next station
+    toast.info(`Scanned: ${scanInput} — would advance to next station`)
+    setScanInput('')
+    // In production: call /api/workflow-transition to advance the parcel
+  }
 
   const handleDayCloseCheck = async () => {
     try {
@@ -247,224 +585,110 @@ export default function HubTodayModule() {
     return (
       <div className="flex items-center justify-center py-20">
         <RefreshCw size={24} className="animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">Loading today's hub...</span>
+        <span className="ml-2 text-gray-500">Loading operations console...</span>
       </div>
     )
   }
 
-  const stations = data.stations
-  const stationKeys = ['intake', 'sort', 'stage', 'dispatch', 'inTransit', 'delivered', 'returns'] as const
+  const codPendingAmount = data.pendingBankings.totalAmount
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      {/* ── Header bar ── */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
-            Today at the Hub
-          </h1>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-            <span className="ml-2 text-gray-400">·</span>
-            <span className="ml-2 text-xs text-gray-400">Auto-refreshes every 30s</span>
+          <h1 className="text-lg font-bold text-gray-900">Operations Console</h1>
+          <p className="text-[11px] text-gray-500">
+            {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+            <span className="ml-2 text-gray-400">· Auto-refresh 30s</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchData}
-            className="rounded-xl"
-          >
-            <RefreshCw size={14} className="mr-1" /> Refresh
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
+            <RefreshCw size={12} className="mr-1" /> Refresh
           </Button>
           <Button
             size="sm"
             onClick={handleDayCloseCheck}
-            className={`rounded-xl ${data.dayClose.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500'} text-white`}
+            className={`h-7 text-xs rounded-md ${data.dayClose.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500'} text-white`}
           >
-            <Lock size={14} className="mr-1" /> Close Day
+            <Lock size={12} className="mr-1" /> Close Day
           </Button>
         </div>
       </div>
 
-      {/* Today's totals strip */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl border border-gray-100 p-3">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Inbound Today</p>
-          <p className="text-xl font-bold text-gray-900">{data.totals.inboundToday}</p>
-          <p className="text-xs text-gray-500">parcels received</p>
+      {/* ── Scan input (persistent, top) ── */}
+      <form onSubmit={handleScan} className="flex items-center gap-2 bg-[#1B2A4A] rounded-lg px-3 py-2">
+        <ScanLine size={16} className="text-blue-300" />
+        <input
+          type="text"
+          value={scanInput}
+          onChange={e => setScanInput(e.target.value)}
+          placeholder="Scan parcel or location barcode..."
+          autoFocus
+          className="flex-1 bg-transparent text-white placeholder-blue-200/50 text-sm outline-none font-mono"
+        />
+        <button type="submit" className="text-[11px] text-blue-200 hover:text-white px-2 py-1 rounded border border-blue-200/30 hover:bg-blue-200/10">
+          Enter ↵
+        </button>
+      </form>
+
+      {/* ── KPI Ribbon ── */}
+      <KpiRibbon
+        totals={data.totals}
+        exceptionsCount={data.exceptions.count}
+        ridersCount={data.riders.length}
+        codPending={codPendingAmount}
+      />
+
+      {/* ── Station Tabs ── */}
+      <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
+        {STATIONS.map(s => {
+          const station = data.stations[s.key]
+          const count = station?.count ?? 0
+          const isActive = activeStation === s.key
+          return (
+            <button
+              key={s.key}
+              onClick={() => { setActiveStation(s.key); setExpandedId(null) }}
+              className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+                isActive
+                  ? 'border-[#FF6B35] text-[#FF6B35]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <span>{s.label}</span>
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                isActive ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600'
+              }`}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* ── Main: Station Table + Right Rail ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
+        {/* Left: dense table */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <StationTable
+            station={data.stations[activeStation]}
+            stationKey={activeStation}
+            expandedId={expandedId}
+            onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
+          />
         </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Outbound Today</p>
-          <p className="text-xl font-bold text-gray-900">{data.totals.outboundToday}</p>
-          <p className="text-xs text-gray-500">parcels created</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">COD Collected</p>
-          <p className="text-xl font-bold text-green-700">{formatCurrency(data.totals.codCollectedToday)}</p>
-          <p className="text-xs text-gray-500">from deliveries</p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-100 p-3">
-          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Sales Value</p>
-          <p className="text-xl font-bold text-blue-700">{formatCurrency(data.totals.salesToday)}</p>
-          <p className="text-xs text-gray-500">delivered today</p>
+
+        {/* Right: rail with Riders + COD + Exceptions */}
+        <div className="space-y-3">
+          <ExceptionsPanel exceptions={data.exceptions} />
+          <RidersPanel riders={data.riders} />
+          <CodPanel bankings={data.pendingBankings} />
         </div>
       </div>
 
-      {/* 7 Station Cards */}
-      <div>
-        <h2 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <ClipboardList size={16} /> Station Queues
-          <InfoTip term="runsheets" size={13} className="ml-1" />
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-          {stationKeys.map((key) => {
-            const station = stations[key]
-            const meta = STATION_META[key]
-            return (
-              <StationCard
-                key={key}
-                station={station}
-                stationKey={key}
-                icon={meta.icon}
-                color={meta.color}
-                bgColor={meta.bgColor}
-                borderColor={meta.borderColor}
-                gradient={meta.gradient}
-                onExpand={() => setExpandedStation(expandedStation === key ? null : key)}
-                isExpanded={expandedStation === key}
-              />
-            )
-          })}
-        </div>
-      </div>
-
-      {/* Exceptions + Riders + COD */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Exceptions */}
-        <div className="bg-white rounded-2xl border border-red-200 overflow-hidden">
-          <div className="p-4 bg-gradient-to-br from-red-500/10 to-red-500/5 border-b border-red-100">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={18} className="text-red-600" />
-              <h3 className="font-semibold text-gray-900">Exceptions</h3>
-              <Badge className="ml-auto bg-red-100 text-red-700 border-0">{data.exceptions.count}</Badge>
-            </div>
-          </div>
-          <div className="max-h-60 overflow-y-auto">
-            {data.exceptions.count === 0 ? (
-              <p className="p-4 text-sm text-gray-400 text-center">No exceptions. All clear.</p>
-            ) : (
-              <>
-                {data.exceptions.failedDeliveries.slice(0, 5).map((item, idx) => {
-                  const id = String(item.orderNumber || item.outboundId || '')
-                  const customerName = String(item.customerName || '')
-                  const driver = String(item.assignedDriver || 'No driver')
-                  const notes = item.deliveryNotes ? String(item.deliveryNotes) : ''
-                  return (
-                    <div key={`fail-${idx}`} className="px-4 py-2 border-b border-gray-50 hover:bg-red-50/30">
-                      <div className="flex items-center justify-between">
-                        <p className="font-mono text-xs font-semibold text-gray-900">{id}</p>
-                        <Badge className="bg-red-100 text-red-700 border-0 text-[9px]">FAILED</Badge>
-                      </div>
-                      <p className="text-xs text-gray-500">{customerName} · {driver}</p>
-                      {notes && <p className="text-xs text-red-600 mt-1">{notes}</p>}
-                    </div>
-                  )
-                })}
-                {data.exceptions.pendingShrinkage.slice(0, 5).map((item, idx) => {
-                  const id = String(item.shrinkageId || '')
-                  const productName = String(item.productName || '')
-                  const qty = String(item.qty || '')
-                  return (
-                    <div key={`shrink-${idx}`} className="px-4 py-2 border-b border-gray-50 hover:bg-red-50/30">
-                      <div className="flex items-center justify-between">
-                        <p className="font-mono text-xs font-semibold text-gray-900">{id}</p>
-                        <Badge className="bg-orange-100 text-orange-700 border-0 text-[9px]">SHRINKAGE</Badge>
-                      </div>
-                      <p className="text-xs text-gray-500">{productName} × {qty}</p>
-                    </div>
-                  )
-                })}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Riders today */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="p-4 bg-gradient-to-br from-cyan-500/10 to-cyan-500/5 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <Truck size={18} className="text-cyan-600" />
-              <h3 className="font-semibold text-gray-900">Riders Today</h3>
-              <Badge className="ml-auto bg-cyan-100 text-cyan-700 border-0">{data.riders.length}</Badge>
-            </div>
-          </div>
-          <div className="max-h-60 overflow-y-auto">
-            {data.riders.length === 0 ? (
-              <p className="p-4 text-sm text-gray-400 text-center">No active riders today.</p>
-            ) : (
-              data.riders.slice(0, 8).map((rider) => (
-                <div key={rider.driverId} className="px-4 py-2 border-b border-gray-50 hover:bg-gray-50">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-sm text-gray-900">{rider.name}</p>
-                    {rider.pendingBankings > 0 && (
-                      <Badge className="bg-orange-100 text-orange-700 border-0 text-[9px]">
-                        {rider.pendingBankings} pending
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-gray-500">
-                    <span className="flex items-center gap-1">
-                      <ArrowUpRight size={10} /> {rider.dispatchedToday} dispatched
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <CheckCircle2 size={10} /> {rider.deliveredToday} delivered
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Pending COD Bankings */}
-        <div className="bg-white rounded-2xl border border-orange-200 overflow-hidden">
-          <div className="p-4 bg-gradient-to-br from-orange-500/10 to-orange-500/5 border-b border-orange-100">
-            <div className="flex items-center gap-2">
-              <Wallet size={18} className="text-orange-600" />
-              <h3 className="font-semibold text-gray-900">Pending COD <InfoTip term="codBanked" size={13} /></h3>
-              <Badge className="ml-auto bg-orange-100 text-orange-700 border-0">{data.pendingBankings.count}</Badge>
-            </div>
-            {data.pendingBankings.count > 0 && (
-              <p className="text-xs text-orange-700 mt-1">Total: {formatCurrency(data.pendingBankings.totalAmount)}</p>
-            )}
-          </div>
-          <div className="max-h-60 overflow-y-auto">
-            {data.pendingBankings.count === 0 ? (
-              <p className="p-4 text-sm text-gray-400 text-center">All bankings verified.</p>
-            ) : (
-              data.pendingBankings.items.slice(0, 8).map((item, idx) => {
-                const bankingId = String(item.bankingId || '')
-                const amount = Number(item.amount || 0)
-                const driverName = String(item.driverName || '')
-                const bankedAt = String(item.bankedAt || '')
-                return (
-                  <div key={idx} className="px-4 py-2 border-b border-gray-50 hover:bg-orange-50/30">
-                    <div className="flex items-center justify-between">
-                      <p className="font-mono text-xs text-gray-700">{bankingId}</p>
-                      <p className="font-bold text-sm text-orange-700">{formatCurrency(amount)}</p>
-                    </div>
-                    <p className="text-xs text-gray-500">{driverName} · {new Date(bankedAt).toLocaleTimeString()}</p>
-                  </div>
-                )
-              })
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Day Close Dialog */}
+      {/* ── Day Close Dialog ── */}
       <AlertDialog open={dayCloseOpen} onOpenChange={setDayCloseOpen}>
         <AlertDialogContent className="rounded-2xl max-w-lg">
           <AlertDialogHeader>
@@ -478,24 +702,23 @@ export default function HubTodayModule() {
           </AlertDialogHeader>
 
           {dayCloseData && (
-            <div className="space-y-3 py-2">
-              {/* Blockers */}
+            <div className="space-y-3 py-2 max-h-96 overflow-y-auto">
               {dayCloseData.blockers.unaccountedParcels.length > 0 && (
-                <div className="p-3 rounded-xl bg-red-50 border border-red-200">
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200">
                   <p className="text-sm font-medium text-red-900 mb-1">
-                    ⚠️ {dayCloseData.blockers.unaccountedParcels.length} parcels unaccounted for
+                    ⚠ {dayCloseData.blockers.unaccountedParcels.length} parcels unaccounted for
                   </p>
-                  <p className="text-xs text-red-700">
-                    These parcels were dispatched today but are not yet marked delivered or returned. Resolve them before closing.
+                  <p className="text-xs text-red-700 mb-2">
+                    Dispatched today but not yet marked delivered or returned.
                   </p>
-                  <div className="mt-2 max-h-32 overflow-y-auto">
-                    {dayCloseData.blockers.unaccountedParcels.slice(0, 10).map((p, idx) => {
+                  <div className="max-h-24 overflow-y-auto">
+                    {dayCloseData.blockers.unaccountedParcels.slice(0, 15).map((p, idx) => {
                       const id = String(p.orderNumber || p.outboundId || '')
-                      const customerName = String(p.customerName || '')
+                      const customer = String(p.customerName || '')
                       const status = String(p.status || '')
                       return (
-                        <p key={idx} className="text-xs text-red-700 font-mono">
-                          {id} — {customerName} ({status})
+                        <p key={idx} className="text-[11px] text-red-700 font-mono">
+                          {id} — {customer} ({status})
                         </p>
                       )
                     })}
@@ -503,19 +726,17 @@ export default function HubTodayModule() {
                 </div>
               )}
               {dayCloseData.blockers.pendingBankings.length > 0 && (
-                <div className="p-3 rounded-xl bg-orange-50 border border-orange-200">
-                  <p className="text-sm font-medium text-orange-900 mb-1">
-                    ⚠️ {dayCloseData.blockers.pendingBankings.length} pending COD bankings
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+                  <p className="text-sm font-medium text-orange-900">
+                    ⚠ {dayCloseData.blockers.pendingBankings.length} pending COD bankings
                   </p>
-                  <p className="text-xs text-orange-700">
-                    Drivers have unverified cash deposits. Verify them in COD Reconciliation before closing.
+                  <p className="text-xs text-orange-700 mt-1">
+                    Verify them in COD Reconciliation before closing.
                   </p>
                 </div>
               )}
-
-              {/* Summary if can close */}
               {dayCloseData.canClose && (
-                <div className="p-3 rounded-xl bg-green-50 border border-green-200">
+                <div className="p-3 rounded-lg bg-green-50 border border-green-200">
                   <p className="text-sm font-medium text-green-900 mb-2">✓ Ready to close. Today's summary:</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div>
@@ -533,14 +754,6 @@ export default function HubTodayModule() {
                     <div>
                       <p className="text-gray-500">Returns</p>
                       <p className="font-bold text-red-700">{String(dayCloseData.summary.returnedCount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Inbound</p>
-                      <p className="font-bold text-gray-900">{String(dayCloseData.summary.inboundCount)} records</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Inbound units</p>
-                      <p className="font-bold text-gray-900">{String(dayCloseData.summary.inboundUnits)}</p>
                     </div>
                   </div>
                 </div>
