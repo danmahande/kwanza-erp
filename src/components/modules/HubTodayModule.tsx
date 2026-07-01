@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -536,12 +536,8 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       const res = await fetch('/api/hub-today')
       const d = await res.json()
       setData(d)
-      // Auto-pick the first station with items
-      if (d.stations) {
-        const firstWithItems = (['intake', 'sort', 'stage', 'dispatch', 'inTransit', 'delivered', 'returns'] as StationKey[])
-          .find(k => d.stations[k]?.count > 0)
-        if (firstWithItems) setActiveStation(firstWithItems)
-      }
+      // Only auto-pick station on FIRST load (when data was null), not on every refresh
+      // This prevents the station from jumping around while the user is working
     } catch {
       toast.error('Failed to load hub data')
     } finally {
@@ -557,6 +553,12 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
 
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
   const [recentScans, setRecentScans] = useState<Array<{ time: string; value: string; result: string; success: boolean }>>([])
+  const scanInputRef = useRef<HTMLInputElement>(null)
+
+  // Focus scan input on mount only — NOT on every re-render (which would scroll the page)
+  useEffect(() => {
+    scanInputRef.current?.focus()
+  }, [])
 
   const playBeep = (success: boolean) => {
     try {
@@ -722,7 +724,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             value={scanInput}
             onChange={e => setScanInput(e.target.value)}
             placeholder="Scan or type an order number (e.g. DS-001)..."
-            autoFocus
+            ref={scanInputRef}
             className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none font-mono rounded-lg px-3 py-2.5 border border-white/20"
           />
           <button
