@@ -501,7 +501,11 @@ function ExceptionsPanel({ exceptions }: { exceptions: HubData['exceptions'] }) 
 }
 
 // ── Main Component ──
-export default function HubTodayModule() {
+interface HubTodayModuleProps {
+  onNavigate?: (module: string) => void
+}
+
+export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {}) {
   const [data, setData] = useState<HubData | null>(null)
   const [loading, setLoading] = useState(true)
   const [activeStation, setActiveStation] = useState<StationKey>('sort')
@@ -678,9 +682,9 @@ export default function HubTodayModule() {
         <div className="flex items-center gap-3 mb-2">
           <ScanLine size={20} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white'} />
           <label className="text-white font-semibold text-sm">
-            {scanStatus === 'success' ? '✓ Parcel advanced! Scan the next one:' :
+            {scanStatus === 'success' ? '✓ Done! Scan the next parcel:' :
              scanStatus === 'error' ? '✗ Not found. Try again:' :
-             'Scan a parcel to move it to the next step'}
+             'Scan a parcel to advance it in the workflow'}
           </label>
         </div>
         <div className="flex items-center gap-2">
@@ -700,7 +704,7 @@ export default function HubTodayModule() {
           </button>
         </div>
         <p className="text-blue-200/50 text-[11px] mt-2">
-          The system will automatically move the parcel to its next step. You can scan order numbers, tracking numbers, or barcodes.
+          The system finds the parcel and advances it to the next stage (e.g. from pending to picking, or from packed to dispatched). You can scan order numbers, tracking numbers, or barcodes.
         </p>
       </form>
 
@@ -710,26 +714,26 @@ export default function HubTodayModule() {
           <h2 className="text-sm font-semibold text-gray-700">What needs doing now</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {/* Auto-generate action items from the data */}
+          {/* Auto-generate action items from the data — each navigates to the correct module */}
           {(() => {
-            const items: Array<{ icon: typeof Package; label: string; sublabel: string; count: number; station: StationKey; color: string }> = []
+            const items: Array<{ icon: typeof Package; label: string; sublabel: string; count: number; module: string; color: string }> = []
             if (data.stations.intake.count > 0) {
-              items.push({ icon: Package, label: 'Put away new stock', sublabel: 'Parcels that just arrived at the warehouse', count: data.stations.intake.count, station: 'intake', color: 'text-blue-600' })
+              items.push({ icon: Package, label: 'Put away new stock', sublabel: 'Parcels that just arrived at the warehouse', count: data.stations.intake.count, module: 'inventory', color: 'text-blue-600' })
             }
             if (data.stations.sort.count > 0) {
-              items.push({ icon: Boxes, label: 'Sort and pack parcels', sublabel: 'Parcels being prepared for dispatch', count: data.stations.sort.count, station: 'sort', color: 'text-orange-600' })
+              items.push({ icon: Boxes, label: 'Sort and pack parcels', sublabel: 'Parcels being prepared for dispatch', count: data.stations.sort.count, module: 'outbound', color: 'text-orange-600' })
             }
             if (data.stations.stage.count > 0) {
-              items.push({ icon: ClipboardList, label: 'Assign riders to parcels', sublabel: 'Packed and waiting for a driver', count: data.stations.stage.count, station: 'stage', color: 'text-purple-600' })
+              items.push({ icon: ClipboardList, label: 'Assign riders to parcels', sublabel: 'Packed and waiting for a driver', count: data.stations.stage.count, module: 'outbound', color: 'text-purple-600' })
             }
             if (data.stations.dispatch.count > 0) {
-              items.push({ icon: Truck, label: 'Send parcels out with riders', sublabel: 'Assigned to a rider, ready to leave', count: data.stations.dispatch.count, station: 'dispatch', color: 'text-yellow-700' })
+              items.push({ icon: Truck, label: 'Send parcels out with riders', sublabel: 'Assigned to a rider, ready to leave', count: data.stations.dispatch.count, module: 'outbound', color: 'text-yellow-700' })
             }
             if (data.exceptions.count > 0) {
-              items.push({ icon: AlertTriangle, label: 'Fix problems', sublabel: 'Failed deliveries and missing stock', count: data.exceptions.count, station: 'returns', color: 'text-red-600' })
+              items.push({ icon: AlertTriangle, label: 'Fix problems', sublabel: 'Failed deliveries and missing stock', count: data.exceptions.count, module: 'returns', color: 'text-red-600' })
             }
             if (data.pendingBankings.count > 0) {
-              items.push({ icon: CheckCircle2, label: 'Verify driver cash deposits', sublabel: 'Drivers have banked COD cash — verify it', count: data.pendingBankings.count, station: 'delivered', color: 'text-orange-600' })
+              items.push({ icon: CheckCircle2, label: 'Verify driver cash deposits', sublabel: 'Drivers have banked COD cash — verify it', count: data.pendingBankings.count, module: 'payments', color: 'text-orange-600' })
             }
 
             if (items.length === 0) {
@@ -747,7 +751,7 @@ export default function HubTodayModule() {
               return (
                 <button
                   key={i}
-                  onClick={() => { setActiveStation(item.station); setExpandedId(null) }}
+                  onClick={() => onNavigate?.(item.module)}
                   className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
                 >
                   <Icon size={20} className={item.color} />
@@ -758,7 +762,7 @@ export default function HubTodayModule() {
                   <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-mono font-bold">
                     {item.count}
                   </span>
-                  <ChevronRight size={16} className="text-gray-300" />
+                  <span className="text-[10px] text-gray-400 uppercase tracking-wider">Go →</span>
                 </button>
               )
             })
@@ -770,9 +774,9 @@ export default function HubTodayModule() {
       {/* LAYER 2: THE SUPERVISOR LAYER — overview for the hub manager   */}
       {/* ════════════════════════════════════════════════════════════ */}
 
-      {/* ── KPI Ribbon (supervisor overview) ── */}
+      {/* ── KPI Ribbon (supervisor overview — view only) ── */}
       <div className="flex items-center gap-2 pt-2">
-        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview</span>
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview (view only)</span>
         <div className="flex-1 h-px bg-gray-100"></div>
       </div>
       <KpiRibbon
@@ -846,19 +850,19 @@ export default function HubTodayModule() {
               How does this work?
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This is the control screen for the whole warehouse. Here's what happens, step by step:
+              This is your starting point. It shows what needs doing and takes you to the right screen to do it. Here's the workflow, step by step:
             </AlertDialogDescription>
           </AlertDialogHeader>
 
           <div className="space-y-3 py-2">
             {[
-              { num: 1, title: 'Parcels arrive', desc: 'Stock comes in from merchants. It lands at Intake and needs to be put away on shelves.' },
-              { num: 2, title: 'We sort and pack', desc: 'Orders are picked from shelves, packed into boxes, and labeled with tracking numbers.' },
-              { num: 3, title: 'Parcels wait for riders', desc: 'Packed parcels sit in Staging until a driver is assigned.' },
-              { num: 4, title: 'Riders pick up', desc: 'A rider gets their list of parcels for the day and leaves the warehouse.' },
-              { num: 5, title: 'Riders deliver', desc: 'The rider drives to each customer. If the customer pays cash, the rider collects it.' },
-              { num: 6, title: 'Riders bring back cash', desc: 'At the end of the day, riders deposit the cash they collected. We verify it matches.' },
-              { num: 7, title: 'We close the day', desc: 'When every parcel is accounted for and all cash is verified, the supervisor closes the day.' },
+              { num: 1, title: 'Parcels arrive', desc: 'Stock comes in from merchants. It needs to be received and put away on shelves. → Go to Inventory → Inbound tab.' },
+              { num: 2, title: 'We sort and pack', desc: 'Orders are picked from shelves, packed into boxes, and labeled with tracking numbers. → Go to Outbound → Order Processing tab.' },
+              { num: 3, title: 'Parcels wait for riders', desc: 'Packed parcels sit in Staging until a driver is assigned. → Go to Outbound → Runsheets tab to assign riders.' },
+              { num: 4, title: 'Riders pick up', desc: 'A rider gets their list of parcels for the day and leaves the warehouse. → Go to Outbound → Runsheets tab to dispatch.' },
+              { num: 5, title: 'Riders deliver', desc: 'The rider drives to each customer. If the customer pays cash, the rider collects it. → Track in Outbound → Outbound Records tab.' },
+              { num: 6, title: 'Riders bring back cash', desc: 'At the end of the day, riders deposit the cash they collected. We verify it matches. → Go to Payments → COD Reconciliation tab.' },
+              { num: 7, title: 'We close the day', desc: 'When every parcel is accounted for and all cash is verified, the supervisor closes the day. → Click "Close Day" at the top of this screen.' },
             ].map(step => (
               <div key={step.num} className="flex items-start gap-3 p-2 rounded-lg bg-gray-50">
                 <div className="w-7 h-7 rounded-full bg-[#FF6B35] text-white flex items-center justify-center font-bold text-sm shrink-0">
@@ -872,10 +876,22 @@ export default function HubTodayModule() {
             ))}
           </div>
 
-          <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-            <p className="text-xs text-blue-800">
-              <strong>The scan bar at the top</strong> is the fastest way to work. Just scan a parcel's barcode and the system automatically moves it to the next step. You don't need to click through the tabs — just scan, scan, scan.
-            </p>
+          <div className="space-y-2">
+            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+              <p className="text-xs text-blue-800">
+                <strong>The scan bar at the top</strong> lets you advance a parcel without leaving this screen. Scan a parcel's barcode and the system advances it to the next stage (e.g. from pending to picking, or from packed to dispatched).
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+              <p className="text-xs text-orange-800">
+                <strong>"What needs doing now"</strong> shows the 1-6 things that need attention. Click any item to go straight to the module where the work happens.
+              </p>
+            </div>
+            <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+              <p className="text-xs text-gray-600">
+                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash — but you can't take actions from here. To act, use the "What needs doing now" buttons or the sidebar.
+              </p>
+            </div>
           </div>
 
           <AlertDialogFooter>

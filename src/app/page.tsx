@@ -69,7 +69,7 @@ const navItems: NavItem[] = [
   { key: 'audit_log', label: 'Audit Log', icon: ClipboardList, section: 'System' },
 ]
 
-const moduleComponents: Record<ModuleKey, React.ComponentType> = {
+const moduleComponents: Record<ModuleKey, React.ComponentType<{ onNavigate?: (module: string) => void }>> = {
   hub_today: HubTodayModule,
   dashboard: DashboardModule,
   merchants: MerchantsModule,
@@ -436,7 +436,7 @@ function AppContent() {
                 exit={{ opacity: 0, x: -10 }}
                 transition={{ duration: 0.2 }}
               >
-                <ActiveModuleComponent />
+                <ActiveModuleComponent onNavigate={(m: string) => handleNavClick(m as ModuleKey)} />
               </motion.div>
             </AnimatePresence>
           </div>
