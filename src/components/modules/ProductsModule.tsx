@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle } from 'lucide-react'
+import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -51,6 +51,7 @@ export default function ProductsModule() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState({
     productLabel: '',
     brand: '',
@@ -228,40 +229,83 @@ export default function ProductsModule() {
                 </tr>
               </thead>
               <tbody>
-                {data.map((p, i) => (
-                  <motion.tr
-                    key={p.id}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: i * 0.02 }}
-                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => handleEdit(p)}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{p.productLabel}</p>
-                      <p className="text-xs text-gray-400">
-                        {p.productId}
-                        {p.brand && ` · ${p.brand}`}
-                        {p.variant && ` · ${p.variant}`}
-                      </p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-700 text-xs">{p.merchantName || '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 text-xs">{p.category}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{formatCurrency(p.unitCost)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">{formatCurrency(p.unitSellingPrice)}</td>
-                    <td className="px-4 py-3 text-center">{stockBadge(p)}</td>
-                    <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(p)}>
-                          <Edit3 size={12} className="text-gray-600" />
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setDeletingId(p.id); setDeleteOpen(true) }}>
-                          <Trash2 size={12} className="text-red-600" />
-                        </Button>
-                      </div>
-                    </td>
-                  </motion.tr>
-                ))}
+                {data.map((p, i) => {
+                  const isExpanded = expandedId === p.id
+                  return (
+                    <>
+                      <motion.tr
+                        key={p.id}
+                        initial={{ opacity: 0, y: 5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.15, delay: Math.min(i * 0.01, 0.5) }}
+                        className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer ${p.currentStock <= p.minStock ? 'bg-orange-50/40' : ''}`}
+                        onClick={() => setExpandedId(isExpanded ? null : p.id)}
+                      >
+                        <td className="px-4 py-2">
+                          <p className="font-medium text-gray-900 text-sm">{p.productLabel}</p>
+                          <p className="text-[10px] text-gray-400 font-mono">
+                            {p.productId}
+                            {p.brand && ` · ${p.brand}`}
+                            {p.variant && ` · ${p.variant}`}
+                          </p>
+                        </td>
+                        <td className="px-4 py-2 text-gray-700 text-xs">{p.merchantName || '—'}</td>
+                        <td className="px-4 py-2 text-gray-600 text-xs">{p.category}</td>
+                        <td className="px-4 py-2 text-right text-gray-700 font-mono text-xs tabular-nums">{formatCurrency(p.unitCost)}</td>
+                        <td className="px-4 py-2 text-right font-medium text-gray-900 font-mono text-xs tabular-nums">{formatCurrency(p.unitSellingPrice)}</td>
+                        <td className="px-4 py-2 text-center">{stockBadge(p)}</td>
+                        <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(p)}>
+                              <Edit3 size={12} className="text-gray-600" />
+                            </Button>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setDeletingId(p.id); setDeleteOpen(true) }}>
+                              <Trash2 size={12} className="text-red-600" />
+                            </Button>
+                            {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
+                          </div>
+                        </td>
+                      </motion.tr>
+                      {isExpanded && (
+                        <tr key={`${p.id}-detail`} className="bg-white border-b border-gray-200">
+                          <td colSpan={7} className="px-6 py-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product</p>
+                                <p className="text-gray-900">{p.productLabel}</p>
+                                <p className="text-gray-500 font-mono">{p.productId}</p>
+                                {p.brand && <p className="text-gray-500">Brand: {p.brand}</p>}
+                                {p.variant && <p className="text-gray-500">Variant: {p.variant}</p>}
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Stock</p>
+                                <p className="text-gray-900">Current: <span className="font-mono font-bold">{p.currentStock}</span></p>
+                                <p className="text-gray-500">Min: <span className="font-mono">{p.minStock}</span></p>
+                                <p className="text-gray-500">Unit: {p.unit}</p>
+                                {p.weight && <p className="text-gray-500">Weight: {p.weight}</p>}
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Pricing</p>
+                                <p className="text-gray-700">Cost: <span className="font-mono">{formatCurrency(p.unitCost)}</span></p>
+                                <p className="text-gray-700">Sell: <span className="font-mono">{formatCurrency(p.unitSellingPrice)}</span></p>
+                                <p className="text-gray-700">Commission: <span className="font-mono">{p.commissionPercent}%</span></p>
+                                <p className="text-gray-500 mt-1">Stock value: <span className="font-mono">{formatCurrency(p.currentStock * p.unitCost)}</span></p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Merchant</p>
+                                <p className="text-gray-900">{p.merchantName || '—'}</p>
+                                <p className="text-gray-500 font-mono">{p.merchantId}</p>
+                                <div className="mt-2 flex gap-1">
+                                  <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleEdit(p)}>Edit</Button>
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           </div>

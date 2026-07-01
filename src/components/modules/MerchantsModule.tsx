@@ -16,6 +16,7 @@ import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr, StatusPill } from '@/components/shared/ops-ui'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 
 interface Merchant {
   id: string
@@ -64,6 +65,7 @@ export default function MerchantsModule() {
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
   const [rateCard, setRateCard] = useState<RateCard | null>(null)
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     businessName: '', contact: '', email: '', deliveryType: 'self-delivery',
@@ -227,41 +229,81 @@ export default function MerchantsModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map((m, i) => (
-              <DenseTr
-                key={m.id}
-                onClick={() => handleEdit(m)}
-                tint={m.isActive ? '' : 'bg-gray-50/50'}
-              >
-                <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
-                <DenseTd className="text-gray-900 font-medium">{m.businessName}</DenseTd>
-                <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
-                <DenseTd className="text-gray-600 truncate max-w-[120px]">{m.contact}</DenseTd>
-                <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
-                <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>
-                  {formatCurrencyCompact(m.pendingPayment, m.currency)}
-                </DenseTd>
-                <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>
-                  {formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}
-                </DenseTd>
-                <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>
-                  {formatCurrencyCompact(m.totalShrinkageValue, m.currency)}
-                </DenseTd>
-                <DenseTd className="text-center">
-                  <span className={`inline-block w-2 h-2 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                </DenseTd>
-                <DenseTd right>
-                  <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                    <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]">
-                      <SettingsIcon size={12} />
-                    </button>
-                    <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]">
-                      <FileText size={12} />
-                    </button>
-                  </div>
-                </DenseTd>
-              </DenseTr>
-            ))}
+            {data.map((m, i) => {
+              const isExpanded = expandedId === m.id
+              return (
+                <>
+                  <DenseTr
+                    key={m.id}
+                    onClick={() => setExpandedId(isExpanded ? null : m.id)}
+                    tint={m.isActive ? '' : 'bg-gray-50/50'}
+                  >
+                    <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
+                    <DenseTd className="text-gray-900 font-medium">{m.businessName}</DenseTd>
+                    <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
+                    <DenseTd className="text-gray-600 truncate max-w-[120px]">{m.contact}</DenseTd>
+                    <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
+                    <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>
+                      {formatCurrencyCompact(m.pendingPayment, m.currency)}
+                    </DenseTd>
+                    <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>
+                      {formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}
+                    </DenseTd>
+                    <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>
+                      {formatCurrencyCompact(m.totalShrinkageValue, m.currency)}
+                    </DenseTd>
+                    <DenseTd className="text-center">
+                      <span className={`inline-block w-2 h-2 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    </DenseTd>
+                    <DenseTd right>
+                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]">
+                          <SettingsIcon size={12} />
+                        </button>
+                        <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]">
+                          <FileText size={12} />
+                        </button>
+                        {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
+                      </div>
+                    </DenseTd>
+                  </DenseTr>
+                  {isExpanded && (
+                    <tr key={`${m.id}-detail`} className="bg-white border-b border-gray-200">
+                      <td colSpan={10} className="px-6 py-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Contact</p>
+                            <p className="text-gray-900">{m.contact}</p>
+                            <p className="text-gray-500">{m.email}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Delivery Type</p>
+                            <p className="text-gray-900 capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</p>
+                            <p className="text-gray-500">{m.currency}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Financials</p>
+                            <p className="text-gray-700">Inbound: <span className="font-mono">{formatCurrency(m.totalInboundValue, m.currency)}</span></p>
+                            <p className="text-gray-700">Returns: <span className="font-mono">{formatCurrency(m.totalReturnValue, m.currency)}</span></p>
+                            <p className="text-gray-700">Expected: <span className="font-mono">{formatCurrency(m.expectedPayment, m.currency)}</span></p>
+                            <p className="text-gray-700">Actual: <span className="font-mono text-green-700">{formatCurrency(m.actualPayment, m.currency)}</span></p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Joined</p>
+                            <p className="text-gray-500">{new Date(m.createdAt).toLocaleDateString('en-UG')}</p>
+                            <div className="mt-2 flex gap-1">
+                              <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleEdit(m)}>Edit</Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleOpenRateCard(m)}>Rate Card</Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleOpenStatement(m)}>Statement</Button>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
           </tbody>
         </DenseTable>
       )}

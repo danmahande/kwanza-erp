@@ -7,12 +7,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User } from 'lucide-react'
+import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
+import { StatusPill, rowTint, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import { getStage } from '@/lib/workflow'
 
 const MODULE = 'rtv'
@@ -85,6 +86,7 @@ export default function RTVModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<RTVRecord | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     merchantId: '', merchantName: '', productId: '', productName: '', qty: '', reason: '', processedBy: '',
@@ -191,68 +193,93 @@ export default function RTVModule() {
         onAction={openCreate}
       />
 
-      {/* ── Card Grid ── */}
+      {/* ── Dense table with inline expansion ── */}
       {data.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {data.map((item, i) => (
-            <motion.div
-              key={item.id}
-              custom={i}
-              variants={cardVariants}
-              initial="hidden"
-              animate="visible"
-              whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.08)' }}
-              transition={{ duration: 0.2 }}
-              onClick={() => openDetail(item)}
-              className="cursor-pointer bg-white rounded-2xl border border-gray-100 p-5 hover:border-gray-200 transition-colors group"
-            >
-              {/* Card header: ID + date */}
-              <div className="flex items-start justify-between mb-3">
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-xs text-gray-400 truncate">{item.rtvId}</p>
-                  <p className="text-sm font-bold text-gray-900 mt-0.5 truncate">{item.merchantName}</p>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-gray-400 shrink-0 ml-2">
-                  <CalendarDays size={12} />
-                  {new Date(item.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </div>
-              </div>
-
-              {/* Product */}
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                  <Package size={14} className="text-[#FF6B35]" />
-                </div>
-                <span className="text-sm text-gray-600 truncate">{item.productName}</span>
-              </div>
-
-              {/* Quantity */}
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs text-gray-400">Quantity</span>
-                <span className="text-lg font-extrabold text-red-500 tabular-nums">-{item.qty}</span>
-              </div>
-
-              {/* Reason + Status row */}
-              <div className="flex items-center justify-between pt-3 border-t border-gray-50">
-                {reasonBadge(item.reason)}
-                {statusBadge(item.status)}
-              </div>
-
-              {/* Workflow actions */}
-              <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                <StatusStepper module={MODULE} currentStatus={item.status} size="sm" />
-                <div className="mt-2">
-                  <WorkflowActions
-                    module={MODULE}
-                    currentStatus={item.status}
-                    onTransition={(to) => handleTransition(item, to)}
-                    size="sm"
-                  />
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh className="w-24">RTV ID</DenseTh>
+              <DenseTh>Merchant</DenseTh>
+              <DenseTh>Product</DenseTh>
+              <DenseTh className="w-16 text-right">Qty</DenseTh>
+              <DenseTh className="w-32">Reason</DenseTh>
+              <DenseTh className="w-20">Status</DenseTh>
+              <DenseTh className="w-20 text-right">Actions</DenseTh>
+              <DenseTh className="w-8"></DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {data.map((item, i) => {
+              const isExpanded = expandedId === item.id
+              return (
+                <>
+                  <DenseTr
+                    key={item.id}
+                    onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                    tint={rowTint(item.status)}
+                  >
+                    <DenseTd mono className="text-gray-500">{item.rtvId}</DenseTd>
+                    <DenseTd className="text-gray-900 font-medium truncate max-w-[160px]">{item.merchantName}</DenseTd>
+                    <DenseTd className="text-gray-700 truncate max-w-[200px]">{item.productName}</DenseTd>
+                    <DenseTd mono right className="text-red-600 font-bold">-{item.qty}</DenseTd>
+                    <DenseTd className="text-gray-500 text-[10px] truncate max-w-[120px]">{item.reason}</DenseTd>
+                    <DenseTd><StatusPill status={item.status} /></DenseTd>
+                    <DenseTd right>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <WorkflowActions
+                          module={MODULE}
+                          currentStatus={item.status}
+                          onTransition={(to) => handleTransition(item, to)}
+                          size="sm"
+                        />
+                      </div>
+                    </DenseTd>
+                    <DenseTd className="text-gray-400">
+                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                    </DenseTd>
+                  </DenseTr>
+                  {isExpanded && (
+                    <tr key={`${item.id}-detail`} className="bg-white border-b border-gray-200">
+                      <td colSpan={8} className="px-6 py-3">
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Merchant</p>
+                            <p className="text-gray-900 font-medium">{item.merchantName}</p>
+                            <p className="text-gray-500 font-mono text-[11px]">{item.merchantId}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product</p>
+                            <p className="text-gray-900">{item.productName}</p>
+                            <p className="text-gray-500 font-mono text-[11px]">{item.productId}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Reason</p>
+                            <p className="text-gray-700">{item.reason}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Created</p>
+                            <p className="text-gray-500">{new Date(item.createdAt).toLocaleString('en-UG')}</p>
+                            {item.processedBy && <p className="text-gray-500 text-[11px] mt-1">Processed by: {item.processedBy}</p>}
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <StatusStepper module={MODULE} currentStatus={item.status} size="sm" />
+                          <div className="mt-2">
+                            <NextStepBanner
+                              module={MODULE}
+                              currentStatus={item.status}
+                              onAdvance={(to) => handleTransition(item, to)}
+                            />
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </>
+              )
+            })}
+          </tbody>
+        </DenseTable>
       ) : (
         <motion.div
           initial={{ opacity: 0 }}

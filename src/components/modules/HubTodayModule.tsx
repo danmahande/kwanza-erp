@@ -541,13 +541,53 @@ export default function HubTodayModule() {
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const handleScan = (e: React.FormEvent) => {
+  const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
+
+  const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!scanInput.trim()) return
-    // Scan handler: find the parcel and advance it to the next station
-    toast.info(`Scanned: ${scanInput} — would advance to next station`)
+    const value = scanInput.trim()
     setScanInput('')
-    // In production: call /api/workflow-transition to advance the parcel
+    setScanStatus('scanning')
+    try {
+      const res = await fetch('/api/scan-advance', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scanValue: value, performedBy: 'admin' }),
+      })
+      const result = await res.json()
+      if (res.ok && result.success) {
+        toast.success(result.message)
+        setScanStatus('success')
+        // Auto-switch to the station the parcel just left (so the user sees it move)
+        if (result.module === 'outbound') {
+          const map: Record<string, StationKey> = {
+            picking: 'sort', picked: 'sort', packing: 'sort', packed: 'stage',
+            dispatched: 'dispatch', delivered: 'delivered',
+          }
+          const targetStation = map[result.toStatus]
+          if (targetStation) setActiveStation(targetStation)
+        } else if (result.module === 'inbound') {
+          if (result.toStatus === 'put_away') setActiveStation('intake')
+          if (result.toStatus === 'stored') setActiveStation('intake')
+        } else if (result.module === 'after_sales') {
+          setActiveStation('returns')
+        }
+        fetchData()
+      } else if (res.ok && !result.success) {
+        // Terminal state — info, not error
+        toast.info(result.message)
+        setScanStatus('idle')
+      } else {
+        toast.error(result.error || 'Parcel not found')
+        setScanStatus('error')
+      }
+    } catch {
+      toast.error('Scan failed — network error')
+      setScanStatus('error')
+    }
+    // Reset status indicator after 1.5s
+    setTimeout(() => setScanStatus('idle'), 1500)
   }
 
   const handleDayCloseCheck = async () => {
@@ -618,16 +658,24 @@ export default function HubTodayModule() {
       </div>
 
       {/* ── Scan input (persistent, top) ── */}
-      <form onSubmit={handleScan} className="flex items-center gap-2 bg-[#1B2A4A] rounded-lg px-3 py-2">
-        <ScanLine size={16} className="text-blue-300" />
+      <form
+        onSubmit={handleScan}
+        className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
+          scanStatus === 'success' ? 'bg-green-700' :
+          scanStatus === 'error' ? 'bg-red-700' :
+          'bg-[#1B2A4A]'
+        }`}
+      >
+        <ScanLine size={16} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white animate-pulse'} />
         <input
           type="text"
           value={scanInput}
           onChange={e => setScanInput(e.target.value)}
-          placeholder="Scan parcel or location barcode..."
+          placeholder={scanStatus === 'success' ? '✓ Advanced — scan next parcel...' : scanStatus === 'error' ? '✗ Not found — scan again...' : 'Scan parcel or location barcode...'}
           autoFocus
           className="flex-1 bg-transparent text-white placeholder-blue-200/50 text-sm outline-none font-mono"
         />
+        {scanStatus === 'scanning' && <span className="text-blue-200 text-xs">...</span>}
         <button type="submit" className="text-[11px] text-blue-200 hover:text-white px-2 py-1 rounded border border-blue-200/30 hover:bg-blue-200/10">
           Enter ↵
         </button>

@@ -145,7 +145,7 @@ export default function DriversModule() {
 
   // ── Selection ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
 
   // ── Filters ──
   const [filterStatus, setFilterStatus] = useState<string | null>(null)
