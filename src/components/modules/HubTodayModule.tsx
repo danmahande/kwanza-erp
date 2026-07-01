@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   Search, ScanLine, ChevronRight, ChevronDown, Lock, RefreshCw,
-  AlertTriangle, CheckCircle2, X,
+  AlertTriangle, CheckCircle2, X, HelpCircle, ArrowRight, Package,
+  Boxes, Truck, ClipboardList, RotateCcw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -102,14 +103,14 @@ interface HubData {
 
 type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
-const STATIONS: { key: StationKey; label: string; pillClass: string }[] = [
-  { key: 'intake',    label: 'INTAKE',    pillClass: 'text-blue-600' },
-  { key: 'sort',      label: 'SORT & PACK', pillClass: 'text-orange-600' },
-  { key: 'stage',     label: 'STAGING',   pillClass: 'text-purple-600' },
-  { key: 'dispatch',  label: 'DISPATCH',  pillClass: 'text-yellow-700' },
-  { key: 'inTransit', label: 'IN TRANSIT', pillClass: 'text-cyan-600' },
-  { key: 'delivered', label: 'DELIVERED', pillClass: 'text-green-700' },
-  { key: 'returns',   label: 'RETURNS',   pillClass: 'text-red-600' },
+const STATIONS: { key: StationKey; label: string; shortLabel: string; description: string; icon: typeof Package; pillClass: string }[] = [
+  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Parcels that just arrived', icon: Package,       pillClass: 'text-blue-600' },
+  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Being prepared for dispatch', icon: Boxes,        pillClass: 'text-orange-600' },
+  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed, waiting for rider',   icon: ClipboardList, pillClass: 'text-purple-600' },
+  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to rider, ready to go', icon: Truck,     pillClass: 'text-yellow-700' },
+  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery now',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
+  { key: 'delivered', label: 'DELIVERED',      shortLabel: 'Delivered',       description: 'Successfully delivered today', icon: CheckCircle2, pillClass: 'text-green-700' },
+  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received',   icon: RotateCcw,     pillClass: 'text-red-600' },
 ]
 
 // ── Status pill: colored dot + 2-letter code ──
@@ -507,6 +508,7 @@ export default function HubTodayModule() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [scanInput, setScanInput] = useState('')
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [dayCloseData, setDayCloseData] = useState<{
     canClose: boolean
     blockers: {
@@ -637,13 +639,16 @@ export default function HubTodayModule() {
       {/* ── Header bar ── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Operations Console</h1>
+          <h1 className="text-lg font-bold text-gray-900">Today at the Hub</h1>
           <p className="text-[11px] text-gray-500">
             {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             <span className="ml-2 text-gray-400">· Auto-refresh 30s</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+            <HelpCircle size={12} className="mr-1" /> How does this work?
+          </Button>
           <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
             <RefreshCw size={12} className="mr-1" /> Refresh
           </Button>
@@ -657,31 +662,119 @@ export default function HubTodayModule() {
         </div>
       </div>
 
-      {/* ── Scan input (persistent, top) ── */}
+      {/* ════════════════════════════════════════════════════════════ */}
+      {/* LAYER 1: THE WORK LAYER — what a worker sees and uses          */}
+      {/* ════════════════════════════════════════════════════════════ */}
+
+      {/* ── HERO: Scan bar (big, obvious, can't miss it) ── */}
       <form
         onSubmit={handleScan}
-        className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-colors ${
+        className={`rounded-xl px-4 py-4 transition-colors ${
           scanStatus === 'success' ? 'bg-green-700' :
           scanStatus === 'error' ? 'bg-red-700' :
           'bg-[#1B2A4A]'
         }`}
       >
-        <ScanLine size={16} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white animate-pulse'} />
-        <input
-          type="text"
-          value={scanInput}
-          onChange={e => setScanInput(e.target.value)}
-          placeholder={scanStatus === 'success' ? '✓ Advanced — scan next parcel...' : scanStatus === 'error' ? '✗ Not found — scan again...' : 'Scan parcel or location barcode...'}
-          autoFocus
-          className="flex-1 bg-transparent text-white placeholder-blue-200/50 text-sm outline-none font-mono"
-        />
-        {scanStatus === 'scanning' && <span className="text-blue-200 text-xs">...</span>}
-        <button type="submit" className="text-[11px] text-blue-200 hover:text-white px-2 py-1 rounded border border-blue-200/30 hover:bg-blue-200/10">
-          Enter ↵
-        </button>
+        <div className="flex items-center gap-3 mb-2">
+          <ScanLine size={20} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white'} />
+          <label className="text-white font-semibold text-sm">
+            {scanStatus === 'success' ? '✓ Parcel advanced! Scan the next one:' :
+             scanStatus === 'error' ? '✗ Not found. Try again:' :
+             'Scan a parcel to move it to the next step'}
+          </label>
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={scanInput}
+            onChange={e => setScanInput(e.target.value)}
+            placeholder="Type or scan the parcel number here..."
+            autoFocus
+            className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none font-mono rounded-lg px-3 py-2.5 border border-white/20"
+          />
+          <button
+            type="submit"
+            className="bg-[#FF6B35] hover:bg-[#E55A25] text-white font-semibold text-sm px-6 py-2.5 rounded-lg whitespace-nowrap"
+          >
+            {scanStatus === 'scanning' ? '...' : 'Enter ↵'}
+          </button>
+        </div>
+        <p className="text-blue-200/50 text-[11px] mt-2">
+          The system will automatically move the parcel to its next step. You can scan order numbers, tracking numbers, or barcodes.
+        </p>
       </form>
 
-      {/* ── KPI Ribbon ── */}
+      {/* ── "What needs doing now" — plain-English action items ── */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+          <h2 className="text-sm font-semibold text-gray-700">What needs doing now</h2>
+        </div>
+        <div className="divide-y divide-gray-50">
+          {/* Auto-generate action items from the data */}
+          {(() => {
+            const items: Array<{ icon: typeof Package; label: string; sublabel: string; count: number; station: StationKey; color: string }> = []
+            if (data.stations.intake.count > 0) {
+              items.push({ icon: Package, label: 'Put away new stock', sublabel: 'Parcels that just arrived at the warehouse', count: data.stations.intake.count, station: 'intake', color: 'text-blue-600' })
+            }
+            if (data.stations.sort.count > 0) {
+              items.push({ icon: Boxes, label: 'Sort and pack parcels', sublabel: 'Parcels being prepared for dispatch', count: data.stations.sort.count, station: 'sort', color: 'text-orange-600' })
+            }
+            if (data.stations.stage.count > 0) {
+              items.push({ icon: ClipboardList, label: 'Assign riders to parcels', sublabel: 'Packed and waiting for a driver', count: data.stations.stage.count, station: 'stage', color: 'text-purple-600' })
+            }
+            if (data.stations.dispatch.count > 0) {
+              items.push({ icon: Truck, label: 'Send parcels out with riders', sublabel: 'Assigned to a rider, ready to leave', count: data.stations.dispatch.count, station: 'dispatch', color: 'text-yellow-700' })
+            }
+            if (data.exceptions.count > 0) {
+              items.push({ icon: AlertTriangle, label: 'Fix problems', sublabel: 'Failed deliveries and missing stock', count: data.exceptions.count, station: 'returns', color: 'text-red-600' })
+            }
+            if (data.pendingBankings.count > 0) {
+              items.push({ icon: CheckCircle2, label: 'Verify driver cash deposits', sublabel: 'Drivers have banked COD cash — verify it', count: data.pendingBankings.count, station: 'delivered', color: 'text-orange-600' })
+            }
+
+            if (items.length === 0) {
+              return (
+                <div className="px-4 py-6 text-center">
+                  <CheckCircle2 size={24} className="text-green-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium text-green-700">All caught up!</p>
+                  <p className="text-xs text-gray-400 mt-1">Nothing needs doing right now. Check back when new parcels arrive.</p>
+                </div>
+              )
+            }
+
+            return items.map((item, i) => {
+              const Icon = item.icon
+              return (
+                <button
+                  key={i}
+                  onClick={() => { setActiveStation(item.station); setExpandedId(null) }}
+                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
+                >
+                  <Icon size={20} className={item.color} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{item.label}</p>
+                    <p className="text-[11px] text-gray-500">{item.sublabel}</p>
+                  </div>
+                  <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-mono font-bold">
+                    {item.count}
+                  </span>
+                  <ChevronRight size={16} className="text-gray-300" />
+                </button>
+              )
+            })
+          })()}
+        </div>
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════ */}
+      {/* LAYER 2: THE SUPERVISOR LAYER — overview for the hub manager   */}
+      {/* ════════════════════════════════════════════════════════════ */}
+
+      {/* ── KPI Ribbon (supervisor overview) ── */}
+      <div className="flex items-center gap-2 pt-2">
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview</span>
+        <div className="flex-1 h-px bg-gray-100"></div>
+      </div>
       <KpiRibbon
         totals={data.totals}
         exceptionsCount={data.exceptions.count}
@@ -689,25 +782,28 @@ export default function HubTodayModule() {
         codPending={codPendingAmount}
       />
 
-      {/* ── Station Tabs ── */}
+      {/* ── Station Tabs (with plain-English labels + attention dots) ── */}
       <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
         {STATIONS.map(s => {
           const station = data.stations[s.key]
           const count = station?.count ?? 0
           const isActive = activeStation === s.key
+          const needsAttention = count > 0 && ['intake', 'sort', 'stage', 'dispatch', 'returns'].includes(s.key)
+          const Icon = s.icon
           return (
             <button
               key={s.key}
               onClick={() => { setActiveStation(s.key); setExpandedId(null) }}
-              className={`flex items-center gap-2 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
                 isActive
                   ? 'border-[#FF6B35] text-[#FF6B35]'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
             >
-              <span>{s.label}</span>
+              <Icon size={12} className={isActive ? 'text-[#FF6B35]' : 'text-gray-400'} />
+              <span>{s.shortLabel}</span>
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                isActive ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600'
+                isActive ? 'bg-[#FF6B35] text-white' : needsAttention ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
               }`}>
                 {count}
               </span>
@@ -715,6 +811,11 @@ export default function HubTodayModule() {
           )
         })}
       </div>
+
+      {/* Active station description (plain English) */}
+      <p className="text-[11px] text-gray-500">
+        {STATIONS.find(s => s.key === activeStation)?.description}
+      </p>
 
       {/* ── Main: Station Table + Right Rail ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
@@ -735,6 +836,55 @@ export default function HubTodayModule() {
           <CodPanel bankings={data.pendingBankings} />
         </div>
       </div>
+
+      {/* ── Help Dialog (plain-English workflow explanation) ── */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How does this work?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This is the control screen for the whole warehouse. Here's what happens, step by step:
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-3 py-2">
+            {[
+              { num: 1, title: 'Parcels arrive', desc: 'Stock comes in from merchants. It lands at Intake and needs to be put away on shelves.' },
+              { num: 2, title: 'We sort and pack', desc: 'Orders are picked from shelves, packed into boxes, and labeled with tracking numbers.' },
+              { num: 3, title: 'Parcels wait for riders', desc: 'Packed parcels sit in Staging until a driver is assigned.' },
+              { num: 4, title: 'Riders pick up', desc: 'A rider gets their list of parcels for the day and leaves the warehouse.' },
+              { num: 5, title: 'Riders deliver', desc: 'The rider drives to each customer. If the customer pays cash, the rider collects it.' },
+              { num: 6, title: 'Riders bring back cash', desc: 'At the end of the day, riders deposit the cash they collected. We verify it matches.' },
+              { num: 7, title: 'We close the day', desc: 'When every parcel is accounted for and all cash is verified, the supervisor closes the day.' },
+            ].map(step => (
+              <div key={step.num} className="flex items-start gap-3 p-2 rounded-lg bg-gray-50">
+                <div className="w-7 h-7 rounded-full bg-[#FF6B35] text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  {step.num}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">{step.title}</p>
+                  <p className="text-xs text-gray-500">{step.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+            <p className="text-xs text-blue-800">
+              <strong>The scan bar at the top</strong> is the fastest way to work. Just scan a parcel's barcode and the system automatically moves it to the next step. You don't need to click through the tabs — just scan, scan, scan.
+            </p>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ── Day Close Dialog ── */}
       <AlertDialog open={dayCloseOpen} onOpenChange={setDayCloseOpen}>
