@@ -54,7 +54,7 @@ interface AuthContextType {
 }
 
 const navItems: NavItem[] = [
-  { key: 'hub_today', label: 'Today at the Hub', icon: LayoutDashboard, section: 'Overview' },
+  { key: 'hub_today', label: 'Operations Desk', icon: LayoutDashboard, section: 'Overview' },
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Overview' },
   { key: 'merchants', label: 'Merchants', icon: Store, section: 'Management' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Management' },

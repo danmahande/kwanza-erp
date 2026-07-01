@@ -643,7 +643,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       {/* ── Header bar ── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-bold text-gray-900">Today at the Hub</h1>
+          <h1 className="text-lg font-bold text-gray-900">Operations Desk</h1>
           <p className="text-[11px] text-gray-500">
             {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
             <span className="ml-2 text-gray-400">· Auto-refresh 30s</span>
@@ -708,64 +708,62 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         </p>
       </form>
 
-      {/* ── "What needs doing now" — plain-English action items ── */}
+      {/* ── "What needs doing now" — always shows all 6 actions, greyed when count=0 ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
           <h2 className="text-sm font-semibold text-gray-700">What needs doing now</h2>
         </div>
         <div className="divide-y divide-gray-50">
-          {/* Auto-generate action items from the data — each navigates to the correct module */}
           {(() => {
-            const items: Array<{ icon: typeof Package; label: string; sublabel: string; count: number; module: string; color: string }> = []
-            if (data.stations.intake.count > 0) {
-              items.push({ icon: Package, label: 'Put away new stock', sublabel: 'Parcels that just arrived at the warehouse', count: data.stations.intake.count, module: 'inventory', color: 'text-blue-600' })
-            }
-            if (data.stations.sort.count > 0) {
-              items.push({ icon: Boxes, label: 'Sort and pack parcels', sublabel: 'Parcels being prepared for dispatch', count: data.stations.sort.count, module: 'outbound', color: 'text-orange-600' })
-            }
-            if (data.stations.stage.count > 0) {
-              items.push({ icon: ClipboardList, label: 'Assign riders to parcels', sublabel: 'Packed and waiting for a driver', count: data.stations.stage.count, module: 'outbound', color: 'text-purple-600' })
-            }
-            if (data.stations.dispatch.count > 0) {
-              items.push({ icon: Truck, label: 'Send parcels out with riders', sublabel: 'Assigned to a rider, ready to leave', count: data.stations.dispatch.count, module: 'outbound', color: 'text-yellow-700' })
-            }
-            if (data.exceptions.count > 0) {
-              items.push({ icon: AlertTriangle, label: 'Fix problems', sublabel: 'Failed deliveries and missing stock', count: data.exceptions.count, module: 'returns', color: 'text-red-600' })
-            }
-            if (data.pendingBankings.count > 0) {
-              items.push({ icon: CheckCircle2, label: 'Verify driver cash deposits', sublabel: 'Drivers have banked COD cash — verify it', count: data.pendingBankings.count, module: 'payments', color: 'text-orange-600' })
-            }
+            // Always show all 6 items — greyed out when count is 0
+            const allItems = [
+              { icon: Package,        label: 'Put away new stock',           sublabel: 'Parcels that just arrived at the warehouse',     count: data.stations.intake.count,    module: 'inventory', color: 'text-blue-600' },
+              { icon: Boxes,          label: 'Sort and pack parcels',         sublabel: 'Parcels being prepared for dispatch',            count: data.stations.sort.count,      module: 'outbound',  color: 'text-orange-600' },
+              { icon: ClipboardList,  label: 'Assign riders to parcels',      sublabel: 'Packed and waiting for a driver',               count: data.stations.stage.count,     module: 'outbound',  color: 'text-purple-600' },
+              { icon: Truck,          label: 'Send parcels out with riders',  sublabel: 'Assigned to a rider, ready to leave',            count: data.stations.dispatch.count,  module: 'outbound',  color: 'text-yellow-700' },
+              { icon: AlertTriangle,  label: 'Fix problems',                  sublabel: 'Failed deliveries and missing stock',            count: data.exceptions.count,          module: 'returns',   color: 'text-red-600' },
+              { icon: CheckCircle2,   label: 'Verify driver cash deposits',   sublabel: 'Drivers have banked COD cash — verify it',       count: data.pendingBankings.count,     module: 'payments',  color: 'text-orange-600' },
+            ]
 
-            if (items.length === 0) {
-              return (
-                <div className="px-4 py-6 text-center">
-                  <CheckCircle2 size={24} className="text-green-500 mx-auto mb-2" />
-                  <p className="text-sm font-medium text-green-700">All caught up!</p>
-                  <p className="text-xs text-gray-400 mt-1">Nothing needs doing right now. Check back when new parcels arrive.</p>
-                </div>
-              )
-            }
+            const activeCount = allItems.filter(i => i.count > 0).length
 
-            return items.map((item, i) => {
-              const Icon = item.icon
-              return (
-                <button
-                  key={i}
-                  onClick={() => onNavigate?.(item.module)}
-                  className="w-full px-4 py-3 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left"
-                >
-                  <Icon size={20} className={item.color} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900">{item.label}</p>
-                    <p className="text-[11px] text-gray-500">{item.sublabel}</p>
+            return (
+              <>
+                {activeCount === 0 && (
+                  <div className="px-4 py-2 bg-green-50 border-b border-green-100 flex items-center gap-2">
+                    <CheckCircle2 size={14} className="text-green-600" />
+                    <p className="text-xs text-green-700 font-medium">All caught up right now — but here's what you'd do when work comes in:</p>
                   </div>
-                  <span className="px-2 py-1 rounded-full bg-gray-100 text-gray-700 text-xs font-mono font-bold">
-                    {item.count}
-                  </span>
-                  <span className="text-[10px] text-gray-400 uppercase tracking-wider">Go →</span>
-                </button>
-              )
-            })
+                )}
+                {allItems.map((item, i) => {
+                  const Icon = item.icon
+                  const isActive = item.count > 0
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => onNavigate?.(item.module)}
+                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors text-left ${
+                        isActive ? 'hover:bg-gray-50' : 'opacity-50 hover:opacity-75'
+                      }`}
+                    >
+                      <Icon size={20} className={isActive ? item.color : 'text-gray-300'} />
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-sm font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</p>
+                        <p className="text-[11px] text-gray-400">{item.sublabel}</p>
+                      </div>
+                      <span className={`px-2 py-1 rounded-full text-xs font-mono font-bold ${
+                        isActive ? 'bg-gray-100 text-gray-700' : 'bg-gray-50 text-gray-300'
+                      }`}>
+                        {item.count}
+                      </span>
+                      <span className={`text-[10px] uppercase tracking-wider ${isActive ? 'text-gray-400' : 'text-gray-300'}`}>
+                        {isActive ? 'Go →' : '—'}
+                      </span>
+                    </button>
+                  )
+                })}
+              </>
+            )
           })()}
         </div>
       </div>
