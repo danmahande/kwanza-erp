@@ -585,7 +585,9 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         toast.info(result.message)
         setScanStatus('idle')
       } else {
-        toast.error(result.error || 'Parcel not found')
+        // Not found — give a helpful message with examples
+        const scannedValue = value
+        toast.error(`"${scannedValue}" was not found. Make sure you're scanning an order number (like DS-001), a tracking number, or an inbound ID (like IN000001).`, { duration: 6000 })
         setScanStatus('error')
       }
     } catch {
@@ -683,7 +685,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <ScanLine size={20} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white'} />
           <label className="text-white font-semibold text-sm">
             {scanStatus === 'success' ? '✓ Done! Scan the next parcel:' :
-             scanStatus === 'error' ? '✗ Not found. Try again:' :
+             scanStatus === 'error' ? '✗ Not found — scan an order number (DS-001), tracking number, or inbound ID:' :
              'Scan a parcel to advance it in the workflow'}
           </label>
         </div>
@@ -692,7 +694,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             type="text"
             value={scanInput}
             onChange={e => setScanInput(e.target.value)}
-            placeholder="Type or scan the parcel number here..."
+            placeholder="Scan or type an order number (e.g. DS-001)..."
             autoFocus
             className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none font-mono rounded-lg px-3 py-2.5 border border-white/20"
           />
@@ -704,7 +706,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           </button>
         </div>
         <p className="text-blue-200/50 text-[11px] mt-2">
-          The system finds the parcel and advances it to the next stage (e.g. from pending to picking, or from packed to dispatched). You can scan order numbers, tracking numbers, or barcodes.
+          The system finds the parcel and advances it to the next stage (e.g. from pending to picking, or from packed to dispatched). Works with order numbers (DS-001), tracking numbers, or inbound IDs (IN000001).
         </p>
       </form>
 
