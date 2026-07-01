@@ -104,13 +104,13 @@ interface HubData {
 type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
 const STATIONS: { key: StationKey; label: string; shortLabel: string; description: string; icon: typeof Package; pillClass: string }[] = [
-  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Parcels that just arrived', icon: Package,       pillClass: 'text-blue-600' },
-  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Being prepared for dispatch', icon: Boxes,        pillClass: 'text-orange-600' },
-  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed, waiting for rider',   icon: ClipboardList, pillClass: 'text-purple-600' },
-  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to rider, ready to go', icon: Truck,     pillClass: 'text-yellow-700' },
-  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery now',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
-  { key: 'delivered', label: 'DELIVERED',      shortLabel: 'Delivered',       description: 'Successfully delivered today', icon: CheckCircle2, pillClass: 'text-green-700' },
-  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received',   icon: RotateCcw,     pillClass: 'text-red-600' },
+  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock that arrived — needs to be put away on shelves (received → put away → stored)', icon: Package,       pillClass: 'text-blue-600' },
+  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Orders being prepared — picking from shelves, then packing into boxes (pending → picking → picked → packing → packed)', icon: Boxes,        pillClass: 'text-orange-600' },
+  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed and ready — waiting for a rider to be assigned',   icon: ClipboardList, pillClass: 'text-purple-600' },
+  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to a rider — ready to leave the warehouse', icon: Truck,     pillClass: 'text-yellow-700' },
+  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery — rider is on the road',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
+  { key: 'delivered', label: 'DELIVERED',      shortLabel: 'Delivered',       description: 'Successfully delivered to the customer today', icon: CheckCircle2, pillClass: 'text-green-700' },
+  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received — needs inspection and disposition',   icon: RotateCcw,     pillClass: 'text-red-600' },
 ]
 
 // ── Status pill: colored dot + 2-letter code ──
@@ -422,14 +422,19 @@ function RidersPanel({ riders }: { riders: StationItem[] }) {
   )
 }
 
-function CodPanel({ bankings }: { bankings: { count: number; items: StationItem[]; totalAmount: number } }) {
+function CodPanel({ bankings, onNavigate }: { bankings: { count: number; items: StationItem[]; totalAmount: number }; onNavigate?: (m: string) => void }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
         <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">
           Pending COD <InfoTip term="codBanked" size={11} />
         </span>
-        <span className="text-[11px] font-mono font-bold text-orange-700">{formatCurrencyCompact(bankings.totalAmount)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-mono font-bold text-orange-700">{formatCurrencyCompact(bankings.totalAmount)}</span>
+          {bankings.count > 0 && (
+            <button onClick={() => onNavigate?.('payments')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
+          )}
+        </div>
       </div>
       <table className="w-full text-[11px]">
         <thead className="text-gray-400 text-[9px] uppercase">
@@ -457,7 +462,7 @@ function CodPanel({ bankings }: { bankings: { count: number; items: StationItem[
   )
 }
 
-function ExceptionsPanel({ exceptions }: { exceptions: HubData['exceptions'] }) {
+function ExceptionsPanel({ exceptions, onNavigate }: { exceptions: HubData['exceptions']; onNavigate?: (m: string) => void }) {
   if (exceptions.count === 0) {
     return (
       <div className="bg-white rounded-lg border border-green-200 px-3 py-2 flex items-center gap-2">
@@ -472,7 +477,10 @@ function ExceptionsPanel({ exceptions }: { exceptions: HubData['exceptions'] }) 
         <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider flex items-center gap-1">
           <AlertTriangle size={12} /> Exceptions
         </span>
-        <span className="text-[11px] text-red-700 font-mono font-bold">{exceptions.count}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-red-700 font-mono font-bold">{exceptions.count}</span>
+          <button onClick={() => onNavigate?.('returns')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Fix →</button>
+        </div>
       </div>
       <table className="w-full text-[11px]">
         <tbody>
@@ -548,6 +556,22 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   }, [fetchData])
 
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
+  const [recentScans, setRecentScans] = useState<Array<{ time: string; value: string; result: string; success: boolean }>>([])
+
+  const playBeep = (success: boolean) => {
+    try {
+      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = success ? 880 : 220
+      gain.gain.value = 0.3
+      osc.start()
+      osc.stop(ctx.currentTime + 0.15)
+      setTimeout(() => ctx.close(), 300)
+    } catch { /* audio not available */ }
+  }
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -565,6 +589,8 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       if (res.ok && result.success) {
         toast.success(result.message)
         setScanStatus('success')
+        playBeep(true)
+        setRecentScans(prev => [{ time: new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), value, result: result.message, success: true }, ...prev].slice(0, 5))
         // Auto-switch to the station the parcel just left (so the user sees it move)
         if (result.module === 'outbound') {
           const map: Record<string, StationKey> = {
@@ -586,16 +612,17 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         setScanStatus('idle')
       } else {
         // Not found — give a helpful message with examples
-        const scannedValue = value
-        toast.error(`"${scannedValue}" was not found. Make sure you're scanning an order number (like DS-001), a tracking number, or an inbound ID (like IN000001).`, { duration: 6000 })
+        playBeep(false)
+        setRecentScans(prev => [{ time: new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), value, result: 'Not found', success: false }, ...prev].slice(0, 5))
+        toast.error(`"${value}" was not found. Make sure you're scanning an order number (like DS-001), a tracking number, or an inbound ID (like IN000001).`, { duration: 6000 })
         setScanStatus('error')
       }
     } catch {
       toast.error('Scan failed — network error')
       setScanStatus('error')
     }
-    // Reset status indicator after 1.5s
-    setTimeout(() => setScanStatus('idle'), 1500)
+    // Reset status indicator after 2s (longer for warehouse visibility)
+    setTimeout(() => setScanStatus('idle'), 2000)
   }
 
   const handleDayCloseCheck = async () => {
@@ -709,6 +736,74 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           The system finds the parcel and advances it to the next stage (e.g. from pending to picking, or from packed to dispatched). Works with order numbers (DS-001), tracking numbers, or inbound IDs (IN000001).
         </p>
       </form>
+
+      {/* ── Recent scans (shows the last 5 scans with timestamp + result) ── */}
+      {recentScans.length > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Recent scans</span>
+            <button onClick={() => setRecentScans([])} className="text-[10px] text-gray-400 hover:text-gray-600">Clear</button>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {recentScans.map((scan, i) => (
+              <div key={i} className="px-3 py-1.5 flex items-center gap-2 text-[11px]">
+                <span className="font-mono text-gray-400 tabular-nums w-16">{scan.time}</span>
+                <span className={`font-mono font-semibold ${scan.success ? 'text-green-700' : 'text-red-600'}`}>{scan.value}</span>
+                <span className={`flex-1 truncate ${scan.success ? 'text-gray-600' : 'text-red-500'}`}>{scan.result}</span>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center ${scan.success ? 'bg-green-100' : 'bg-red-100'}`}>
+                  {scan.success ? <CheckCircle2 size={10} className="text-green-600" /> : <X size={10} className="text-red-600" />}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Today's progress bar ── */}
+      {data.totals.outboundToday > 0 && (
+        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Today's progress</span>
+            <span className="text-[11px] font-mono text-gray-500">
+              {data.stations.delivered.count} of {data.totals.outboundToday} delivered
+            </span>
+          </div>
+          <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
+            {/* Delivered (green) */}
+            {data.stations.delivered.count > 0 && (
+              <div className="bg-green-500" style={{ width: `${(data.stations.delivered.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.delivered.count} delivered`} />
+            )}
+            {/* In transit (cyan) */}
+            {data.stations.inTransit.count > 0 && (
+              <div className="bg-cyan-400" style={{ width: `${(data.stations.inTransit.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.inTransit.count} in transit`} />
+            )}
+            {/* Dispatched (yellow) */}
+            {data.stations.dispatch.count > 0 && (
+              <div className="bg-yellow-400" style={{ width: `${(data.stations.dispatch.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.dispatch.count} dispatched`} />
+            )}
+            {/* Sort/Pack (orange) */}
+            {data.stations.sort.count > 0 && (
+              <div className="bg-orange-400" style={{ width: `${(data.stations.sort.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.sort.count} sorting/packing`} />
+            )}
+            {/* Stage (purple) */}
+            {data.stations.stage.count > 0 && (
+              <div className="bg-purple-400" style={{ width: `${(data.stations.stage.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.stage.count} staging`} />
+            )}
+            {/* Exceptions (red) */}
+            {data.exceptions.count > 0 && (
+              <div className="bg-red-400" style={{ width: `${(data.exceptions.count / data.totals.outboundToday) * 100}%` }} title={`${data.exceptions.count} exceptions`} />
+            )}
+          </div>
+          <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400 flex-wrap">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Delivered</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> In transit</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400"></span> Dispatched</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400"></span> Sorting</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400"></span> Staging</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Exceptions</span>
+          </div>
+        </div>
+      )}
 
       {/* ── "What needs doing now" — always shows all 6 actions, greyed when count=0 ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -835,9 +930,9 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
 
         {/* Right: rail with Riders + COD + Exceptions */}
         <div className="space-y-3">
-          <ExceptionsPanel exceptions={data.exceptions} />
+          <ExceptionsPanel exceptions={data.exceptions} onNavigate={onNavigate} />
           <RidersPanel riders={data.riders} />
-          <CodPanel bankings={data.pendingBankings} />
+          <CodPanel bankings={data.pendingBankings} onNavigate={onNavigate} />
         </div>
       </div>
 
@@ -912,6 +1007,12 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             </AlertDialogTitle>
             <AlertDialogDescription>
               Closing the day finalizes today's operations. All parcels must be delivered, returned, or staged. All driver COD must be banked.
+              <br />
+              <span className="text-[11px] text-gray-400 mt-1 block">
+                Current time: {new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })} ·
+                {' '}{data.totals.outboundToday} orders processed today ·
+                {' '}{data.stations.delivered.count} delivered
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
 
