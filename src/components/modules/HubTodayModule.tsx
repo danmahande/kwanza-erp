@@ -518,7 +518,6 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   const [loading, setLoading] = useState(true)
   const [activeStation, setActiveStation] = useState<StationKey>('sort')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [scanInput, setScanInput] = useState('')
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [dayCloseData, setDayCloseData] = useState<{
@@ -555,11 +554,6 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   const [recentScans, setRecentScans] = useState<Array<{ time: string; value: string; result: string; success: boolean }>>([])
   const scanInputRef = useRef<HTMLInputElement>(null)
 
-  // Focus scan input on mount only — NOT on every re-render (which would scroll the page)
-  useEffect(() => {
-    scanInputRef.current?.focus()
-  }, [])
-
   const playBeep = (success: boolean) => {
     try {
       const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
@@ -577,9 +571,9 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
 
   const handleScan = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!scanInput.trim()) return
-    const value = scanInput.trim()
-    setScanInput('')
+    const value = (scanInputRef.current?.value || '').trim()
+    if (!value) return
+    scanInputRef.current!.value = ''
     setScanStatus('scanning')
     try {
       const res = await fetch('/api/scan-advance', {
@@ -721,8 +715,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         <div className="flex items-center gap-2">
           <input
             type="text"
-            value={scanInput}
-            onChange={e => setScanInput(e.target.value)}
+            defaultValue=""
             placeholder="Scan or type an order number (e.g. DS-001)..."
             ref={scanInputRef}
             className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none font-mono rounded-lg px-3 py-2.5 border border-white/20"
