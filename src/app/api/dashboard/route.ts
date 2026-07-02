@@ -128,6 +128,77 @@ export async function GET(request: NextRequest) {
       : 0
     const avgCycleTimeHours = Math.round(avgCycleTimeMs / (1000 * 60 * 60))
 
+    // ── First-Attempt Delivery Success Rate ──
+    // deliveryAttempts = 0 or 1 means first-attempt success; > 1 means re-attempt
+    const allDeliveredRecords = await db.outboundRecord.findMany({
+      where: { status: 'delivered' },
+      select: { deliveryAttempts: true },
+    })
+    const firstAttemptSuccess = allDeliveredRecords.filter(r => (r.deliveryAttempts ?? 0) <= 1).length
+    const firstAttemptRate = allDeliveredRecords.length > 0
+      ? Math.round((firstAttemptSuccess / allDeliveredRecords.length) * 100)
+      : 0
+
+    // ── What Needs Attention (stale items) ──
+    // 1. Orders stuck in picking/packing for > 2 hours
+    const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+    const stuckOrders = await db.outboundRecord.findMany({
+      where: {
+        status: { in: ['picking', 'packing', 'pending'] },
+        createdAt: { lt: twoHoursAgo },
+      },
+      select: { id: true, orderNumber: true, outboundId: true, customerName: true, status: true, createdAt: true },
+      take: 10,
+    })
+    // 2. COD pending for > 1 day
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const agedCodBankings = await db.driverBanking.findMany({
+      where: { status: 'pending', bankedAt: { lt: oneDayAgo } },
+      select: { id: true, bankingId: true, driverName: true, amount: true, bankedAt: true },
+      take: 10,
+    })
+    // 3. Unresolved shrinkage older than 3 days
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000)
+    const agedShrinkage = await db.shrinkageRecord.findMany({
+      where: { status: { in: ['pending', 'investigating'] }, createdAt: { lt: threeDaysAgo } },
+      select: { id: true, shrinkageId: true, productName: true, qty: true, createdAt: true },
+      take: 10,
+    })
+
+    const attentionItems: Array<{ type: string; severity: 'critical' | 'warning'; message: string; module: string; count: number; items: Array<Record<string, unknown>> }> = []
+    if (stuckOrders.length > 0) {
+      attentionItems.push({
+        type: 'stuck_orders', severity: 'warning',
+        message: `${stuckOrders.length} order(s) stuck in picking/packing for 2+ hours`,
+        module: 'outbound', count: stuckOrders.length,
+        items: stuckOrders.map(o => ({ id: o.id, label: o.orderNumber || o.outboundId, customer: o.customerName, status: o.status, age: `${Math.round((now.getTime() - o.createdAt.getTime()) / (1000 * 60 * 60))}h` })),
+      })
+    }
+    if (agedCodBankings.length > 0) {
+      attentionItems.push({
+        type: 'aged_cod', severity: 'critical',
+        message: `${agedCodBankings.length} COD banking(s) pending for 24+ hours (UGX ${agedCodBankings.reduce((s, b) => s + b.amount, 0).toLocaleString()})`,
+        module: 'payments', count: agedCodBankings.length,
+        items: agedCodBankings.map(b => ({ id: b.id, label: b.bankingId, driver: b.driverName, amount: b.amount, age: `${Math.round((now.getTime() - b.bankedAt.getTime()) / (1000 * 60 * 60))}h` })),
+      })
+    }
+    if (agedShrinkage.length > 0) {
+      attentionItems.push({
+        type: 'aged_shrinkage', severity: 'warning',
+        message: `${agedShrinkage.length} shrinkage record(s) unresolved for 3+ days`,
+        module: 'returns', count: agedShrinkage.length,
+        items: agedShrinkage.map(s => ({ id: s.id, label: s.shrinkageId, product: s.productName, qty: s.qty, age: `${Math.round((now.getTime() - s.createdAt.getTime()) / (1000 * 60 * 60 * 24))}d` })),
+      })
+    }
+    if (criticalStockProducts > 0) {
+      attentionItems.push({
+        type: 'out_of_stock', severity: 'critical',
+        message: `${criticalStockProducts} product(s) out of stock`,
+        module: 'inventory', count: criticalStockProducts,
+        items: allProducts.filter(p => p.currentStock === 0).slice(0, 5).map(p => ({ label: p.productLabel })),
+      })
+    }
+
     // ── Revenue by Month (6 months, real data) ──
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const revenueByMonth: Array<{ month: string; revenue: number; commissions: number }> = []
@@ -193,6 +264,33 @@ export async function GET(request: NextRequest) {
     const totalShrinkageQty = await db.shrinkageRecord.aggregate({ _sum: { qty: true } })
     const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], _sum: { qty: true }, _count: { reason: true } })
 
+    // ── Merchant Profitability (revenue - commission - shrinkage - returns) ──
+    const merchantProfitability: Array<{ name: string; revenue: number; commission: number; shrinkage: number; returns: number; net: number }> = []
+    const allMerchants = await db.merchant.findMany({ where: { isActive: true }, select: { merchantId: true, businessName: true } })
+    for (const m of allMerchants.slice(0, 10)) {
+      const mPayments = await db.merchantPayment.aggregate({ where: { merchantId: m.merchantId }, _sum: { amount: true } })
+      const mRevenue = mPayments._sum.amount ?? 0
+      // Commission: sum of (saleAmount * product.commissionPercent / 100) for this merchant's products
+      const mProducts = await db.product.findMany({ where: { merchantId: m.merchantId }, select: { commissionPercent: true, productId: true } })
+      const mOutbound = await db.outboundRecord.aggregate({
+        where: { businessName: m.businessName, status: 'delivered' },
+        _sum: { saleAmount: true },
+      })
+      const mSalesValue = mOutbound._sum.saleAmount ?? 0
+      const avgComm = mProducts.length > 0 ? mProducts.reduce((s, p) => s + p.commissionPercent, 0) / mProducts.length / 100 : 0
+      const mCommission = Math.round(mSalesValue * avgComm)
+      // Shrinkage for this merchant
+      const mShrinkageAgg = await db.shrinkageRecord.aggregate({ where: { merchantId: m.merchantId }, _sum: { totalValue: true } })
+      const mShrinkage = mShrinkageAgg._sum.totalValue ?? 0
+      // Returns for this merchant (approx: RTV qty * avg unitCost)
+      const mRtvAgg = await db.rTVRecord.aggregate({ where: { merchantName: m.businessName }, _sum: { qty: true } })
+      const avgUnitCost = mProducts.length > 0 ? (await db.product.aggregate({ where: { merchantId: m.merchantId }, _avg: { unitCost: true } }))._avg.unitCost ?? 0 : 0
+      const mReturns = Math.round((mRtvAgg._sum.qty ?? 0) * avgUnitCost)
+      const mNet = mRevenue - mCommission - mShrinkage - mReturns
+      merchantProfitability.push({ name: m.businessName, revenue: mRevenue, commission: mCommission, shrinkage: mShrinkage, returns: mReturns, net: mNet })
+    }
+    merchantProfitability.sort((a, b) => b.net - a.net)
+
     // ── Alerts ──
     const alerts: Array<{ type: 'critical' | 'warning' | 'info'; message: string; module: string; time: string }> = []
     allProducts.filter(p => p.currentStock === 0).slice(0, 2).forEach(p =>
@@ -239,6 +337,9 @@ export async function GET(request: NextRequest) {
       driverPerformance,
       onTimeRate,
       avgCycleTimeHours,
+      firstAttemptRate,
+      attentionItems,
+      merchantProfitability,
       orderStatusDistribution,
       exceptionRate,
       exceptionCount,

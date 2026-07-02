@@ -9,7 +9,7 @@ import {
 } from 'recharts'
 import {
   AlertTriangle, CheckCircle2, XCircle, AlertCircle, Shield,
-  TrendingUp, TrendingDown,
+  TrendingUp, TrendingDown, ChevronRight, Clock,
 } from 'lucide-react'
 import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr, StatusPill } from '@/components/shared/ops-ui'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -39,9 +39,21 @@ interface DashboardData {
   }>
   onTimeRate: number
   avgCycleTimeHours: number
+  firstAttemptRate: number
+  attentionItems: Array<{
+    type: string; severity: 'critical' | 'warning'; message: string; module: string; count: number
+    items: Array<Record<string, unknown>>
+  }>
+  merchantProfitability: Array<{
+    name: string; revenue: number; commission: number; shrinkage: number; returns: number; net: number
+  }>
   orderStatusDistribution: Array<{ status: string; count: number }>
   exceptionRate: number
   exceptionCount: number
+}
+
+interface DashboardModuleProps {
+  onNavigate?: (module: string) => void
 }
 
 const COLORS = ['#FF6B35', '#1B2A4A', '#22C55E', '#F59E0B', '#3B82F6', '#8B5CF6', '#EC4899', '#14B8A6']
@@ -61,7 +73,7 @@ const tooltipStyle = {
   fontSize: '12px', padding: '8px 12px',
 }
 
-export default function DashboardModule() {
+export default function DashboardModule({ onNavigate }: DashboardModuleProps = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
 
   const fetchData = useCallback(() => {
@@ -88,13 +100,14 @@ export default function DashboardModule() {
     )
   }
 
+  // KPI cells with trends + clickable navigation
   const kpiCells = [
     { label: 'REVENUE', value: formatCurrencyCompact(data.stats.totalRevenue), trend: data.comparison.revenueChange, trendLabel: 'vs last month' },
     { label: 'ORDERS', value: data.orders.total, trend: data.comparison.ordersChange, trendLabel: 'vs last month' },
     { label: 'DELIVERED', value: data.orders.delivered },
     { label: 'CYCLE TIME', value: data.avgCycleTimeHours > 0 ? `${data.avgCycleTimeHours}h` : '—', trendLabel: 'avg order→delivery' },
     { label: 'ON-TIME %', value: `${data.onTimeRate}%`, highlight: data.onTimeRate < 80, highlightColor: 'red' as const },
-    { label: 'COD COLLECTED', value: formatCurrencyCompact(data.cod.collectedTotal) },
+    { label: '1ST ATTEMPT %', value: `${data.firstAttemptRate}%`, highlight: data.firstAttemptRate < 70, highlightColor: 'orange' as const },
     { label: 'COD PENDING', value: formatCurrencyCompact(data.cod.pendingBankings), highlight: data.cod.pendingBankings > 0, highlightColor: 'orange' as const },
     { label: 'EXCEPTIONS', value: data.exceptionCount, highlight: data.exceptionCount > 0, highlightColor: 'red' as const },
   ]
@@ -109,13 +122,19 @@ export default function DashboardModule() {
     .filter(s => s.count > 0)
     .map(s => ({ name: STATUS_LABELS[s.status] || s.status, value: s.count, fill: STATUS_COLORS[s.status] || '#9CA3AF' }))
 
+  const shrinkageChartData = data.shrinkage.byReason.map((s, i) => ({
+    name: s.reason || 'Unknown',
+    qty: s.qty,
+    fill: COLORS[i % COLORS.length],
+  }))
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Dashboard</h1>
-          <p className="text-[11px] text-gray-500">Real-time overview · This Month</p>
+          <p className="text-[11px] text-gray-500">Real-time overview · Auto-refresh 30s</p>
         </div>
         <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 border border-green-100">
           <span className="relative flex h-2 w-2">
@@ -128,6 +147,43 @@ export default function DashboardModule() {
 
       {/* KPI Ribbon */}
       <KpiRibbon cells={kpiCells} />
+
+      {/* What Needs Attention (#4) */}
+      {data.attentionItems.length > 0 && (
+        <div className="bg-white rounded-lg border border-orange-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-orange-100 bg-orange-50 flex items-center gap-2">
+            <AlertTriangle size={14} className="text-orange-600" />
+            <span className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Needs Attention</span>
+            <span className="text-[10px] text-orange-600 ml-auto">{data.attentionItems.length} issues</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {data.attentionItems.map((item, i) => (
+              <button
+                key={i}
+                onClick={() => onNavigate?.(item.module)}
+                className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left ${
+                  item.severity === 'critical' ? 'bg-red-50/30' : 'bg-orange-50/20'
+                }`}
+              >
+                <div className={`w-2 h-2 rounded-full shrink-0 ${item.severity === 'critical' ? 'bg-red-500' : 'bg-orange-500'}`} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium text-gray-900">{item.message}</p>
+                  <div className="flex items-center gap-1 mt-0.5">
+                    {item.items.slice(0, 3).map((it, j) => (
+                      <span key={j} className="text-[10px] text-gray-400 font-mono">
+                        {String(it.label || '')}
+                        {j < Math.min(item.items.length, 3) - 1 ? ',' : ''}
+                      </span>
+                    ))}
+                    {item.items.length > 3 && <span className="text-[10px] text-gray-400">+{item.items.length - 3} more</span>}
+                  </div>
+                </div>
+                <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.module} →</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Row 1: Revenue Trend + Order Status Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
@@ -182,10 +238,10 @@ export default function DashboardModule() {
 
       {/* Row 2: Driver Performance + COD Status */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        {/* Driver Performance Table */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden lg:col-span-2">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
             <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Driver Performance</h3>
+            {onNavigate && <button onClick={() => onNavigate('drivers')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
           </div>
           {data.driverPerformance.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">No active drivers</p>
@@ -197,7 +253,7 @@ export default function DashboardModule() {
                   <DenseTh className="text-right">Disp</DenseTh>
                   <DenseTh className="text-right">Del</DenseTh>
                   <DenseTh className="text-right">Failed</DenseTh>
-                  <DenseTh className="text-right">COD Collected</DenseTh>
+                  <DenseTh className="text-right">COD</DenseTh>
                   <DenseTh className="text-center">Banking</DenseTh>
                 </tr>
               </thead>
@@ -225,7 +281,6 @@ export default function DashboardModule() {
           )}
         </div>
 
-        {/* COD Status */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
           <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Status</h3>
           <div className="space-y-3">
@@ -257,11 +312,26 @@ export default function DashboardModule() {
                 />
               </div>
             </div>
+            {/* First-attempt success rate (#6) */}
+            <div className="pt-2 border-t border-gray-100">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-500">1st Attempt Success</span>
+                <span className={`font-mono font-bold ${data.firstAttemptRate >= 80 ? 'text-green-700' : data.firstAttemptRate >= 60 ? 'text-orange-700' : 'text-red-700'}`}>
+                  {data.firstAttemptRate}%
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${data.firstAttemptRate >= 80 ? 'bg-green-500' : data.firstAttemptRate >= 60 ? 'bg-orange-500' : 'bg-red-500'}`}
+                  style={{ width: `${data.firstAttemptRate}%` }}
+                />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Row 3: Throughput + Inventory Health */}
+      {/* Row 3: Throughput + Inventory + Shrinkage Chart (#7) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 p-4 lg:col-span-2">
           <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Warehouse Throughput (7 days)</h3>
@@ -298,7 +368,70 @@ export default function DashboardModule() {
         </div>
       </div>
 
-      {/* Row 4: Top Merchants + Payment Methods */}
+      {/* Row 4: Shrinkage Chart (#7) + Merchant Profitability (#8) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Shrinkage by Reason (#7) */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
+            Shrinkage by Reason
+            {onNavigate && <button onClick={() => onNavigate('returns')} className="float-right text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View →</button>}
+          </h3>
+          {shrinkageChartData.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-8">No shrinkage recorded</p>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={shrinkageChartData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} width={80} />
+                <Tooltip contentStyle={tooltipStyle} />
+                <Bar dataKey="qty" radius={[0, 4, 4, 0]}>
+                  {shrinkageChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Merchant Profitability (#8) */}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Merchant Profitability</h3>
+            {onNavigate && <button onClick={() => onNavigate('merchants')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
+          </div>
+          {data.merchantProfitability.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-6">No merchant data</p>
+          ) : (
+            <DenseTable>
+              <thead>
+                <tr>
+                  <DenseTh>Merchant</DenseTh>
+                  <DenseTh className="text-right">Revenue</DenseTh>
+                  <DenseTh className="text-right">Costs</DenseTh>
+                  <DenseTh className="text-right">Net</DenseTh>
+                </tr>
+              </thead>
+              <tbody>
+                {data.merchantProfitability.slice(0, 8).map((m, i) => {
+                  const costs = m.commission + m.shrinkage + m.returns
+                  return (
+                    <DenseTr key={i} tint={m.net < 0 ? 'bg-red-50/40' : ''}>
+                      <DenseTd className="text-gray-900 font-medium truncate max-w-[120px]">{m.name}</DenseTd>
+                      <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.revenue)}</DenseTd>
+                      <DenseTd mono right className="text-red-600">{costs > 0 ? formatCurrencyCompact(costs) : '—'}</DenseTd>
+                      <DenseTd mono right className={m.net >= 0 ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}>
+                        {formatCurrencyCompact(m.net)}
+                      </DenseTd>
+                    </DenseTr>
+                  )
+                })}
+              </tbody>
+            </DenseTable>
+          )}
+        </div>
+      </div>
+
+      {/* Row 5: Top Merchants + Payment Methods */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
@@ -348,7 +481,7 @@ export default function DashboardModule() {
         </div>
       </div>
 
-      {/* Live Activity Feed */}
+      {/* Live Activity Feed (#18) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
@@ -369,7 +502,7 @@ export default function DashboardModule() {
                     <span className="font-mono text-gray-500 w-20">{id}</span>
                     <span className="flex-1 text-gray-700 truncate">{product}</span>
                     <span className="text-gray-400 truncate max-w-[80px]">{merchant}</span>
-                    <span className="font-mono text-blue-600">×{qty}</span>
+                    <span className="font-mono text-blue-600">x{qty}</span>
                     <span className="text-gray-400 w-20 text-right">{time}</span>
                   </div>
                 )
@@ -398,7 +531,7 @@ export default function DashboardModule() {
                     <span className="font-mono text-gray-500 w-20">{id}</span>
                     <span className="flex-1 text-gray-700 truncate">{customer}</span>
                     <span className="text-gray-400 truncate max-w-[80px]">{product}</span>
-                    <span className="font-mono text-orange-600">×{qty}</span>
+                    <span className="font-mono text-orange-600">x{qty}</span>
                     <StatusPill status={status} />
                     <span className="text-gray-400 w-20 text-right">{time}</span>
                   </div>
