@@ -98,12 +98,28 @@ export async function POST(req: NextRequest) {
     const outboundId = `OUT${String(outboundCount + 1).padStart(6, '0')}`
 
     // Look up the merchant (vendor) to set deliveryType + merchantName on the outbound record
-    let merchant: { merchantId: string; businessName: string; deliveryType: string | null } | null = null
+    let merchant: { merchantId: string; businessName: string; deliveryType: string | null; isOnHold: boolean; holdReason: string | null } | null = null
     if (body.merchantId) {
       merchant = await db.merchant.findUnique({
         where: { merchantId: body.merchantId },
-        select: { merchantId: true, businessName: true, deliveryType: true },
+        select: { merchantId: true, businessName: true, deliveryType: true, isOnHold: true, holdReason: true },
       })
+
+      // ── Operational Hold enforcement (Workflow 2 gate) ──
+      if (merchant?.isOnHold) {
+        await logAudit({
+          action: 'BLOCK',
+          module: 'order-processing',
+          entityId: body.merchantId,
+          details: `Blocked new order for ${merchant.businessName} — merchant on hold: ${merchant.holdReason || 'no reason'}`,
+        })
+        return NextResponse.json({
+          error: 'Merchant on hold',
+          reason: merchant.holdReason || 'Overdue balance / dispute',
+          merchantName: merchant.businessName,
+          code: 'MERCHANT_ON_HOLD',
+        }, { status: 409 })
+      }
     }
 
     const deliveryType = merchant?.deliveryType || body.deliveryType || 'self-delivery'

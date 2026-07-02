@@ -840,32 +840,53 @@ export default function MerchantsModule() {
                     <div className="py-12 text-center text-xs text-gray-400">Computing performance metrics...</div>
                   ) : performanceData ? (
                     <>
-                      {/* Rate cards — 5 KPIs */}
-                      <div className="grid grid-cols-5 gap-2">
-                        {[
-                          { label: 'Success', value: `${performanceData.rates.successRate}%`, color: performanceData.rates.successRate >= 85 ? 'text-green-600' : performanceData.rates.successRate >= 60 ? 'text-orange-600' : 'text-red-600', sub: `${performanceData.totals.delivered}/${performanceData.totals.orders}` },
-                          { label: 'First Attempt', value: `${performanceData.rates.firstAttemptRate}%`, color: performanceData.rates.firstAttemptRate >= 70 ? 'text-green-600' : 'text-orange-600', sub: 'delivered 1st try' },
-                          { label: 'Returns', value: `${performanceData.rates.returnsRate}%`, color: performanceData.rates.returnsRate <= 5 ? 'text-green-600' : performanceData.rates.returnsRate <= 15 ? 'text-orange-600' : 'text-red-600', sub: `${performanceData.totals.returns} RTV` },
-                          { label: 'Cancelled', value: `${performanceData.rates.cancellationRate}%`, color: performanceData.rates.cancellationRate <= 5 ? 'text-green-600' : 'text-red-600', sub: `${performanceData.totals.cancelled} orders` },
-                          { label: 'COD Collected', value: `${performanceData.rates.codRate}%`, color: performanceData.rates.codRate >= 90 ? 'text-green-600' : 'text-orange-600', sub: `${formatCurrencyCompact(performanceData.cod.totalCollected, performanceData.currency)}` },
-                        ].map((k, i) => (
-                          <div key={i} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
-                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">{k.label}</p>
-                            <p className={`text-lg font-mono font-bold ${k.color}`}>{k.value}</p>
-                            <p className="text-[9px] text-gray-400 mt-0.5">{k.sub}</p>
-                          </div>
-                        ))}
+                      {/* Single dense card — all rates stacked with thin progress bars */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Delivery Performance ({performanceData.window.days}d)</h3>
+                        <div className="space-y-3">
+                          {[
+                            { label: 'Success Rate', value: performanceData.rates.successRate, sub: `${performanceData.totals.delivered} of ${performanceData.totals.orders} delivered`, good: 85, ok: 60, invert: false },
+                            { label: 'First Attempt Success', value: performanceData.rates.firstAttemptRate, sub: 'delivered on first try', good: 70, ok: 50, invert: false },
+                            { label: 'Returns Rate', value: performanceData.rates.returnsRate, sub: `${performanceData.totals.returns} RTV records`, good: 5, ok: 15, invert: true },
+                            { label: 'Cancellation Rate', value: performanceData.rates.cancellationRate, sub: `${performanceData.totals.cancelled} cancelled`, good: 5, ok: 10, invert: true },
+                            { label: 'COD Collection Rate', value: performanceData.rates.codRate, sub: `${formatCurrencyCompact(performanceData.cod.totalCollected, performanceData.currency)} of ${formatCurrencyCompact(performanceData.cod.totalSale, performanceData.currency)}`, good: 90, ok: 70, invert: false },
+                          ].map((m, i) => {
+                            const color = m.invert
+                              ? (m.value <= m.good ? 'green' : m.value <= m.ok ? 'orange' : 'red')
+                              : (m.value >= m.good ? 'green' : m.value >= m.ok ? 'orange' : 'red')
+                            const barColor = color === 'green' ? 'bg-green-500' : color === 'orange' ? 'bg-orange-500' : 'bg-red-500'
+                            const textColor = color === 'green' ? 'text-green-700' : color === 'orange' ? 'text-orange-700' : 'text-red-700'
+                            return (
+                              <div key={i}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-500">{m.label}</span>
+                                  <span className={`font-mono font-bold text-sm ${textColor}`}>{m.value}%</span>
+                                </div>
+                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(m.value, 100)}%` }} />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-0.5">{m.sub}</p>
+                              </div>
+                            )
+                          })}
+                        </div>
                       </div>
 
-                      {/* Cycle time + sparkline */}
+                      {/* Cycle time + 7-day volume — single card each */}
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Order Cycle Time</p>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Cycle Time</h3>
                           <p className="text-2xl font-mono font-bold text-gray-900">{performanceData.cycleTime.avgDays}<span className="text-xs text-gray-400 ml-1">days</span></p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours} hours avg · {performanceData.cycleTime.samples} samples</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours}h avg · {performanceData.cycleTime.samples} samples</p>
+                          <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px]">
+                            <div><span className="text-gray-400">In Transit:</span> <span className="font-mono font-bold text-blue-600">{performanceData.totals.inTransit}</span></div>
+                            <div><span className="text-gray-400">Failed:</span> <span className="font-mono font-bold text-red-600">{performanceData.totals.failed}</span></div>
+                            <div><span className="text-gray-400">RMA:</span> <span className="font-mono font-bold text-red-500">{performanceData.totals.rma}</span></div>
+                            <div><span className="text-gray-400">Shrinkage:</span> <span className="font-mono font-bold text-red-600">{performanceData.totals.shrinkageQty}u</span></div>
+                          </div>
                         </div>
-                        <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">7-Day Volume</p>
+                        <div className="bg-white rounded-lg border border-gray-200 p-4">
+                          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">7-Day Volume</h3>
                           <div className="flex items-end gap-1 h-12 mt-1">
                             {performanceData.sparkline.map((d, i) => {
                               const maxVol = Math.max(...performanceData.sparkline.map(s => s.total), 1)
@@ -882,35 +903,33 @@ export default function MerchantsModule() {
                               )
                             })}
                           </div>
-                          <p className="text-[9px] text-gray-400 mt-1">Orange = delivered, light = total</p>
+                          <p className="text-[9px] text-gray-400 mt-1">Dark = delivered, light = total</p>
                         </div>
                       </div>
 
-                      {/* Operational totals */}
-                      <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                        <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Operational Totals ({performanceData.window.days}d)</p>
-                        <div className="grid grid-cols-4 gap-3 text-xs">
-                          <div><p className="text-[10px] text-gray-400">Orders</p><p className="font-mono font-bold text-gray-900">{performanceData.totals.orders}</p></div>
-                          <div><p className="text-[10px] text-gray-400">In Transit</p><p className="font-mono font-bold text-blue-600">{performanceData.totals.inTransit}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Failed</p><p className="font-mono font-bold text-red-600">{performanceData.totals.failed}</p></div>
-                          <div><p className="text-[10px] text-gray-400">RMA</p><p className="font-mono font-bold text-red-500">{performanceData.totals.rma}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Inbound Qty</p><p className="font-mono font-bold text-blue-600">{performanceData.totals.inboundQty}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Inbound Value</p><p className="font-mono font-bold text-gray-900">{formatCurrencyCompact(performanceData.totals.inboundValue, performanceData.currency)}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Shrinkage Qty</p><p className="font-mono font-bold text-red-600">{performanceData.totals.shrinkageQty}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Shrinkage Value</p><p className="font-mono font-bold text-red-600">{formatCurrencyCompact(performanceData.totals.shrinkageValue, performanceData.currency)}</p></div>
-                        </div>
-                      </div>
-
-                      {/* COD reconciliation */}
-                      <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                        <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">COD Reconciliation ({performanceData.window.days}d)</p>
-                        <div className="grid grid-cols-3 gap-3 text-xs">
-                          <div><p className="text-[10px] text-gray-400">Total Sales</p><p className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.cod.totalSale, performanceData.currency)}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Cash Collected</p><p className="font-mono font-bold text-green-600">{formatCurrency(performanceData.cod.totalCollected, performanceData.currency)}</p></div>
-                          <div><p className="text-[10px] text-gray-400">Shortfall</p><p className={`font-mono font-bold ${performanceData.cod.shortfall > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(performanceData.cod.shortfall, performanceData.currency)}</p></div>
+                      {/* COD reconciliation — single card with stacked rows */}
+                      <div className="bg-white rounded-lg border border-gray-200 p-4">
+                        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Reconciliation ({performanceData.window.days}d)</h3>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                            <span className="text-gray-500">Total Sales Value</span>
+                            <span className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.cod.totalSale, performanceData.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                            <span className="text-gray-500">Cash Collected by Drivers</span>
+                            <span className="font-mono font-bold text-green-700">{formatCurrency(performanceData.cod.totalCollected, performanceData.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                            <span className="text-gray-500">Collection Shortfall</span>
+                            <span className={`font-mono font-bold ${performanceData.cod.shortfall > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(performanceData.cod.shortfall, performanceData.currency)}</span>
+                          </div>
+                          <div className="flex items-center justify-between py-1">
+                            <span className="text-gray-500">Inbound Value Received</span>
+                            <span className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.totals.inboundValue, performanceData.currency)} <span className="text-[10px] text-gray-400">({performanceData.totals.inboundQty}u)</span></span>
+                          </div>
                         </div>
                         {performanceData.cod.shortfall > 0 && (
-                          <p className="text-[10px] text-orange-600 mt-2">⚠ Cash collection shortfall — investigate driver banking or undelivered orders.</p>
+                          <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Cash collection shortfall — investigate driver banking or undelivered orders.</p>
                         )}
                       </div>
                     </>

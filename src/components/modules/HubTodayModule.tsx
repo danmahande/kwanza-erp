@@ -88,6 +88,19 @@ interface HubData {
     items: StationItem[]
     totalAmount: number
   }
+  followUps: {
+    count: number
+    items: Array<{
+      id: string
+      merchantId: string
+      merchantName: string
+      merchantOnHold: boolean
+      type: string
+      subject: string
+      followUpAt: string
+      createdAt: string
+    }>
+  }
   dayClose: {
     canClose: boolean
     unaccountedParcels: number
@@ -418,6 +431,65 @@ function RidersPanel({ riders }: { riders: StationItem[] }) {
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+function FollowUpsPanel({ followUps, onNavigate }: {
+  followUps: HubData['followUps']
+  onNavigate?: (m: string) => void
+}) {
+  if (followUps.count === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-green-200 px-3 py-2 flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-green-600" />
+        <span className="text-[11px] text-green-700 font-medium">No merchant follow-ups due.</span>
+      </div>
+    )
+  }
+  return (
+    <div className="bg-white rounded-lg border border-orange-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-orange-100 bg-orange-50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-orange-700 uppercase tracking-wider flex items-center gap-1">
+          <AlertTriangle size={12} /> Follow-ups Due
+        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-orange-700 font-mono font-bold">{followUps.count}</span>
+          <button onClick={() => onNavigate?.('merchants')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Open →</button>
+        </div>
+      </div>
+      <table className="w-full text-[11px]">
+        <tbody>
+          {followUps.items.slice(0, 8).map((f, i) => {
+            const isOverdue = new Date(f.followUpAt) < new Date()
+            const typeColor: Record<string, string> = { call: 'bg-blue-100 text-blue-700', whatsapp: 'bg-green-100 text-green-700', email: 'bg-purple-100 text-purple-700', visit: 'bg-orange-100 text-orange-700', meeting: 'bg-pink-100 text-pink-700', other: 'bg-gray-100 text-gray-700' }
+            return (
+              <tr key={f.id} className={`border-t border-orange-50 hover:bg-orange-50/30 ${isOverdue ? 'bg-red-50/20' : ''}`} style={{ height: '32px' }}>
+                <td className="px-3 py-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className={`px-1 py-0.5 rounded text-[8px] uppercase font-semibold ${typeColor[f.type] || 'bg-gray-100 text-gray-700'}`}>{f.type}</span>
+                    {f.merchantOnHold && <span className="bg-red-100 text-red-700 text-[8px] px-1 py-0.5 rounded font-semibold uppercase">HOLD</span>}
+                  </div>
+                  <p className="text-gray-900 font-medium truncate max-w-[180px] mt-0.5">{f.subject}</p>
+                </td>
+                <td className="px-2 py-1 text-right">
+                  <p className="text-gray-700 truncate max-w-[80px]">{f.merchantName}</p>
+                  <p className={`text-[9px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                    {isOverdue ? 'Overdue ' : 'Due '}{new Date(f.followUpAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}
+                  </p>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+      {followUps.count > 8 && (
+        <div className="px-3 py-1.5 border-t border-orange-100 bg-orange-50/50 text-center">
+          <button onClick={() => onNavigate?.('merchants')} className="text-[10px] text-orange-700 hover:text-orange-900 font-medium">
+            + {followUps.count - 8} more — view all in Merchants
+          </button>
+        </div>
+      )}
     </div>
   )
 }
@@ -923,9 +995,10 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           />
         </div>
 
-        {/* Right: rail with Riders + COD + Exceptions */}
+        {/* Right: rail with Riders + COD + Exceptions + Follow-ups */}
         <div className="space-y-3">
           <ExceptionsPanel exceptions={data.exceptions} onNavigate={onNavigate} />
+          <FollowUpsPanel followUps={data.followUps} onNavigate={onNavigate} />
           <RidersPanel riders={data.riders} />
           <CodPanel bankings={data.pendingBankings} onNavigate={onNavigate} />
         </div>

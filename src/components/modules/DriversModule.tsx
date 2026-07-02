@@ -158,6 +158,11 @@ export default function DriversModule() {
   const [editing, setEditing] = useState<Driver | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // Driver performance state (parity with Merchants Performance tab)
+  const [driverPerf, setDriverPerf] = useState<Record<string, unknown> | null>(null)
+  const [driverPerfLoading, setDriverPerfLoading] = useState(false)
+  const [driverPerfWindow, setDriverPerfWindow] = useState(30)
+
   const [form, setForm] = useState({
     name: '', phone: '', nationalId: '', licenseNumber: '',
     vehicleType: '', vehicleNumber: '', status: 'active',
@@ -395,6 +400,34 @@ export default function DriversModule() {
     } catch { toast.error('Failed to save driver. Please try again.') } finally { setSubmitting(false) }
   }
 
+  // Load driver performance data on slide-over open
+  const loadDriverPerf = useCallback(async (driver: Driver | null, days: number) => {
+    if (!driver) return
+    setDriverPerfLoading(true)
+    try {
+      const res = await fetch(`/api/drivers/${driver.id}/performance?days=${days}`)
+      const d = await res.json()
+      setDriverPerf(d)
+    } catch {
+      setDriverPerf(null)
+    } finally {
+      setDriverPerfLoading(false)
+    }
+  }, [])
+
+  const handleDriverPerfWindowChange = (days: number) => {
+    setDriverPerfWindow(days)
+    loadDriverPerf(selectedRecord, days)
+  }
+
+  // Open slide-over with perf data loading
+  const openDriverDetail = (driver: Driver) => {
+    setSelectedRecord(driver)
+    setDetailOpen(true)
+    setDriverPerf(null)
+    loadDriverPerf(driver, driverPerfWindow)
+  }
+
   // ════════════════════════════════════════
   // ── RENDER ──
   // ════════════════════════════════════════
@@ -495,7 +528,7 @@ export default function DriversModule() {
               return (
                 <motion.div key={driver.id} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
                   className={`group relative bg-white rounded-2xl border-2 border-l-4 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${statusBorderAccent(driver.status)} ${isSelected ? 'border-[#FF6B35] shadow-md' : 'border-gray-100'}`}
-                  onClick={() => { setSelectedRecord(driver); setDetailOpen(true) }}
+                  onClick={() => openDriverDetail(driver)}
                   onDoubleClick={() => { setDetailOpen(false); setProfileDriver(driver) }}>
                   {/* Checkbox */}
                   <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
@@ -608,7 +641,7 @@ export default function DriversModule() {
           data={paginatedData}
           columns={tableColumns}
           keyExtractor={(r) => r.id}
-          onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
+          onRowClick={(r) => openDriverDetail(r)}
           rowClassName={(r) => selectedIds.has(r.id) ? 'bg-[#FF6B35]/5' : ''}
           pageSize={100}
         />
@@ -726,42 +759,158 @@ export default function DriversModule() {
               </div>
             </div>
 
-            {/* Performance Metrics */}
+            {/* Performance — single dense card with stacked progress bars */}
             {selectedRecord.ordersReceived > 0 && (
-              <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
-                <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Performance</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-lg p-3 border border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] text-gray-400 uppercase tracking-wider">Success Rate</span>
-                      <Shield size={14} className={selectedRecord.successRate >= 80 ? 'text-green-500' : selectedRecord.successRate >= 50 ? 'text-amber-500' : 'text-red-500'} />
-                    </div>
-                    <p className={`text-2xl font-bold ${selectedRecord.successRate >= 80 ? 'text-green-600' : selectedRecord.successRate >= 50 ? 'text-amber-600' : 'text-red-600'}`}>{selectedRecord.successRate}%</p>
-                    <div className="w-full h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${selectedRecord.successRate >= 80 ? 'bg-green-500' : selectedRecord.successRate >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                        style={{ '--bar-pct': `${selectedRecord.successRate}%` } as React.CSSProperties} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-100">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[11px] text-gray-400 uppercase tracking-wider">Risk Level</span>
-                      <ShieldAlert size={14} className={selectedRecord.riskPercent <= 10 ? 'text-green-500' : selectedRecord.riskPercent <= 30 ? 'text-amber-500' : 'text-red-500'} />
-                    </div>
-                    <p className={`text-2xl font-bold ${selectedRecord.riskPercent <= 10 ? 'text-green-600' : selectedRecord.riskPercent <= 30 ? 'text-amber-600' : 'text-red-600'}`}>{selectedRecord.riskPercent}%</p>
-                    <div className="w-full h-1.5 bg-gray-100 rounded-full mt-2 overflow-hidden">
-                      <div className={`h-full rounded-full transition-all ${selectedRecord.riskPercent <= 10 ? 'bg-green-500' : selectedRecord.riskPercent <= 30 ? 'bg-amber-500' : 'bg-red-500'}`}
-                        style={{ '--bar-pct': `${Math.min(selectedRecord.riskPercent, 100)}%` } as React.CSSProperties} />
-                    </div>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-100">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Orders Received</p>
-                    <p className="text-xl font-bold text-gray-800">{selectedRecord.ordersReceived.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-white rounded-lg p-3 border border-gray-100">
-                    <p className="text-[11px] text-gray-400 uppercase tracking-wider mb-1">Orders Delivered</p>
-                    <p className="text-xl font-bold text-green-600">{selectedRecord.ordersDelivered.toLocaleString()}</p>
-                  </div>
+              <div className="space-y-3">
+                {/* Window selector */}
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Performance window:</span>
+                  {[7, 30, 90].map(d => (
+                    <button key={d} onClick={() => handleDriverPerfWindowChange(d)}
+                      className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${driverPerfWindow === d ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                      {d}d
+                    </button>
+                  ))}
+                  {driverPerfLoading && <span className="text-[10px] text-gray-400 ml-1">Loading…</span>}
                 </div>
+
+                {/* Single dense card — all rates stacked with thin progress bars */}
+                <div className="bg-white rounded-xl border border-gray-200 p-4">
+                  <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
+                    Delivery Performance ({(driverPerf as Record<string, { days?: number }>)?.window?.days || driverPerfWindow}d)
+                  </h4>
+                  {driverPerfLoading ? (
+                    <p className="text-xs text-gray-400 text-center py-4">Computing performance metrics...</p>
+                  ) : driverPerf ? (
+                    <div className="space-y-3">
+                      {(() => {
+                        const rates = (driverPerf as { rates: Record<string, number> }).rates
+                        const totals = (driverPerf as { totals: Record<string, number> }).totals
+                        return [
+                          { label: 'Success Rate', value: rates.successRate, sub: `${totals.delivered} of ${totals.orders} delivered`, good: 85, ok: 60, invert: false },
+                          { label: 'First Attempt Success', value: rates.firstAttemptRate, sub: 'delivered on first try', good: 70, ok: 50, invert: false },
+                          { label: 'Failure Rate', value: rates.failureRate, sub: `${totals.failed} failed`, good: 5, ok: 15, invert: true },
+                          { label: 'Cancellation Rate', value: rates.cancellationRate, sub: `${totals.cancelled} cancelled`, good: 5, ok: 10, invert: true },
+                          { label: 'COD Collection Rate', value: rates.codRate, sub: 'cash collected vs sale value', good: 90, ok: 70, invert: false },
+                          { label: 'Banking Rate', value: rates.bankingRate, sub: `${totals.bankingsVerified}/${totals.bankingsCount} verified`, good: 90, ok: 70, invert: false },
+                        ].map((m, i) => {
+                          const color = m.invert
+                            ? (m.value <= m.good ? 'green' : m.value <= m.ok ? 'orange' : 'red')
+                            : (m.value >= m.good ? 'green' : m.value >= m.ok ? 'orange' : 'red')
+                          const barColor = color === 'green' ? 'bg-green-500' : color === 'orange' ? 'bg-orange-500' : 'bg-red-500'
+                          const textColor = color === 'green' ? 'text-green-700' : color === 'orange' ? 'text-orange-700' : 'text-red-700'
+                          return (
+                            <div key={i}>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs text-gray-500">{m.label}</span>
+                                <span className={`font-mono font-bold text-sm ${textColor}`}>{m.value}%</span>
+                              </div>
+                              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(m.value, 100)}%` }} />
+                              </div>
+                              <p className="text-[10px] text-gray-400 mt-0.5">{m.sub}</p>
+                            </div>
+                          )
+                        })
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 text-center py-4">No performance data</p>
+                  )}
+                </div>
+
+                {/* Cycle time + risk + sparkline */}
+                {driverPerf && !driverPerfLoading && (() => {
+                  const p = driverPerf as {
+                    cycleTime: { avgHours: number; avgMins: number; samples: number }
+                    rates: { riskPercent: number }
+                    totals: { trips: number; distance: number; inTransit: number; bankingsPending: number }
+                    cod: { totalSale: number; totalCollected: number; totalBanked: number; unbanked: number; bankingShortfall: number }
+                    damages: { damages: number; loss: number; total: number }
+                    sparkline: Array<{ date: string; total: number; delivered: number }>
+                  }
+                  return (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white rounded-xl border border-gray-200 p-4">
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Cycle Time & Trips</h4>
+                        <p className="text-2xl font-mono font-bold text-gray-900">{p.cycleTime.avgHours}<span className="text-xs text-gray-400 ml-1">h</span></p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{p.cycleTime.avgMins} min avg · {p.cycleTime.samples} samples</p>
+                        <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px]">
+                          <div><span className="text-gray-400">Trips:</span> <span className="font-mono font-bold text-blue-600">{p.totals.trips}</span></div>
+                          <div><span className="text-gray-400">Distance:</span> <span className="font-mono font-bold text-gray-700">{p.totals.distance}km</span></div>
+                          <div><span className="text-gray-400">In Transit:</span> <span className="font-mono font-bold text-blue-600">{p.totals.inTransit}</span></div>
+                          <div><span className="text-gray-400">Pending Bank:</span> <span className="font-mono font-bold text-orange-600">{p.totals.bankingsPending}</span></div>
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-xl border border-gray-200 p-4">
+                        <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">7-Day Volume</h4>
+                        <div className="flex items-end gap-1 h-12 mt-1">
+                          {p.sparkline.map((d, i) => {
+                            const maxVol = Math.max(...p.sparkline.map(s => s.total), 1)
+                            const totalH = (d.total / maxVol) * 100
+                            const delivH = d.total > 0 ? (d.delivered / d.total) * totalH : 0
+                            return (
+                              <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.delivered}/${d.total} delivered`}>
+                                <div className="w-full flex flex-col justify-end h-10 relative">
+                                  <div className="w-full bg-orange-200 rounded-t" style={{ height: `${totalH}%` }} />
+                                  <div className="w-full bg-orange-500 absolute bottom-0" style={{ height: `${delivH}%` }} />
+                                </div>
+                                <span className="text-[8px] text-gray-400">{d.date.slice(-2)}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                        <p className="text-[9px] text-gray-400 mt-1">Dark = delivered, light = total</p>
+                      </div>
+                    </div>
+                  )
+                })()}
+
+                {/* COD + damages reconciliation — single card with stacked rows */}
+                {driverPerf && !driverPerfLoading && (() => {
+                  const p = driverPerf as {
+                    cod: { totalSale: number; totalCollected: number; totalBanked: number; unbanked: number; bankingShortfall: number }
+                    damages: { damages: number; loss: number; total: number }
+                    rates: { riskPercent: number }
+                  }
+                  return (
+                    <div className="bg-white rounded-xl border border-gray-200 p-4">
+                      <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Financial Reconciliation ({driverPerfWindow}d)</h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="text-gray-500">Total Sales Delivered</span>
+                          <span className="font-mono font-bold text-gray-900">{fmtMoney(p.cod.totalSale)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="text-gray-500">Cash Collected</span>
+                          <span className="font-mono font-bold text-green-700">{fmtMoney(p.cod.totalCollected)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="text-gray-500">Cash Banked</span>
+                          <span className="font-mono font-bold text-blue-700">{fmtMoney(p.cod.totalBanked)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="text-gray-500">Unbanked Cash (on hand)</span>
+                          <span className={`font-mono font-bold ${p.cod.unbanked > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{fmtMoney(p.cod.unbanked)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                          <span className="text-gray-500">Banking Shortfall</span>
+                          <span className={`font-mono font-bold ${p.cod.bankingShortfall > 0 ? 'text-red-600' : 'text-gray-400'}`}>{fmtMoney(p.cod.bankingShortfall)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-1">
+                          <span className="text-gray-500">Damages + Loss</span>
+                          <span className={`font-mono font-bold ${p.damages.total > 0 ? 'text-red-600' : 'text-gray-400'}`}>{fmtMoney(p.damages.total)}</span>
+                        </div>
+                      </div>
+                      {p.cod.bankingShortfall > 0 && (
+                        <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Banking shortfall — investigate missing cash from driver's bankings.</p>
+                      )}
+                      {p.damages.total > 0 && (
+                        <p className="text-[10px] text-red-600 mt-1">⚠ {fmtMoney(p.damages.total)} in damages/loss — risk score: {p.rates.riskPercent}%</p>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )}
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createStorageLiabilityOnInbound } from '@/lib/storage-liability'
+import { logAudit } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   try {
@@ -28,6 +29,32 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // ── Operational Hold enforcement (Workflow 1 gate) ──
+    // If the merchant is on hold, block the inbound at the server.
+    // This is the lightweight replacement for formal credit control.
+    if (body.merchantId) {
+      const merchant = await db.merchant.findUnique({
+        where: { merchantId: body.merchantId },
+        select: { businessName: true, isOnHold: true, holdReason: true, holdSetAt: true },
+      })
+      if (merchant?.isOnHold) {
+        await logAudit({
+          action: 'BLOCK',
+          module: 'inbound',
+          entityId: body.merchantId,
+          details: `Blocked inbound for ${merchant.businessName} — merchant on hold: ${merchant.holdReason || 'no reason'}`,
+        })
+        return NextResponse.json({
+          error: 'Merchant on hold',
+          reason: merchant.holdReason || 'Overdue balance / dispute',
+          merchantName: merchant.businessName,
+          holdSetAt: merchant.holdSetAt,
+          code: 'MERCHANT_ON_HOLD',
+        }, { status: 409 })
+      }
+    }
+
     const count = await db.inboundRecord.count()
     const inboundId = `IN${String(count + 1).padStart(6, '0')}`
 

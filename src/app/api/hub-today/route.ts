@@ -179,6 +179,33 @@ export async function GET(req: NextRequest) {
       take: 20,
     })
 
+    // ── MERCHANT FOLLOW-UPS DUE ──
+    // Open communication entries with followUpAt <= now (overdue or due today)
+    const followUpsDue = await db.merchantCommunication.findMany({
+      where: {
+        isResolved: false,
+        followUpAt: { lte: now },
+      },
+      select: {
+        id: true, merchantId: true, type: true, subject: true,
+        followUpAt: true, createdAt: true,
+      },
+      orderBy: { followUpAt: 'asc' },
+      take: 15,
+    })
+    // Enrich with merchant names
+    const followUpMerchantIds = Array.from(new Set(followUpsDue.map(f => f.merchantId)))
+    const followUpMerchants = await db.merchant.findMany({
+      where: { merchantId: { in: followUpMerchantIds } },
+      select: { merchantId: true, businessName: true, isOnHold: true },
+    })
+    const followUpMerchantMap = new Map(followUpMerchants.map(m => [m.merchantId, m]))
+    const followUpsEnriched = followUpsDue.map(f => ({
+      ...f,
+      merchantName: followUpMerchantMap.get(f.merchantId)?.businessName || f.merchantId,
+      merchantOnHold: followUpMerchantMap.get(f.merchantId)?.isOnHold || false,
+    }))
+
     // ── DAY-CLOSE READINESS ──
     // Count parcels that are "unaccounted for" — not delivered, not returned, not staged
     const unaccountedParcels = await db.outboundRecord.count({
@@ -275,6 +302,10 @@ export async function GET(req: NextRequest) {
         count: pendingBankings.length,
         items: pendingBankings,
         totalAmount: pendingBankings.reduce((s, b) => s + b.amount, 0),
+      },
+      followUps: {
+        count: followUpsEnriched.length,
+        items: followUpsEnriched,
       },
       dayClose: {
         canClose: canCloseDay,
