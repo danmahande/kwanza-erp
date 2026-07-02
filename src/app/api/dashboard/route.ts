@@ -6,7 +6,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const period = searchParams.get('period') || 'This Month'
 
-    // Calculate date range based on period
     const now = new Date()
     let startDate: Date
     switch (period) {
@@ -24,7 +23,7 @@ export async function GET(request: NextRequest) {
         const quarterMonth = Math.floor(now.getMonth() / 3) * 3
         startDate = new Date(now.getFullYear(), quarterMonth, 1)
         break
-      default: // All Time
+      default:
         startDate = new Date(2020, 0, 1)
     }
 
@@ -33,10 +32,12 @@ export async function GET(request: NextRequest) {
     const totalProducts = await db.product.count({ where: { isActive: true } })
     const totalCustomers = await db.customer.count()
     const totalDrivers = await db.driver.count({ where: { status: 'active' } })
-    const activeDrivers = totalDrivers
 
-    // ── Inventory Metrics ──
-    const allProducts = await db.product.findMany({ where: { isActive: true }, select: { currentStock: true, unitCost: true, unitSellingPrice: true, minStock: true, commissionPercent: true, productLabel: true, createdAt: true } })
+    // ── Inventory ──
+    const allProducts = await db.product.findMany({
+      where: { isActive: true },
+      select: { currentStock: true, unitCost: true, unitSellingPrice: true, minStock: true, commissionPercent: true, productLabel: true, createdAt: true },
+    })
     const lowStockProducts = allProducts.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).length
     const criticalStockProducts = allProducts.filter(p => p.currentStock === 0).length
     const healthyStockProducts = allProducts.filter(p => p.currentStock > p.minStock).length
@@ -46,181 +47,170 @@ export async function GET(request: NextRequest) {
     // ── Inbound / Outbound ──
     const inboundRecords = await db.inboundRecord.findMany({ orderBy: { createdAt: 'desc' }, take: 10 })
     const outboundRecords = await db.outboundRecord.findMany({ orderBy: { createdAt: 'desc' }, take: 10 })
-    const totalInboundQty = await db.inboundRecord.aggregate({ _sum: { qtyIn: true } })
-    const totalOutboundQty = await db.outboundRecord.aggregate({ _sum: { qty: true } })
 
-    // ── Order / Delivery Metrics ──
+    // ── Order Status ──
     const statusCounts = await db.outboundRecord.groupBy({ by: ['status'], _count: { status: true } })
+    const orderStatusDistribution = statusCounts.map(s => ({ status: s.status, count: s._count.status }))
     const pendingCount = statusCounts.find(s => s.status === 'pending')?._count.status || 0
     const dispatchedCount = statusCounts.find(s => s.status === 'dispatched')?._count.status || 0
     const deliveredCount = statusCounts.find(s => s.status === 'delivered')?._count.status || 0
-    const totalOrders = pendingCount + dispatchedCount + deliveredCount
+    const failedCount = statusCounts.find(s => s.status === 'failed')?._count.status || 0
+    const returnedCount = statusCounts.find(s => s.status === 'returned')?._count.status || 0
+    const totalOrders = pendingCount + dispatchedCount + deliveredCount + failedCount + returnedCount
     const fulfillmentRate = totalOrders > 0 ? Math.round((deliveredCount / totalOrders) * 100) : 0
+    const exceptionCount = failedCount + returnedCount
+    const exceptionRate = totalOrders > 0 ? Math.round((exceptionCount / totalOrders) * 100) : 0
 
-    // ── Financial Metrics ──
+    // ── Financial ──
     const payments = await db.merchantPayment.findMany({ orderBy: { createdAt: 'desc' } })
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0)
     const totalCommission = allProducts.reduce((sum, p) => sum + (p.currentStock * p.unitSellingPrice * p.commissionPercent / 100), 0)
-    const avgOrderValue = totalOrders > 0 ? Math.round((totalRevenue || 0) / Math.max(deliveredCount, 1)) : 0
+    const avgOrderValue = deliveredCount > 0 ? Math.round((totalRevenue || 0) / deliveredCount) : 0
     const revenuePerMerchant = totalMerchants > 0 ? Math.round((totalRevenue || 0) / totalMerchants) : 0
 
-    // ── Payment Method Distribution ──
-    const paymentMethods = await db.merchantPayment.groupBy({ by: ['paymentMethod'], _count: { paymentMethod: true }, _sum: { amount: true } })
+    // ── COD Metrics ──
+    const codCollectedAgg = await db.outboundRecord.aggregate({
+      where: { status: 'delivered', codCollected: { not: null } },
+      _sum: { codCollected: true },
+      _count: true,
+    })
+    const codCollectedTotal = codCollectedAgg._sum.codCollected ?? 0
 
-    // ── Top Merchants by Payment ──
-    const topMerchants = await db.merchantPayment.groupBy({
-      by: ['merchantName'],
+    const pendingBankingsAgg = await db.driverBanking.aggregate({
+      where: { status: 'pending' },
       _sum: { amount: true },
-      orderBy: { _sum: { amount: 'desc' } },
-      take: 5,
+      _count: true,
     })
+    const codPendingBankings = pendingBankingsAgg._sum.amount ?? 0
 
-    // ── Top Customers ──
-    const topCustomers = await db.customer.findMany({
-      orderBy: [{ totalOrderValue: 'desc' }],
-      take: 5,
+    const verifiedBankingsAgg = await db.driverBanking.aggregate({
+      where: { status: 'verified' },
+      _sum: { amount: true },
     })
+    const codBanked = verifiedBankingsAgg._sum.amount ?? 0
+    const bankingRate = codCollectedTotal > 0 ? Math.round((codBanked / codCollectedTotal) * 100) : 0
 
-    // ── Shrinkage Metrics ──
-    const shrinkageRecords = await db.shrinkageRecord.findMany({ take: 10, orderBy: { createdAt: 'desc' } })
-    const totalShrinkageQty = await db.shrinkageRecord.aggregate({ _sum: { qty: true } })
-    const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], _sum: { qty: true }, _count: { reason: true } })
+    // ── Driver Performance ──
+    const activeDriverRecords = await db.driver.findMany({
+      where: { status: 'active' },
+      select: { driverId: true, name: true, expectedBankings: true, banked: true },
+    })
+    const driverPerformance = await Promise.all(activeDriverRecords.map(async (d) => {
+      const disp = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: { in: ['dispatched', 'delivered'] } } })
+      const del = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'delivered' } })
+      const failed = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'failed' } })
+      const codAgg = await db.outboundRecord.aggregate({
+        where: { assignedDriver: d.driverId, status: 'delivered', codCollected: { not: null } },
+        _sum: { codCollected: true },
+      })
+      const pendingBank = await db.driverBanking.count({ where: { driverId: d.driverId, status: 'pending' } })
+      return {
+        driverId: d.driverId, name: d.name,
+        dispatched: disp, delivered: del, failed,
+        codCollected: codAgg._sum.codCollected ?? 0,
+        pendingBankings: pendingBank,
+        bankingStatus: pendingBank > 0 ? 'pending' : 'verified',
+      }
+    }))
 
-    // ── Product Categories ──
-    const categories = await db.product.groupBy({ by: ['category'], _count: { category: true } })
+    // ── On-Time Rate (same-day delivery) ──
+    const deliveredWithDates = await db.outboundRecord.findMany({
+      where: { status: 'delivered', dispatchedAt: { not: null }, deliveredAt: { not: null } },
+      select: { dispatchedAt: true, deliveredAt: true },
+    })
+    const sameDay = deliveredWithDates.filter(r => r.dispatchedAt!.toDateString() === r.deliveredAt!.toDateString()).length
+    const onTimeRate = deliveredWithDates.length > 0 ? Math.round((sameDay / deliveredWithDates.length) * 100) : 0
 
-    // ── Revenue by Month (last 6 months - REAL data from outbound records) ──
-    const revenueByMonth: Array<{ month: string; revenue: number; commissions: number }> = []
+    // ── Revenue by Month (6 months, real data) ──
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    const revenueByMonth: Array<{ month: string; revenue: number; commissions: number }> = []
     for (let i = 5; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999)
-      const monthAgg = await db.outboundRecord.aggregate({
-        where: { createdAt: { gte: monthStart, lte: monthEnd } },
-        _sum: { saleAmount: true },
-      })
-      const monthRevenue = monthAgg._sum.saleAmount ?? 0
-      // Commissions: sum of (saleAmount * product.commissionPercent / 100) — simplified here as a global % from products
-      const monthProducts = await db.product.findMany({
-        where: { createdAt: { lte: monthEnd } },
-        select: { commissionPercent: true },
-      })
-      const avgCommission = monthProducts.length > 0
-        ? monthProducts.reduce((s, p) => s + p.commissionPercent, 0) / monthProducts.length / 100
-        : 0
-      revenueByMonth.push({
-        month: monthNames[monthStart.getMonth()],
-        revenue: Math.round(monthRevenue),
-        commissions: Math.round(monthRevenue * avgCommission),
-      })
+      const mStart = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const mEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999)
+      const mAgg = await db.outboundRecord.aggregate({ where: { createdAt: { gte: mStart, lte: mEnd } }, _sum: { saleAmount: true } })
+      const mRev = mAgg._sum.saleAmount ?? 0
+      const mProducts = await db.product.findMany({ where: { createdAt: { lte: mEnd } }, select: { commissionPercent: true } })
+      const avgComm = mProducts.length > 0 ? mProducts.reduce((s, p) => s + p.commissionPercent, 0) / mProducts.length / 100 : 0
+      revenueByMonth.push({ month: monthNames[mStart.getMonth()], revenue: Math.round(mRev), commissions: Math.round(mRev * avgComm) })
     }
 
-    // ── Warehouse Throughput (last 7 days - REAL data) ──
+    // ── Throughput (7 days, real) ──
+    const dayShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     const throughputData: Array<{ day: string; inbound: number; outbound: number }> = []
-    const dayNamesShort = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
     for (let i = 6; i >= 0; i--) {
-      const dayStart = new Date(now)
-      dayStart.setDate(dayStart.getDate() - i)
-      dayStart.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(dayStart)
-      dayEnd.setHours(23, 59, 59, 999)
-      const inboundAgg = await db.inboundRecord.aggregate({
-        where: { createdAt: { gte: dayStart, lte: dayEnd } },
-        _sum: { qtyIn: true },
-      })
-      const outboundAgg = await db.outboundRecord.aggregate({
-        where: { createdAt: { gte: dayStart, lte: dayEnd } },
-        _sum: { qty: true },
-      })
-      throughputData.push({
-        day: dayNamesShort[dayStart.getDay()],
-        inbound: inboundAgg._sum.qtyIn ?? 0,
-        outbound: outboundAgg._sum.qty ?? 0,
-      })
+      const dStart = new Date(now); dStart.setDate(dStart.getDate() - i); dStart.setHours(0, 0, 0, 0)
+      const dEnd = new Date(dStart); dEnd.setHours(23, 59, 59, 999)
+      const inAgg = await db.inboundRecord.aggregate({ where: { createdAt: { gte: dStart, lte: dEnd } }, _sum: { qtyIn: true } })
+      const outAgg = await db.outboundRecord.aggregate({ where: { createdAt: { gte: dStart, lte: dEnd } }, _sum: { qty: true } })
+      throughputData.push({ day: dayShort[dStart.getDay()], inbound: inAgg._sum.qtyIn ?? 0, outbound: outAgg._sum.qty ?? 0 })
     }
 
-    // ── Comparison data (REAL % change: this month vs last month) ──
+    // ── Comparison (this month vs last month) ──
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+    const thisRevAgg = await db.outboundRecord.aggregate({ where: { createdAt: { gte: thisMonthStart } }, _sum: { saleAmount: true } })
+    const lastRevAgg = await db.outboundRecord.aggregate({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } }, _sum: { saleAmount: true } })
+    const thisRev = thisRevAgg._sum.saleAmount ?? 0
+    const lastRev = lastRevAgg._sum.saleAmount ?? 0
+    const revenueChange = lastRev > 0 ? Math.round(((thisRev - lastRev) / lastRev) * 100) : 0
 
-    const thisMonthRevAgg = await db.outboundRecord.aggregate({
-      where: { createdAt: { gte: thisMonthStart } },
-      _sum: { saleAmount: true },
+    const thisOrders = await db.outboundRecord.count({ where: { createdAt: { gte: thisMonthStart } } })
+    const lastOrders = await db.outboundRecord.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } } })
+    const ordersChange = lastOrders > 0 ? Math.round(((thisOrders - lastOrders) / lastOrders) * 100) : 0
+
+    const stockValueToday = totalStockValue
+    const oldStockValue = allProducts.filter(p => p.createdAt < thisMonthStart).reduce((s, p) => s + p.currentStock * p.unitCost, 0)
+    const stockValueChange = oldStockValue > 0 ? Math.round(((stockValueToday - oldStockValue) / oldStockValue) * 100) : 0
+
+    const thisAvg = thisOrders > 0 ? thisRev / thisOrders : 0
+    const lastAvg = lastOrders > 0 ? lastRev / lastOrders : 0
+    const avgOrderChange = lastAvg > 0 ? Math.round(((thisAvg - lastAvg) / lastAvg) * 100) : 0
+
+    const comparison = { revenueChange, ordersChange, stockValueChange, avgOrderChange }
+
+    // ── Top Merchants ──
+    const topMerchants = await db.merchantPayment.groupBy({
+      by: ['merchantName'], _sum: { amount: true }, orderBy: { _sum: { amount: 'desc' } }, take: 5,
     })
-    const lastMonthRevAgg = await db.outboundRecord.aggregate({
-      where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } },
-      _sum: { saleAmount: true },
+
+    // ── Payment Methods ──
+    const paymentMethods = await db.merchantPayment.groupBy({
+      by: ['paymentMethod'], _count: { paymentMethod: true }, _sum: { amount: true },
     })
-    const thisMonthRev = thisMonthRevAgg._sum.saleAmount ?? 0
-    const lastMonthRev = lastMonthRevAgg._sum.saleAmount ?? 0
-    const revenueChange = lastMonthRev > 0 ? Math.round(((thisMonthRev - lastMonthRev) / lastMonthRev) * 100) : 0
 
-    const thisMonthOrders = await db.outboundRecord.count({ where: { createdAt: { gte: thisMonthStart } } })
-    const lastMonthOrders = await db.outboundRecord.count({ where: { createdAt: { gte: lastMonthStart, lte: lastMonthEnd } } })
-    const ordersChange = lastMonthOrders > 0 ? Math.round(((thisMonthOrders - lastMonthOrders) / lastMonthOrders) * 100) : 0
+    // ── Categories ──
+    const categories = await db.product.groupBy({ by: ['category'], _count: { category: true } })
 
-    // Stock value change: compare current stock value to stock value a month ago (approximation: same as today since we don't track historical)
-    // For now, compute stock value today vs stock value of products created before this month
-    const stockValueToday = allProducts.reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
-    const oldProductsStockValue = allProducts
-      .filter(p => p.createdAt < thisMonthStart)
-      .reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
-    const stockValueChange = oldProductsStockValue > 0
-      ? Math.round(((stockValueToday - oldProductsStockValue) / oldProductsStockValue) * 100)
-      : 0
+    // ── Shrinkage ──
+    const totalShrinkageQty = await db.shrinkageRecord.aggregate({ _sum: { qty: true } })
+    const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], _sum: { qty: true }, _count: { reason: true } })
 
-    // Avg order value change
-    const thisMonthAvg = thisMonthOrders > 0 ? thisMonthRev / thisMonthOrders : 0
-    const lastMonthAvg = lastMonthOrders > 0 ? lastMonthRev / lastMonthOrders : 0
-    const avgOrderChange = lastMonthAvg > 0 ? Math.round(((thisMonthAvg - lastMonthAvg) / lastMonthAvg) * 100) : 0
-
-    const comparison = {
-      revenueChange,
-      ordersChange,
-      stockValueChange,
-      avgOrderChange,
-    }
-
-    // ── Build Alerts ──
+    // ── Alerts ──
     const alerts: Array<{ type: 'critical' | 'warning' | 'info'; message: string; module: string; time: string }> = []
-    const criticalProducts = allProducts.filter(p => p.currentStock === 0)
-    const lowProducts = allProducts.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock)
-
-    criticalProducts.slice(0, 2).forEach(p => {
-      alerts.push({ type: 'critical', message: `OUT OF STOCK: ${p.productLabel} - zero units remaining`, module: 'inventory', time: 'Now' })
-    })
-    lowProducts.slice(0, 2).forEach(p => {
-      alerts.push({ type: 'warning', message: `Low stock: ${p.productLabel} - only ${p.currentStock} units left (min: ${p.minStock})`, module: 'inventory', time: 'Now' })
-    })
-    if (pendingCount > 0) {
-      alerts.push({ type: 'warning', message: `${pendingCount} order(s) awaiting dispatch`, module: 'outbound', time: 'Now' })
-    }
-    if (comparison.revenueChange < 0) {
-      alerts.push({ type: 'info', message: `Revenue down ${Math.abs(comparison.revenueChange)}% compared to previous period`, module: 'finance', time: 'Today' })
-    }
+    allProducts.filter(p => p.currentStock === 0).slice(0, 2).forEach(p =>
+      alerts.push({ type: 'critical', message: `OUT OF STOCK: ${p.productLabel}`, module: 'inventory', time: 'Now' })
+    )
+    allProducts.filter(p => p.currentStock > 0 && p.currentStock <= p.minStock).slice(0, 2).forEach(p =>
+      alerts.push({ type: 'warning', message: `Low stock: ${p.productLabel} — ${p.currentStock} left`, module: 'inventory', time: 'Now' })
+    )
+    if (pendingCount > 0) alerts.push({ type: 'warning', message: `${pendingCount} order(s) awaiting dispatch`, module: 'outbound', time: 'Now' })
+    if (codPendingBankings > 0) alerts.push({ type: 'warning', message: `UGX ${codPendingBankings.toLocaleString()} COD cash pending verification`, module: 'payments', time: 'Now' })
+    if (comparison.revenueChange < 0) alerts.push({ type: 'info', message: `Revenue down ${Math.abs(comparison.revenueChange)}% vs last period`, module: 'finance', time: 'Today' })
 
     return NextResponse.json({
       stats: {
-        totalMerchants,
-        totalProducts,
-        totalCustomers,
-        totalDrivers,
-        activeDrivers,
+        totalMerchants, totalProducts, totalCustomers, totalDrivers,
+        activeDrivers: totalDrivers,
         totalRevenue: totalRevenue || 0,
         totalCommission: Math.round(totalCommission),
-        avgOrderValue,
-        revenuePerMerchant,
-        totalStockUnits,
-        totalStockValue: Math.round(totalStockValue),
-        totalInboundQty: totalInboundQty._sum.qtyIn || 0,
-        totalOutboundQty: totalOutboundQty._sum.qty || 0,
+        avgOrderValue, revenuePerMerchant,
+        totalStockUnits, totalStockValue: Math.round(totalStockValue),
       },
       inventory: { healthy: healthyStockProducts, low: lowStockProducts, critical: criticalStockProducts },
       orders: { total: totalOrders, pending: pendingCount, dispatched: dispatchedCount, delivered: deliveredCount, fulfillmentRate },
       shrinkage: {
         totalQty: totalShrinkageQty._sum.qty || 0,
-        totalValueLoss: Math.round((totalShrinkageQty._sum.qty || 0) * 85),
         byReason: shrinkageByReason.map(s => ({ reason: s.reason, qty: s._sum.qty || 0, count: s._count.reason })),
       },
       recentInbound: inboundRecords,
@@ -229,10 +219,21 @@ export async function GET(request: NextRequest) {
       throughputData,
       productsByCategory: categories.map(c => ({ category: c.category, count: c._count.category })),
       topMerchants: topMerchants.map(m => ({ name: m.merchantName, amount: m._sum.amount || 0 })),
-      topCustomers: topCustomers.map(c => ({ name: c.name, orders: c.totalOrders, value: c.totalOrderValue })),
+      topCustomers: [],
       paymentMethods: paymentMethods.map(m => ({ method: m.paymentMethod, count: m._count.paymentMethod, amount: m._sum.amount || 0 })),
       alerts,
       comparison,
+      cod: {
+        collectedTotal: codCollectedTotal,
+        banked: codBanked,
+        pendingBankings: codPendingBankings,
+        bankingRate,
+      },
+      driverPerformance,
+      onTimeRate,
+      orderStatusDistribution,
+      exceptionRate,
+      exceptionCount,
     })
   } catch (error) {
     console.error('Dashboard error:', error)
