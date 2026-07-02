@@ -95,7 +95,7 @@ export default function MerchantsModule() {
   const [rateCard, setRateCard] = useState<RateCard | null>(null)
   const [rateCardHistory, setRateCardHistory] = useState<RateCard[]>([])
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [profileOpen, setProfileOpen] = useState(false)
   const [activityData, setActivityData] = useState<Array<Record<string, unknown>>>([])
   const [activityLoading, setActivityLoading] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -249,21 +249,19 @@ export default function MerchantsModule() {
     return `${months}mo ago`
   }
 
-  // #20: Activity timeline — fetch when a merchant is expanded
+  // Open profile slide-over when a merchant row is clicked
   const handleExpand = async (merchant: Merchant) => {
-    const newId = expandedId === merchant.id ? null : merchant.id
-    setExpandedId(newId)
-    if (newId) {
-      setActivityLoading(true)
-      try {
-        const res = await fetch(`/api/merchants/${merchant.id}/activity?limit=15`)
-        const d = await res.json()
-        setActivityData(d.timeline || [])
-      } catch {
-        setActivityData([])
-      } finally {
-        setActivityLoading(false)
-      }
+    setSelectedMerchant(merchant)
+    setProfileOpen(true)
+    setActivityLoading(true)
+    try {
+      const res = await fetch(`/api/merchants/${merchant.id}/activity?limit=15`)
+      const d = await res.json()
+      setActivityData(d.timeline || [])
+    } catch {
+      setActivityData([])
+    } finally {
+      setActivityLoading(false)
     }
   }
 
@@ -370,14 +368,11 @@ export default function MerchantsModule() {
               <DenseTh className="w-28 text-right">Shrinkage</DenseTh>
               <DenseTh className="w-16 text-center">Status</DenseTh>
               <DenseTh className="w-28 text-right">Actions</DenseTh>
-              <DenseTh className="w-8"></DenseTh>
             </tr>
           </thead>
           <tbody>
             {data.map((m) => {
-              const isExpanded = expandedId === m.id
               return (
-                <>
                   <DenseTr key={m.id} onClick={() => handleExpand(m)} tint={m.isActive ? '' : 'bg-gray-50/50'}>
                     <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
                     <DenseTd className="text-gray-900 font-medium">{m.businessName}</DenseTd>
@@ -402,156 +397,160 @@ export default function MerchantsModule() {
                         <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
                       </div>
                     </DenseTd>
-                    <DenseTd className="text-gray-400">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</DenseTd>
                   </DenseTr>
-                  {isExpanded && (
-                    <tr key={`${m.id}-detail`} className="bg-gray-50/30 border-b border-gray-200">
-                      <td colSpan={12} className="px-4 py-4">
-                        {/* Header card */}
-                        <div className="bg-white rounded-xl border border-gray-200 px-4 py-3 mb-3 flex items-center gap-3 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <span className={`w-3 h-3 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                            <h3 className="text-base font-bold text-gray-900">{m.businessName}</h3>
-                          </div>
-                          <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] font-mono">{m.merchantId}</Badge>
-                          <span className="text-[10px] capitalize px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.currency}</span>
-                          {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
-                          <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
-                            <span>Inbound: <span className="font-medium text-gray-600">{timeAgo(m.lastInboundAt)}</span></span>
-                            <span>·</span>
-                            <span>Outbound: <span className="font-medium text-gray-600">{timeAgo(m.lastOutboundAt)}</span></span>
-                            <span>·</span>
-                            <span>Payment: <span className="font-medium text-gray-600">{timeAgo(m.lastPaymentAt)}</span></span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button onClick={(e) => { e.stopPropagation(); handleEdit(m) }} title="Edit" className="p-1.5 rounded-lg text-gray-400 hover:text-[#FF6B35] hover:bg-orange-50"><SettingsIcon size={14} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleOpenRateCard(m) }} title="Rate Card" className="p-1.5 rounded-lg text-gray-400 hover:text-[#FF6B35] hover:bg-orange-50"><FileText size={14} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleOpenStatement(m) }} title="Statement" className="p-1.5 rounded-lg text-gray-400 hover:text-[#FF6B35] hover:bg-orange-50"><Calendar size={14} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Deactivate' : 'Activate'} className={`p-1.5 rounded-lg ${m.isActive ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 hover:bg-gray-100'}`}><CheckCircle2 size={14} /></button>
-                            <button onClick={(e) => { e.stopPropagation(); setDeletingId(m.id); setDeleteOpen(true) }} title="Delete" className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50"><Trash2 size={14} /></button>
-                          </div>
-                        </div>
-
-                        {/* KPI mini-ribbon */}
-                        <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs mb-3">
-                          <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">SKUs</span><span className="font-mono font-bold text-sm block">{m.productCount}</span></div>
-                          <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Orders</span><span className="font-mono font-bold text-sm block">{m.orderCount}</span></div>
-                          <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Sales</span><span className="font-mono font-bold text-sm block">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</span></div>
-                          <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Pending</span><span className="font-mono font-bold text-sm block text-orange-300">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
-                          <div className="flex-1 px-3 py-1.5"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Storage</span><span className="font-mono font-bold text-sm block text-blue-300">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
-                        </div>
-
-                        {/* Two-column: Contact + Business cards */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-                          <div className="bg-white rounded-lg border border-gray-200 p-3">
-                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Contact</p>
-                            <div className="space-y-1 text-xs">
-                              <p className="text-gray-900 font-medium">{m.contact}</p>
-                              <p className="text-gray-500">{m.email}</p>
-                              {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
-                              {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
-                              {m.address && <p className="text-gray-500">{m.address}</p>}
-                            </div>
-                          </div>
-                          <div className="bg-white rounded-lg border border-gray-200 p-3">
-                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Business</p>
-                            <div className="space-y-1 text-xs">
-                              {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
-                              <p className="text-gray-700">Delivery: <span className="capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span></p>
-                              {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
-                              {m.bankAccount && <p className="text-gray-500 font-mono">{m.bankAccount}</p>}
-                              {(m.contractStart || m.contractEnd) && <p className="text-gray-500 mt-1">Contract: {m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '—'} → {m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : 'Open'}</p>}
-                              {m.notes && <p className="text-gray-400 italic mt-1 text-[11px]">"{m.notes}"</p>}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Profitability waterfall */}
-                        <div className="bg-white rounded-lg border border-gray-200 p-3 mb-3">
-                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Profitability</p>
-                          {(() => {
-                            const maxVal = Math.max(m.profitability.revenue, Math.abs(m.profitability.net), 1)
-                            const barW = (v: number) => `${Math.max(2, (Math.abs(v) / maxVal) * 100)}%`
-                            return (
-                              <div className="space-y-1.5">
-                                {[{l:'Revenue',v:m.profitability.revenue,c:'bg-green-500'},{l:'Commission',v:m.profitability.commission,c:'bg-orange-500'},{l:'Shrinkage',v:m.profitability.shrinkage,c:'bg-red-500'},{l:'Returns',v:m.profitability.returns,c:'bg-red-400'}].map((r,i) => (
-                                  <div key={i} className="flex items-center gap-2">
-                                    <span className="text-[10px] text-gray-500 w-20">{r.l}</span>
-                                    <div className="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
-                                      <div className={`${r.c} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(r.v) }}>
-                                        <span className="text-[9px] text-white font-mono font-bold">{r.v < 0 ? '-' : ''}{formatCurrencyCompact(Math.abs(r.v), m.currency)}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                ))}
-                                <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-                                  <span className={`text-[10px] font-semibold w-20 ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>Net</span>
-                                  <div className="flex-1 bg-gray-100 rounded-full h-5 overflow-hidden">
-                                    <div className={`${m.profitability.net >= 0 ? 'bg-green-600' : 'bg-red-600'} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(m.profitability.net) }}>
-                                      <span className="text-[10px] text-white font-mono font-bold">{formatCurrencyCompact(m.profitability.net, m.currency)}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            )
-                          })()}
-                        </div>
-
-                        {/* Two-column: Statements + Activity timeline */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="bg-white rounded-lg border border-gray-200 p-3">
-                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Recent Statements</p>
-                            {m.statements && m.statements.length > 0 ? (
-                              <div className="space-y-1">
-                                {m.statements.map((s) => (
-                                  <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-50 last:border-0">
-                                    <span className="font-mono text-gray-500">{s.period}</span>
-                                    <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
-                                    <span className={`ml-auto inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : <p className="text-xs text-gray-400 text-center py-3">No statements yet</p>}
-                          </div>
-                          <div className="bg-white rounded-lg border border-gray-200 p-3">
-                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Activity Timeline</p>
-                            {activityLoading ? <p className="text-xs text-gray-400 text-center py-3">Loading...</p> :
-                             activityData.length === 0 ? <p className="text-xs text-gray-400 text-center py-3">No recent activity</p> : (
-                              <div className="max-h-48 overflow-y-auto relative">
-                                <div className="absolute left-[6px] top-2 bottom-2 w-px bg-gray-200"></div>
-                                {activityData.map((event, i) => {
-                                  const dC: Record<string,string> = { inbound:'bg-blue-500',outbound:'bg-orange-500',payment:'bg-green-500',statement:'bg-purple-500',shrinkage:'bg-red-500',rtv:'bg-red-400',rma:'bg-red-300' }
-                                  const iC: Record<string,string> = { inbound:'text-blue-600',outbound:'text-orange-600',payment:'text-green-600',statement:'text-purple-600',shrinkage:'text-red-600',rtv:'text-red-500',rma:'text-red-400' }
-                                  const iM: Record<string,typeof Clock> = { inbound:ArrowDownRight,outbound:ArrowUpRight,payment:DollarSign,statement:FileText,shrinkage:AlertTriangle,rtv:RotateCcw,rma:PackageX }
-                                  const dc = dC[String(event.type)]||'bg-gray-400'
-                                  const ic = iC[String(event.type)]||'text-gray-500'
-                                  const Icon = iM[String(event.type)]||Clock
-                                  const ts = new Date(String(event.timestamp))
-                                  return (
-                                    <div key={i} className="flex items-start gap-2.5 text-[11px] py-1.5 relative">
-                                      <div className={`w-3.5 h-3.5 rounded-full ${dc} ring-2 ring-white shrink-0 z-10 flex items-center justify-center`}><Icon size={7} className="text-white" /></div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-gray-700 truncate leading-tight">{String(event.label)}</p>
-                                        <div className="flex items-center gap-2 mt-0.5"><span className={`text-[9px] ${ic}`}>{String(event.description).slice(0, 40)}</span>{event.amount ? <span className="font-mono text-gray-500 text-[10px]">{formatCurrencyCompact(Number(event.amount))}</span> : null}</div>
-                                      </div>
-                                      <span className="text-gray-400 text-[9px] shrink-0 whitespace-nowrap">{ts.toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
               )
             })}
           </tbody>
         </DenseTable>
       )}
+
+      {/* Profile slide-over — replaces inline expansion */}
+      <DetailSlideOver
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        title={selectedMerchant?.businessName || ''}
+        subtitle={selectedMerchant ? `${selectedMerchant.merchantId} · ${(selectedMerchant.deliveryType || 'self-delivery').replace('-', ' ')}` : ''}
+        width="lg"
+      >
+        {selectedMerchant && (() => {
+          const m = selectedMerchant
+          const maxVal = Math.max(m.profitability.revenue, Math.abs(m.profitability.net), 1)
+          const barW = (v: number) => `${Math.max(2, (Math.abs(v) / maxVal) * 100)}%`
+          return (
+            <div className="space-y-3">
+              {/* Header: status + badges + activity pills + action icons */}
+              <div className="flex items-center gap-2 flex-wrap pb-3 border-b border-gray-100">
+                <span className={`w-3 h-3 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] font-mono">{m.merchantId}</Badge>
+                <span className="text-[10px] capitalize px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.currency}</span>
+                {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
+                <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
+                  <span>In: <span className="font-medium text-gray-600">{timeAgo(m.lastInboundAt)}</span></span>
+                  <span>·</span>
+                  <span>Out: <span className="font-medium text-gray-600">{timeAgo(m.lastOutboundAt)}</span></span>
+                  <span>·</span>
+                  <span>Pay: <span className="font-medium text-gray-600">{timeAgo(m.lastPaymentAt)}</span></span>
+                </div>
+              </div>
+
+              {/* Action icon buttons */}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleEdit(m) }}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenRateCard(m) }}><FileText size={12} className="mr-1" /> Rate Card</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenStatement(m) }}><Calendar size={12} className="mr-1" /> Statement</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleToggleActive(m)}>{m.isActive ? 'Deactivate' : 'Activate'}</Button>
+                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md text-red-600 border-red-200 hover:bg-red-50 ml-auto" onClick={() => { setProfileOpen(false); setDeletingId(m.id); setDeleteOpen(true) }}><Trash2 size={12} className="mr-1" /> Delete</Button>
+              </div>
+
+              {/* KPI mini-ribbon */}
+              <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
+                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">SKUs</span><span className="font-mono font-bold text-sm block">{m.productCount}</span></div>
+                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Orders</span><span className="font-mono font-bold text-sm block">{m.orderCount}</span></div>
+                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Sales</span><span className="font-mono font-bold text-sm block">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</span></div>
+                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Pending</span><span className="font-mono font-bold text-sm block text-orange-300">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
+                <div className="flex-1 px-3 py-1.5"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Storage</span><span className="font-mono font-bold text-sm block text-blue-300">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
+              </div>
+
+              {/* Two-column: Contact + Business */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1"><Phone size={10} /> Contact</p>
+                  <div className="space-y-1 text-xs">
+                    <p className="text-gray-900 font-medium">{m.contact}</p>
+                    <p className="text-gray-500">{m.email}</p>
+                    {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
+                    {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
+                    {m.address && <p className="text-gray-500">{m.address}</p>}
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1"><Building2 size={10} /> Business</p>
+                  <div className="space-y-1 text-xs">
+                    {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
+                    <p className="text-gray-700">Delivery: <span className="capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span></p>
+                    {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
+                    {m.bankAccount && <p className="text-gray-500 font-mono">{m.bankAccount}</p>}
+                    {(m.contractStart || m.contractEnd) && <p className="text-gray-500 mt-1">Contract: {m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '—'} → {m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : 'Open'}</p>}
+                    {m.notes && <p className="text-gray-400 italic mt-1 text-[11px]">"{m.notes}"</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Profitability waterfall */}
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Profitability</p>
+                <div className="space-y-1.5">
+                  {[{l:'Revenue',v:m.profitability.revenue,c:'bg-green-500'},{l:'Commission',v:m.profitability.commission,c:'bg-orange-500'},{l:'Shrinkage',v:m.profitability.shrinkage,c:'bg-red-500'},{l:'Returns',v:m.profitability.returns,c:'bg-red-400'}].map((r,i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <span className="text-[10px] text-gray-500 w-20">{r.l}</span>
+                      <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                        <div className={`${r.c} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(r.v) }}>
+                          <span className="text-[9px] text-white font-mono font-bold">{r.v < 0 ? '-' : ''}{formatCurrencyCompact(Math.abs(r.v), m.currency)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
+                    <span className={`text-[10px] font-semibold w-20 ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>Net</span>
+                    <div className="flex-1 bg-gray-200 rounded-full h-5 overflow-hidden">
+                      <div className={`${m.profitability.net >= 0 ? 'bg-green-600' : 'bg-red-600'} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(m.profitability.net) }}>
+                        <span className="text-[10px] text-white font-mono font-bold">{formatCurrencyCompact(m.profitability.net, m.currency)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Two-column: Statements + Activity timeline */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Recent Statements</p>
+                  {m.statements && m.statements.length > 0 ? (
+                    <div className="space-y-1">
+                      {m.statements.map((s) => (
+                        <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-200 last:border-0">
+                          <span className="font-mono text-gray-500">{s.period}</span>
+                          <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
+                          <span className={`ml-auto inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="text-xs text-gray-400 text-center py-3">No statements yet</p>}
+                </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Activity Timeline</p>
+                  {activityLoading ? <p className="text-xs text-gray-400 text-center py-3">Loading...</p> :
+                   activityData.length === 0 ? <p className="text-xs text-gray-400 text-center py-3">No recent activity</p> : (
+                    <div className="max-h-48 overflow-y-auto relative">
+                      <div className="absolute left-[6px] top-2 bottom-2 w-px bg-gray-300"></div>
+                      {activityData.map((event, i) => {
+                        const dC: Record<string,string> = { inbound:'bg-blue-500',outbound:'bg-orange-500',payment:'bg-green-500',statement:'bg-purple-500',shrinkage:'bg-red-500',rtv:'bg-red-400',rma:'bg-red-300' }
+                        const iC: Record<string,string> = { inbound:'text-blue-600',outbound:'text-orange-600',payment:'text-green-600',statement:'text-purple-600',shrinkage:'text-red-600',rtv:'text-red-500',rma:'text-red-400' }
+                        const iM: Record<string,typeof Clock> = { inbound:ArrowDownRight,outbound:ArrowUpRight,payment:DollarSign,statement:FileText,shrinkage:AlertTriangle,rtv:RotateCcw,rma:PackageX }
+                        const dc = dC[String(event.type)]||'bg-gray-400'
+                        const ic = iC[String(event.type)]||'text-gray-500'
+                        const Icon = iM[String(event.type)]||Clock
+                        const ts = new Date(String(event.timestamp))
+                        return (
+                          <div key={i} className="flex items-start gap-2.5 text-[11px] py-1.5 relative">
+                            <div className={`w-3.5 h-3.5 rounded-full ${dc} ring-2 ring-gray-50 shrink-0 z-10 flex items-center justify-center`}><Icon size={7} className="text-white" /></div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-gray-700 truncate leading-tight">{String(event.label)}</p>
+                              <div className="flex items-center gap-2 mt-0.5"><span className={`text-[9px] ${ic}`}>{String(event.description).slice(0, 40)}</span>{event.amount ? <span className="font-mono text-gray-500 text-[10px]">{formatCurrencyCompact(Number(event.amount))}</span> : null}</div>
+                            </div>
+                            <span className="text-gray-400 text-[9px] shrink-0 whitespace-nowrap">{ts.toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+      </DetailSlideOver>
 
       {/* Edit / Create slide-over with onboarding fields */}
       <DetailSlideOver
