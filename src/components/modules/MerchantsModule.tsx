@@ -49,6 +49,11 @@ interface Merchant {
   lastInboundAt: string | null
   lastOutboundAt: string | null
   lastPaymentAt: string | null
+  profitability: { revenue: number; commission: number; shrinkage: number; returns: number; net: number }
+  statements: Array<{
+    id: string; statementId: string; period: string; netPayable: number
+    isPaid: boolean; status: string; createdAt: string
+  }>
 }
 
 interface RateCard {
@@ -64,6 +69,7 @@ interface RateCard {
   codShortfallPenalty: number
   isActive: boolean
   validFrom: string
+  validTo: string | null
 }
 
 const FILTER_CHIPS = [
@@ -87,6 +93,7 @@ export default function MerchantsModule() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
   const [rateCard, setRateCard] = useState<RateCard | null>(null)
+  const [rateCardHistory, setRateCardHistory] = useState<RateCard[]>([])
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -187,6 +194,7 @@ export default function MerchantsModule() {
       if (Array.isArray(cards) && cards.length > 0) {
         const active = cards.find((c: RateCard) => c.isActive) || cards[0]
         setRateCard(active)
+        setRateCardHistory(cards)
         setRateForm({
           inboundReceivingPerUnit: active.inboundReceivingPerUnit, storagePerUnitPerDay: active.storagePerUnitPerDay,
           pickPerUnit: active.pickPerUnit, packPerOrder: active.packPerOrder,
@@ -195,6 +203,7 @@ export default function MerchantsModule() {
         })
       } else {
         setRateCard(null)
+        setRateCardHistory([])
         setRateForm({ inboundReceivingPerUnit: 0, storagePerUnitPerDay: 0, pickPerUnit: 0, packPerOrder: 0, returnProcessingPerUnit: 0, commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0 })
       }
       setRateCardOpen(true)
@@ -368,6 +377,51 @@ export default function MerchantsModule() {
                             </div>
                           </div>
                         </div>
+
+                        {/* #2: Profitability section */}
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Profitability</p>
+                          <div className="grid grid-cols-5 gap-2 text-xs">
+                            <div className="p-2 rounded-lg bg-green-50">
+                              <p className="text-[9px] text-gray-400 uppercase">Revenue</p>
+                              <p className="font-mono font-bold text-green-700">{formatCurrencyCompact(m.profitability.revenue, m.currency)}</p>
+                            </div>
+                            <div className="p-2 rounded-lg bg-orange-50">
+                              <p className="text-[9px] text-gray-400 uppercase">Commission</p>
+                              <p className="font-mono font-bold text-orange-700">-{formatCurrencyCompact(m.profitability.commission, m.currency)}</p>
+                            </div>
+                            <div className="p-2 rounded-lg bg-red-50">
+                              <p className="text-[9px] text-gray-400 uppercase">Shrinkage</p>
+                              <p className="font-mono font-bold text-red-700">-{formatCurrencyCompact(m.profitability.shrinkage, m.currency)}</p>
+                            </div>
+                            <div className="p-2 rounded-lg bg-red-50">
+                              <p className="text-[9px] text-gray-400 uppercase">Returns</p>
+                              <p className="font-mono font-bold text-red-700">-{formatCurrencyCompact(m.profitability.returns, m.currency)}</p>
+                            </div>
+                            <div className={`p-2 rounded-lg ${m.profitability.net >= 0 ? 'bg-green-100' : 'bg-red-100'}`}>
+                              <p className="text-[9px] text-gray-400 uppercase">Net</p>
+                              <p className={`font-mono font-bold ${m.profitability.net >= 0 ? 'text-green-800' : 'text-red-800'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* #4: Recent statements */}
+                        {m.statements && m.statements.length > 0 && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Recent Statements</p>
+                            <div className="space-y-1">
+                              {m.statements.map((s) => (
+                                <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-50">
+                                  <span className="font-mono text-gray-500">{s.period}</span>
+                                  <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
+                                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                    s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'
+                                  }`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   )}
@@ -454,6 +508,28 @@ export default function MerchantsModule() {
             <div key={f.k}><Label className="text-xs font-medium mb-1 block">{f.l}</Label><Input type="number" value={String(rateForm[f.k as keyof typeof rateForm])} onChange={e => setRateForm({ ...rateForm, [f.k]: parseFloat(e.target.value) || 0 })} className="rounded-xl" /></div>
           ))}
         </div>
+
+        {/* #3: Rate card history */}
+        {rateCardHistory.length > 1 && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Rate Card History</p>
+            <div className="space-y-1">
+              {rateCardHistory.map((rc, i) => (
+                <div key={rc.id || i} className={`flex items-center gap-2 text-[11px] py-1 px-2 rounded ${rc.isActive ? 'bg-orange-50 border border-orange-100' : ''}`}>
+                  <span className={`w-2 h-2 rounded-full ${rc.isActive ? 'bg-orange-500' : 'bg-gray-300'}`} />
+                  <span className="font-mono text-gray-500">{new Date(rc.validFrom).toLocaleDateString('en-UG')}</span>
+                  <span className="text-gray-400">→</span>
+                  <span className="font-mono text-gray-500">{rc.validTo ? new Date(rc.validTo).toLocaleDateString('en-UG') : 'Current'}</span>
+                  <span className="text-gray-400 ml-auto">
+                    Storage: {rc.storagePerUnitPerDay} | Pick: {rc.pickPerUnit} | Comm: {rc.commissionPercent}%
+                  </span>
+                  {rc.isActive && <span className="text-[9px] font-semibold text-orange-600 uppercase">Active</span>}
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2">Saving changes creates a new rate card and supersedes the previous one. Historical cards are kept for audit.</p>
+          </div>
+        )}
       </DetailSlideOver>
 
       {/* Statement dialog (unchanged) */}

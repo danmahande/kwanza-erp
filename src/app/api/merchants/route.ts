@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
       orderBy: { createdAt: 'desc' },
     })
 
-    // Enrich with product count and order count per merchant (#9, #10)
+    // Enrich with product count, order count, profitability, last activity per merchant
     const enriched = await Promise.all(merchants.map(async (m) => {
       const productCount = await db.product.count({ where: { merchantId: m.merchantId, isActive: true } })
       const orderCount = await db.outboundRecord.count({ where: { vendorId: m.merchantId } })
@@ -45,6 +45,24 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
       })
+
+      // #2: Profitability calculation
+      const mRevenue = m.totalSalesValue || 0
+      const mProducts = await db.product.findMany({ where: { merchantId: m.merchantId }, select: { commissionPercent: true } })
+      const avgComm = mProducts.length > 0 ? mProducts.reduce((s, p) => s + p.commissionPercent, 0) / mProducts.length / 100 : 0
+      const mCommission = Math.round(mRevenue * avgComm)
+      const mShrinkage = m.totalShrinkageValue || 0
+      const mReturns = m.totalReturnValue || 0
+      const mNet = mRevenue - mCommission - mShrinkage - mReturns
+
+      // #4: Recent statements for this merchant
+      const statements = await db.merchantStatement.findMany({
+        where: { merchantId: m.merchantId },
+        orderBy: { period: 'desc' },
+        take: 5,
+        select: { id: true, statementId: true, period: true, netPayable: true, isPaid: true, status: true, createdAt: true },
+      })
+
       return {
         ...m,
         productCount,
@@ -52,6 +70,8 @@ export async function GET(req: NextRequest) {
         lastInboundAt: lastInbound?.createdAt || null,
         lastOutboundAt: lastOutbound?.createdAt || null,
         lastPaymentAt: lastPayment?.createdAt || null,
+        profitability: { revenue: mRevenue, commission: mCommission, shrinkage: mShrinkage, returns: mReturns, net: mNet },
+        statements,
       }
     }))
 
