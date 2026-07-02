@@ -34,6 +34,16 @@ model Merchant {
   deliveryType    String?           @default("self-delivery")
   /// Currency for all monetary values for this merchant (default UGX for Uganda)
   currency        String            @default("UGX")
+  /// Onboarding fields
+  taxId           String?
+  address         String?
+  bankName        String?
+  bankAccount     String?
+  contactPerson   String?
+  altPhone        String?
+  contractStart   DateTime?
+  contractEnd     DateTime?
+  notes           String?
   /// Cumulative values for reporting
   totalInboundValue      Float      @default(0)
   totalSalesValue        Float      @default(0)

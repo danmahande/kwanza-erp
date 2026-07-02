@@ -5,17 +5,57 @@ import { logAudit } from '@/lib/audit'
 export async function GET(req: NextRequest) {
   try {
     const search = req.nextUrl.searchParams.get('search') || ''
+    const deliveryType = req.nextUrl.searchParams.get('deliveryType') || ''
+    const status = req.nextUrl.searchParams.get('status') || ''
+
+    const where: Record<string, unknown> = {
+      OR: [
+        { businessName: { contains: search } },
+        { contact: { contains: search } },
+        { merchantId: { contains: search } },
+        { email: { contains: search } },
+        { contactPerson: { contains: search } },
+      ],
+    }
+    if (deliveryType) where.deliveryType = deliveryType
+    if (status === 'active') where.isActive = true
+    if (status === 'inactive') where.isActive = false
+
     const merchants = await db.merchant.findMany({
-      where: {
-        OR: [
-          { businessName: { contains: search } },
-          { contact: { contains: search } },
-          { merchantId: { contains: search } },
-        ],
-      },
+      where,
       orderBy: { createdAt: 'desc' },
     })
-    return NextResponse.json(merchants)
+
+    // Enrich with product count and order count per merchant (#9, #10)
+    const enriched = await Promise.all(merchants.map(async (m) => {
+      const productCount = await db.product.count({ where: { merchantId: m.merchantId, isActive: true } })
+      const orderCount = await db.outboundRecord.count({ where: { vendorId: m.merchantId } })
+      const lastInbound = await db.inboundRecord.findFirst({
+        where: { merchantId: m.merchantId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      const lastOutbound = await db.outboundRecord.findFirst({
+        where: { vendorId: m.merchantId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      const lastPayment = await db.merchantPayment.findFirst({
+        where: { merchantId: m.merchantId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true },
+      })
+      return {
+        ...m,
+        productCount,
+        orderCount,
+        lastInboundAt: lastInbound?.createdAt || null,
+        lastOutboundAt: lastOutbound?.createdAt || null,
+        lastPaymentAt: lastPayment?.createdAt || null,
+      }
+    }))
+
+    return NextResponse.json(enriched)
   } catch {
     return NextResponse.json({ error: 'Failed to fetch merchants' }, { status: 500 })
   }
