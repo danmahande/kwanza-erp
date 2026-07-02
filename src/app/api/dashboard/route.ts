@@ -116,10 +116,17 @@ export async function GET(request: NextRequest) {
     // ── On-Time Rate (same-day delivery) ──
     const deliveredWithDates = await db.outboundRecord.findMany({
       where: { status: 'delivered', dispatchedAt: { not: null }, deliveredAt: { not: null } },
-      select: { dispatchedAt: true, deliveredAt: true },
+      select: { dispatchedAt: true, deliveredAt: true, createdAt: true },
     })
     const sameDay = deliveredWithDates.filter(r => r.dispatchedAt!.toDateString() === r.deliveredAt!.toDateString()).length
     const onTimeRate = deliveredWithDates.length > 0 ? Math.round((sameDay / deliveredWithDates.length) * 100) : 0
+
+    // ── Order Cycle Time (average hours from order creation to delivery) ──
+    const cycleTimeRecords = deliveredWithDates.filter(r => r.createdAt && r.deliveredAt)
+    const avgCycleTimeMs = cycleTimeRecords.length > 0
+      ? cycleTimeRecords.reduce((sum, r) => sum + (r.deliveredAt!.getTime() - r.createdAt.getTime()), 0) / cycleTimeRecords.length
+      : 0
+    const avgCycleTimeHours = Math.round(avgCycleTimeMs / (1000 * 60 * 60))
 
     // ── Revenue by Month (6 months, real data) ──
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -231,6 +238,7 @@ export async function GET(request: NextRequest) {
       },
       driverPerformance,
       onTimeRate,
+      avgCycleTimeHours,
       orderStatusDistribution,
       exceptionRate,
       exceptionCount,

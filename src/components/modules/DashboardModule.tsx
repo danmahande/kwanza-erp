@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -38,6 +38,7 @@ interface DashboardData {
     codCollected: number; pendingBankings: number; bankingStatus: string
   }>
   onTimeRate: number
+  avgCycleTimeHours: number
   orderStatusDistribution: Array<{ status: string; count: number }>
   exceptionRate: number
   exceptionCount: number
@@ -63,12 +64,18 @@ const tooltipStyle = {
 export default function DashboardModule() {
   const [data, setData] = useState<DashboardData | null>(null)
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     fetch('/api/dashboard?period=This Month')
       .then(r => r.json())
       .then(setData)
       .catch(() => {})
   }, [])
+
+  useEffect(() => {
+    fetchData()
+    const interval = setInterval(fetchData, 30000)
+    return () => clearInterval(interval)
+  }, [fetchData])
 
   if (!data) {
     return (
@@ -82,14 +89,14 @@ export default function DashboardModule() {
   }
 
   const kpiCells = [
-    { label: 'REVENUE', value: formatCurrencyCompact(data.stats.totalRevenue) },
-    { label: 'ORDERS', value: data.orders.total },
+    { label: 'REVENUE', value: formatCurrencyCompact(data.stats.totalRevenue), trend: data.comparison.revenueChange, trendLabel: 'vs last month' },
+    { label: 'ORDERS', value: data.orders.total, trend: data.comparison.ordersChange, trendLabel: 'vs last month' },
     { label: 'DELIVERED', value: data.orders.delivered },
+    { label: 'CYCLE TIME', value: data.avgCycleTimeHours > 0 ? `${data.avgCycleTimeHours}h` : '—', trendLabel: 'avg order→delivery' },
     { label: 'ON-TIME %', value: `${data.onTimeRate}%`, highlight: data.onTimeRate < 80, highlightColor: 'red' as const },
     { label: 'COD COLLECTED', value: formatCurrencyCompact(data.cod.collectedTotal) },
     { label: 'COD PENDING', value: formatCurrencyCompact(data.cod.pendingBankings), highlight: data.cod.pendingBankings > 0, highlightColor: 'orange' as const },
     { label: 'EXCEPTIONS', value: data.exceptionCount, highlight: data.exceptionCount > 0, highlightColor: 'red' as const },
-    { label: 'FULFILLMENT %', value: `${data.orders.fulfillmentRate}%` },
   ]
 
   const stockHealthData = [
@@ -337,6 +344,67 @@ export default function DashboardModule() {
                 ))}
               </div>
             </>
+          )}
+        </div>
+      </div>
+
+      {/* Live Activity Feed */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
+            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Recent Inbound</h3>
+          </div>
+          {data.recentInbound.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No recent inbound</p>
+          ) : (
+            <div className="max-h-48 overflow-y-auto">
+              {data.recentInbound.slice(0, 8).map((r, i) => {
+                const id = String(r.inboundId || '')
+                const product = String(r.productName || '')
+                const merchant = String(r.merchantName || '')
+                const qty = String(r.qtyIn || '')
+                const time = r.createdAt ? new Date(String(r.createdAt)).toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''
+                return (
+                  <div key={i} className="px-4 py-1.5 border-b border-gray-50 flex items-center gap-2 text-[11px]">
+                    <span className="font-mono text-gray-500 w-20">{id}</span>
+                    <span className="flex-1 text-gray-700 truncate">{product}</span>
+                    <span className="text-gray-400 truncate max-w-[80px]">{merchant}</span>
+                    <span className="font-mono text-blue-600">×{qty}</span>
+                    <span className="text-gray-400 w-20 text-right">{time}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
+            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Recent Outbound</h3>
+          </div>
+          {data.recentOutbound.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No recent outbound</p>
+          ) : (
+            <div className="max-h-48 overflow-y-auto">
+              {data.recentOutbound.slice(0, 8).map((r, i) => {
+                const id = String(r.orderNumber || r.outboundId || '')
+                const customer = String(r.customerName || '')
+                const product = String(r.productName || '')
+                const qty = String(r.qty || '')
+                const status = String(r.status || '')
+                const time = r.createdAt ? new Date(String(r.createdAt)).toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''
+                return (
+                  <div key={i} className="px-4 py-1.5 border-b border-gray-50 flex items-center gap-2 text-[11px]">
+                    <span className="font-mono text-gray-500 w-20">{id}</span>
+                    <span className="flex-1 text-gray-700 truncate">{customer}</span>
+                    <span className="text-gray-400 truncate max-w-[80px]">{product}</span>
+                    <span className="font-mono text-orange-600">×{qty}</span>
+                    <StatusPill status={status} />
+                    <span className="text-gray-400 w-20 text-right">{time}</span>
+                  </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </div>

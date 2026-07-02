@@ -88,7 +88,8 @@ export function rowTint(status: string): string {
 
 // ── KPI Ribbon ──
 // Single dense horizontal bar. Replaces 3-4 card stats. Dark navy, white tabular numbers.
-export function KpiRibbon({ cells }: { cells: Array<{ label: string; value: string | number; highlight?: boolean; highlightColor?: 'red' | 'green' | 'orange' }> }) {
+// Supports optional trend arrows (↑/↓ with % change).
+export function KpiRibbon({ cells }: { cells: Array<{ label: string; value: string | number; highlight?: boolean; highlightColor?: 'red' | 'green' | 'orange'; trend?: number; trendLabel?: string }> }) {
   return (
     <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
       {cells.map((c, i) => {
@@ -97,13 +98,22 @@ export function KpiRibbon({ cells }: { cells: Array<{ label: string; value: stri
           : c.highlightColor === 'orange' ? 'bg-orange-500/20'
           : 'bg-red-500/20'
           : ''
+        const trendUp = (c.trend ?? 0) >= 0
         return (
           <div
             key={c.label}
             className={`flex-1 px-3 py-2 flex flex-col justify-center border-r border-white/10 ${bg} ${i === cells.length - 1 ? 'border-r-0' : ''} min-w-0`}
           >
             <span className="text-[9px] text-blue-200/60 uppercase tracking-wider font-medium truncate">{c.label}</span>
-            <span className="font-mono font-bold text-base tabular-nums truncate">{c.value}</span>
+            <div className="flex items-baseline gap-1">
+              <span className="font-mono font-bold text-base tabular-nums truncate">{c.value}</span>
+              {c.trend !== undefined && (
+                <span className={`text-[9px] font-mono ${trendUp ? 'text-green-400' : 'text-red-400'}`}>
+                  {trendUp ? '↑' : '↓'}{Math.abs(c.trend)}%
+                </span>
+              )}
+            </div>
+            {c.trendLabel && <span className="text-[8px] text-blue-200/40 truncate">{c.trendLabel}</span>}
           </div>
         )
       })}
