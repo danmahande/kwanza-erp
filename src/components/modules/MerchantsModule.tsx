@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight } from 'lucide-react'
+import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -96,6 +96,10 @@ export default function MerchantsModule() {
   const [rateCardHistory, setRateCardHistory] = useState<RateCard[]>([])
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [activityData, setActivityData] = useState<Array<Record<string, unknown>>>([])
+  const [activityLoading, setActivityLoading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
 
   const [form, setForm] = useState({
     businessName: '', contact: '', email: '', deliveryType: 'self-delivery',
@@ -245,6 +249,69 @@ export default function MerchantsModule() {
     return `${months}mo ago`
   }
 
+  // #20: Activity timeline — fetch when a merchant is expanded
+  const handleExpand = async (merchant: Merchant) => {
+    const newId = expandedId === merchant.id ? null : merchant.id
+    setExpandedId(newId)
+    if (newId) {
+      setActivityLoading(true)
+      try {
+        const res = await fetch(`/api/merchants/${merchant.id}/activity?limit=15`)
+        const d = await res.json()
+        setActivityData(d.timeline || [])
+      } catch {
+        setActivityData([])
+      } finally {
+        setActivityLoading(false)
+      }
+    }
+  }
+
+  // #17: CSV import — parse and bulk create
+  const handleImport = async () => {
+    if (!importText.trim()) { toast.error('Paste CSV data first'); return }
+    const lines = importText.trim().split('\n')
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim())
+    const requiredCols = ['businessname', 'contact', 'email']
+    for (const col of requiredCols) {
+      if (!header.includes(col)) { toast.error(`CSV must have columns: ${requiredCols.join(', ')} (and optionally: deliverytype, taxid, bankname, bankaccount)`); return }
+    }
+    let success = 0, failed = 0
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim())
+      if (vals.length < 3) continue
+      const row: Record<string, string> = {}
+      header.forEach((h, j) => { row[h] = vals[j] || '' })
+      try {
+        await fetch('/api/merchants', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: row.businessname, contact: row.contact, email: row.email,
+            deliveryType: row.deliverytype || 'self-delivery',
+            taxId: row.taxid || '', bankName: row.bankname || '', bankAccount: row.bankaccount || '',
+            isActive: true, createdBy: 'admin',
+          }),
+        })
+        success++
+      } catch { failed++ }
+    }
+    toast.success(`Imported ${success} merchants${failed > 0 ? `, ${failed} failed` : ''}`)
+    setImportOpen(false); setImportText(''); fetchData()
+  }
+
+  // #13: Contract status helper
+  const contractStatus = (m: Merchant): { label: string; color: string } | null => {
+    if (!m.contractStart && !m.contractEnd) return null
+    const now = new Date()
+    if (m.contractEnd && new Date(m.contractEnd) < now) return { label: 'EXPIRED', color: 'bg-red-100 text-red-700' }
+    if (m.contractEnd) {
+      const daysLeft = Math.ceil((new Date(m.contractEnd).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+      if (daysLeft <= 30) return { label: `EXPIRES IN ${daysLeft}d`, color: 'bg-orange-100 text-orange-700' }
+    }
+    if (m.contractStart && new Date(m.contractStart) > now) return { label: 'UPCOMING', color: 'bg-blue-100 text-blue-700' }
+    return { label: 'ACTIVE', color: 'bg-green-100 text-green-700' }
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       <OpsHeader
@@ -256,7 +323,11 @@ export default function MerchantsModule() {
         searchPlaceholder="Search by name, ID, contact, or email..."
         actionLabel="Add Merchant"
         onAction={() => { setEditing(null); setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' }); setOpen(true) }}
-      />
+      >
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
+          <Upload size={12} className="mr-1" /> Import CSV
+        </Button>
+      </OpsHeader>
 
       {/* Filter chips (#6, #7) */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -307,7 +378,7 @@ export default function MerchantsModule() {
               const isExpanded = expandedId === m.id
               return (
                 <>
-                  <DenseTr key={m.id} onClick={() => setExpandedId(isExpanded ? null : m.id)} tint={m.isActive ? '' : 'bg-gray-50/50'}>
+                  <DenseTr key={m.id} onClick={() => handleExpand(m)} tint={m.isActive ? '' : 'bg-gray-50/50'}>
                     <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
                     <DenseTd className="text-gray-900 font-medium">{m.businessName}</DenseTd>
                     <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
@@ -318,9 +389,12 @@ export default function MerchantsModule() {
                     <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</DenseTd>
                     <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
                     <DenseTd className="text-center">
-                      <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
-                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
-                      </button>
+                      <div className="flex flex-col items-center gap-1">
+                        <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
+                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
+                        </button>
+                        {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[8px] px-1 py-0.5 rounded font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
+                      </div>
                     </DenseTd>
                     <DenseTd right>
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
@@ -422,6 +496,60 @@ export default function MerchantsModule() {
                             </div>
                           </div>
                         )}
+
+                        {/* #13: Contract management section */}
+                        {(m.contractStart || m.contractEnd) && (
+                          <div className="mt-3 pt-3 border-t border-gray-100">
+                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1">
+                              <Calendar size={10} /> Contract
+                              {(() => { const cs = contractStatus(m); return cs ? <span className={`ml-auto text-[9px] px-1.5 py-0.5 rounded font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
+                            </p>
+                            <div className="flex items-center gap-4 text-xs text-gray-600">
+                              {m.contractStart && <span>Start: <span className="font-mono text-gray-700">{new Date(m.contractStart).toLocaleDateString('en-UG')}</span></span>}
+                              {m.contractEnd && <span>End: <span className="font-mono text-gray-700">{new Date(m.contractEnd).toLocaleDateString('en-UG')}</span></span>}
+                              {!m.contractEnd && <span className="text-gray-400">Open-ended (no expiry)</span>}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* #20: Activity timeline */}
+                        <div className="mt-3 pt-3 border-t border-gray-100">
+                          <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1">
+                            <Clock size={10} /> Activity Timeline
+                          </p>
+                          {activityLoading ? (
+                            <p className="text-xs text-gray-400 text-center py-3">Loading activity...</p>
+                          ) : activityData.length === 0 ? (
+                            <p className="text-xs text-gray-400 text-center py-3">No recent activity</p>
+                          ) : (
+                            <div className="max-h-48 overflow-y-auto space-y-1">
+                              {activityData.map((event, i) => {
+                                const iconMap: Record<string, typeof ArrowDownRight> = {
+                                  inbound: ArrowDownRight, outbound: ArrowUpRight, payment: DollarSign,
+                                  statement: FileText, shrinkage: AlertTriangle, rtv: RotateCcw, rma: PackageX,
+                                }
+                                const colorMap: Record<string, string> = {
+                                  inbound: 'text-blue-600', outbound: 'text-orange-600', payment: 'text-green-600',
+                                  statement: 'text-purple-600', shrinkage: 'text-red-600', rtv: 'text-red-500', rma: 'text-red-400',
+                                }
+                                const Icon = iconMap[String(event.icon)] || Clock
+                                const color = colorMap[String(event.type)] || 'text-gray-500'
+                                const ts = new Date(String(event.timestamp))
+                                return (
+                                  <div key={i} className="flex items-start gap-2 text-[11px] py-1 border-b border-gray-50">
+                                    <Icon size={12} className={`${color} mt-0.5 shrink-0`} />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-gray-700 truncate">{String(event.label)}</p>
+                                      <p className="text-gray-400 text-[10px]">{String(event.description)}</p>
+                                    </div>
+                                    {event.amount ? <span className="font-mono text-gray-600 shrink-0">{formatCurrencyCompact(Number(event.amount))}</span> : null}
+                                    <span className="text-gray-400 text-[10px] shrink-0 w-20 text-right">{ts.toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -545,6 +673,35 @@ export default function MerchantsModule() {
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader><AlertDialogTitle>Delete Merchant</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* #17: CSV Import dialog */}
+      <AlertDialog open={importOpen} onOpenChange={setImportOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Upload size={18} /> Import Merchants from CSV</AlertDialogTitle>
+            <AlertDialogDescription>
+              Paste CSV data below. Required columns: businessName, contact, email.
+              Optional: deliveryType, taxId, bankName, bankAccount.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <textarea
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={'businessName,contact,email,deliveryType,taxId,bankName,bankAccount\nAcme Ltd,0700123456,acme@gmail.com,consignment,TIN123456,Stanbic,9012345678\nBidco Africa,0700789012,bidco@gmail.com,self-delivery,TIN789012,MTN,2001234567'}
+              rows={8}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-mono"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              First line must be the header row. Each subsequent line is one merchant.
+              deliveryType options: self-delivery, drop-ship, consignment.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImport} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Import</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </motion.div>
