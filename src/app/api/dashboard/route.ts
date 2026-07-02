@@ -44,12 +44,12 @@ export async function GET(request: NextRequest) {
     const totalStockUnits = allProducts.reduce((sum, p) => sum + p.currentStock, 0)
     const totalStockValue = allProducts.reduce((sum, p) => sum + (p.currentStock * p.unitCost), 0)
 
-    // ── Inbound / Outbound ──
-    const inboundRecords = await db.inboundRecord.findMany({ orderBy: { createdAt: 'desc' }, take: 10 })
-    const outboundRecords = await db.outboundRecord.findMany({ orderBy: { createdAt: 'desc' }, take: 10 })
+    // ── Inbound / Outbound (filtered by period) ──
+    const inboundRecords = await db.inboundRecord.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' }, take: 10 })
+    const outboundRecords = await db.outboundRecord.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' }, take: 10 })
 
-    // ── Order Status ──
-    const statusCounts = await db.outboundRecord.groupBy({ by: ['status'], _count: { status: true } })
+    // ── Order Status (filtered by period) ──
+    const statusCounts = await db.outboundRecord.groupBy({ by: ['status'], where: { createdAt: { gte: startDate } }, _count: { status: true } })
     const orderStatusDistribution = statusCounts.map(s => ({ status: s.status, count: s._count.status }))
     const pendingCount = statusCounts.find(s => s.status === 'pending')?._count.status || 0
     const dispatchedCount = statusCounts.find(s => s.status === 'dispatched')?._count.status || 0
@@ -61,16 +61,16 @@ export async function GET(request: NextRequest) {
     const exceptionCount = failedCount + returnedCount
     const exceptionRate = totalOrders > 0 ? Math.round((exceptionCount / totalOrders) * 100) : 0
 
-    // ── Financial ──
-    const payments = await db.merchantPayment.findMany({ orderBy: { createdAt: 'desc' } })
+    // ── Financial (filtered by period) ──
+    const payments = await db.merchantPayment.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' } })
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0)
     const totalCommission = allProducts.reduce((sum, p) => sum + (p.currentStock * p.unitSellingPrice * p.commissionPercent / 100), 0)
     const avgOrderValue = deliveredCount > 0 ? Math.round((totalRevenue || 0) / deliveredCount) : 0
     const revenuePerMerchant = totalMerchants > 0 ? Math.round((totalRevenue || 0) / totalMerchants) : 0
 
-    // ── COD Metrics ──
+    // ── COD Metrics (filtered by period) ──
     const codCollectedAgg = await db.outboundRecord.aggregate({
-      where: { status: 'delivered', codCollected: { not: null } },
+      where: { status: 'delivered', codCollected: { not: null }, deliveredAt: { gte: startDate } },
       _sum: { codCollected: true },
       _count: true,
     })
@@ -90,15 +90,15 @@ export async function GET(request: NextRequest) {
     const codBanked = verifiedBankingsAgg._sum.amount ?? 0
     const bankingRate = codCollectedTotal > 0 ? Math.round((codBanked / codCollectedTotal) * 100) : 0
 
-    // ── Driver Performance ──
+    // ── Driver Performance (filtered by period) ──
     const activeDriverRecords = await db.driver.findMany({
       where: { status: 'active' },
       select: { driverId: true, name: true, expectedBankings: true, banked: true },
     })
     const driverPerformance = await Promise.all(activeDriverRecords.map(async (d) => {
-      const disp = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: { in: ['dispatched', 'delivered'] } } })
-      const del = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'delivered' } })
-      const failed = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'failed' } })
+      const disp = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: { in: ['dispatched', 'delivered'] }, createdAt: { gte: startDate } } })
+      const del = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'delivered', deliveredAt: { gte: startDate } } })
+      const failed = await db.outboundRecord.count({ where: { assignedDriver: d.driverId, status: 'failed', createdAt: { gte: startDate } } })
       const codAgg = await db.outboundRecord.aggregate({
         where: { assignedDriver: d.driverId, status: 'delivered', codCollected: { not: null } },
         _sum: { codCollected: true },
@@ -113,9 +113,9 @@ export async function GET(request: NextRequest) {
       }
     }))
 
-    // ── On-Time Rate (same-day delivery) ──
+    // ── On-Time Rate (same-day delivery, filtered by period) ──
     const deliveredWithDates = await db.outboundRecord.findMany({
-      where: { status: 'delivered', dispatchedAt: { not: null }, deliveredAt: { not: null } },
+      where: { status: 'delivered', dispatchedAt: { not: null }, deliveredAt: { gte: startDate, not: null } },
       select: { dispatchedAt: true, deliveredAt: true, createdAt: true },
     })
     const sameDay = deliveredWithDates.filter(r => r.dispatchedAt!.toDateString() === r.deliveredAt!.toDateString()).length
@@ -128,10 +128,9 @@ export async function GET(request: NextRequest) {
       : 0
     const avgCycleTimeHours = Math.round(avgCycleTimeMs / (1000 * 60 * 60))
 
-    // ── First-Attempt Delivery Success Rate ──
-    // deliveryAttempts = 0 or 1 means first-attempt success; > 1 means re-attempt
+    // ── First-Attempt Delivery Success Rate (filtered by period) ──
     const allDeliveredRecords = await db.outboundRecord.findMany({
-      where: { status: 'delivered' },
+      where: { status: 'delivered', deliveredAt: { gte: startDate } },
       select: { deliveryAttempts: true },
     })
     const firstAttemptSuccess = allDeliveredRecords.filter(r => (r.deliveryAttempts ?? 0) <= 1).length
@@ -247,22 +246,22 @@ export async function GET(request: NextRequest) {
 
     const comparison = { revenueChange, ordersChange, stockValueChange, avgOrderChange }
 
-    // ── Top Merchants ──
+    // ── Top Merchants (filtered by period) ──
     const topMerchants = await db.merchantPayment.groupBy({
-      by: ['merchantName'], _sum: { amount: true }, orderBy: { _sum: { amount: 'desc' } }, take: 5,
+      by: ['merchantName'], where: { createdAt: { gte: startDate } }, _sum: { amount: true }, orderBy: { _sum: { amount: 'desc' } }, take: 5,
     })
 
-    // ── Payment Methods ──
+    // ── Payment Methods (filtered by period) ──
     const paymentMethods = await db.merchantPayment.groupBy({
-      by: ['paymentMethod'], _count: { paymentMethod: true }, _sum: { amount: true },
+      by: ['paymentMethod'], where: { createdAt: { gte: startDate } }, _count: { paymentMethod: true }, _sum: { amount: true },
     })
 
     // ── Categories ──
     const categories = await db.product.groupBy({ by: ['category'], _count: { category: true } })
 
-    // ── Shrinkage ──
-    const totalShrinkageQty = await db.shrinkageRecord.aggregate({ _sum: { qty: true } })
-    const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], _sum: { qty: true }, _count: { reason: true } })
+    // ── Shrinkage (filtered by period) ──
+    const totalShrinkageQty = await db.shrinkageRecord.aggregate({ where: { createdAt: { gte: startDate } }, _sum: { qty: true } })
+    const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], where: { createdAt: { gte: startDate } }, _sum: { qty: true }, _count: { reason: true } })
 
     // ── Merchant Profitability (revenue - commission - shrinkage - returns) ──
     const merchantProfitability: Array<{ name: string; revenue: number; commission: number; shrinkage: number; returns: number; net: number }> = []

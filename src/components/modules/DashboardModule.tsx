@@ -1,15 +1,16 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import {
   AlertTriangle, CheckCircle2, XCircle, AlertCircle, Shield,
-  TrendingUp, TrendingDown, ChevronRight, Clock,
+  TrendingUp, TrendingDown, ChevronRight, Clock, ChevronDown, Download,
 } from 'lucide-react'
 import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr, StatusPill } from '@/components/shared/ops-ui'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -75,19 +76,84 @@ const tooltipStyle = {
 
 export default function DashboardModule({ onNavigate }: DashboardModuleProps = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [period, setPeriod] = useState('This Month')
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const fetchData = useCallback(() => {
-    fetch('/api/dashboard?period=This Month')
+    fetch(`/api/dashboard?period=${encodeURIComponent(period)}`)
       .then(r => r.json())
       .then(setData)
       .catch(() => {})
-  }, [])
+  }, [period])
 
   useEffect(() => {
     fetchData()
     const interval = setInterval(fetchData, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
+
+  const periods = ['Today', 'This Week', 'This Month', 'This Quarter', 'All Time']
+
+  const handleExport = async () => {
+    if (!data) return
+    setExporting(true)
+    try {
+      // Build a CSV from the dashboard data
+      const rows: string[] = []
+      rows.push('Kwanza Logistics — Dashboard Export')
+      rows.push(`Period: ${period}`)
+      rows.push(`Generated: ${new Date().toLocaleString('en-UG')}`)
+      rows.push('')
+      rows.push('KPI Summary')
+      rows.push(`Revenue,${data.stats.totalRevenue}`)
+      rows.push(`Orders,${data.orders.total}`)
+      rows.push(`Delivered,${data.orders.delivered}`)
+      rows.push(`On-Time Rate,${data.onTimeRate}%`)
+      rows.push(`First Attempt Rate,${data.firstAttemptRate}%`)
+      rows.push(`Cycle Time (hours),${data.avgCycleTimeHours}`)
+      rows.push(`COD Collected,${data.cod.collectedTotal}`)
+      rows.push(`COD Pending,${data.cod.pendingBankings}`)
+      rows.push(`Exceptions,${data.exceptionCount}`)
+      rows.push('')
+      rows.push('Driver Performance')
+      rows.push('Driver,Dispatched,Delivered,Failed,COD Collected,Banking Status')
+      data.driverPerformance.forEach(d => {
+        rows.push(`${d.name},${d.dispatched},${d.delivered},${d.failed},${d.codCollected},${d.bankingStatus}`)
+      })
+      rows.push('')
+      rows.push('Merchant Profitability')
+      rows.push('Merchant,Revenue,Commission,Shrinkage,Returns,Net')
+      data.merchantProfitability.forEach(m => {
+        rows.push(`${m.name},${m.revenue},${m.commission},${m.shrinkage},${m.returns},${m.net}`)
+      })
+      rows.push('')
+      rows.push('Top Merchants by Revenue')
+      rows.push('Merchant,Revenue')
+      data.topMerchants.forEach(m => {
+        rows.push(`${m.name},${m.amount}`)
+      })
+      rows.push('')
+      rows.push('Alerts')
+      rows.push('Type,Message,Module')
+      data.alerts.forEach(a => {
+        rows.push(`${a.type},${a.message},${a.module}`)
+      })
+
+      const csv = rows.join('\n')
+      const blob = new Blob([csv], { type: 'text/csv' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `kwanza-dashboard-${period.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      // silent
+    } finally {
+      setExporting(false)
+    }
+  }
 
   if (!data) {
     return (
@@ -136,12 +202,61 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
           <h1 className="text-lg font-bold text-gray-900">Dashboard</h1>
           <p className="text-[11px] text-gray-500">Real-time overview · Auto-refresh 30s</p>
         </div>
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 border border-green-100">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-          </span>
-          <span className="text-xs font-medium text-green-700">Live</span>
+        <div className="flex items-center gap-2">
+          {/* Live indicator */}
+          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 border border-green-100">
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+            </span>
+            <span className="text-xs font-medium text-green-700">Live</span>
+          </div>
+
+          {/* Period selector (#13) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPeriodMenu(!showPeriodMenu)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:border-gray-300 text-xs font-medium text-gray-700"
+            >
+              {period}
+              <ChevronDown size={12} className={`text-gray-400 transition-transform ${showPeriodMenu ? 'rotate-180' : ''}`} />
+            </button>
+            <AnimatePresence>
+              {showPeriodMenu && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                  transition={{ duration: 0.12 }}
+                  className="absolute right-0 top-full mt-1 w-40 bg-white rounded-lg shadow-xl border border-gray-100 py-1 z-50"
+                >
+                  {periods.map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => { setPeriod(p); setShowPeriodMenu(false) }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                        p === period ? 'bg-[#FF6B35] text-white font-medium' : 'text-gray-600 hover:bg-gray-50'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* Export button (#14) */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExport}
+            disabled={exporting}
+            className="h-7 text-xs rounded-md"
+          >
+            <Download size={12} className="mr-1" />
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </Button>
         </div>
       </div>
 
