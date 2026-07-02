@@ -54,10 +54,40 @@ model Merchant {
   pendingPayment         Float      @default(0)
   /// Outstanding storage liability (accrued daily, settled on statement generation)
   storageLiabilityBalance Float     @default(0)
+  /// Operational hold — when true, blocks new inbounds/orders for this merchant.
+  /// Lightweight replacement for formal credit control. Set manually by supervisor
+  /// when merchant has overdue statement balance or service dispute.
+  isOnHold        Boolean           @default(false)
+  holdReason      String?
+  holdSetAt       DateTime?
+  holdSetBy       String?
   isActive        Boolean           @default(true)
   createdBy       String
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+}
+
+/// Merchant communication log — calls, WhatsApp, emails, visits, meetings.
+/// Fills the gap between system events (activity timeline) and human-to-human contact.
+model MerchantCommunication {
+  id              String    @id @default(cuid())
+  merchantId      String
+  /// Type of contact: call | whatsapp | email | visit | meeting | other
+  type            String    @default("call")
+  /// Direction: inbound | outbound
+  direction       String    @default("outbound")
+  subject         String
+  notes           String?
+  /// Who on our side made/received the contact
+  recordedBy      String
+  /// Optional follow-up date — surfaces in "follow-ups due" banner
+  followUpAt      DateTime?
+  isResolved      Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  @@index([merchantId])
+  @@index([followUpAt])
+  @@index([createdAt])
 }
 
 /// Per-merchant contracted rate card. One warehouse, many rate cards.

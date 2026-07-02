@@ -20,6 +20,7 @@ export async function GET(req: NextRequest) {
     if (deliveryType) where.deliveryType = deliveryType
     if (status === 'active') where.isActive = true
     if (status === 'inactive') where.isActive = false
+    if (status === 'onhold') where.isOnHold = true
 
     const merchants = await db.merchant.findMany({
       where,
@@ -44,6 +45,18 @@ export async function GET(req: NextRequest) {
         where: { merchantId: m.merchantId },
         orderBy: { createdAt: 'desc' },
         select: { createdAt: true },
+      })
+      const lastComm = await db.merchantCommunication.findFirst({
+        where: { merchantId: m.merchantId },
+        orderBy: { createdAt: 'desc' },
+        select: { createdAt: true, type: true, subject: true },
+      })
+      const pendingFollowUps = await db.merchantCommunication.count({
+        where: {
+          merchantId: m.merchantId,
+          isResolved: false,
+          followUpAt: { lte: new Date() },
+        },
       })
 
       // #2: Profitability calculation
@@ -70,6 +83,10 @@ export async function GET(req: NextRequest) {
         lastInboundAt: lastInbound?.createdAt || null,
         lastOutboundAt: lastOutbound?.createdAt || null,
         lastPaymentAt: lastPayment?.createdAt || null,
+        lastCommunicationAt: lastComm?.createdAt || null,
+        lastCommunicationType: lastComm?.type || null,
+        lastCommunicationSubject: lastComm?.subject || null,
+        pendingFollowUps,
         profitability: { revenue: mRevenue, commission: mCommission, shrinkage: mShrinkage, returns: mReturns, net: mNet },
         statements,
       }
@@ -105,12 +122,25 @@ export async function PUT(req: NextRequest) {
   try {
     const body = await req.json()
     const { id, ...data } = body
+
+    // Special handling for hold toggle — record who/when
+    if (typeof data.isOnHold === 'boolean') {
+      if (data.isOnHold) {
+        data.holdSetAt = new Date()
+        data.holdSetBy = data.holdSetBy || 'admin'
+      } else {
+        data.holdSetAt = null
+        data.holdSetBy = null
+        data.holdReason = null
+      }
+    }
+
     const merchant = await db.merchant.update({ where: { id }, data })
     await logAudit({
       action: 'UPDATE',
       module: 'merchants',
       entityId: merchant.merchantId,
-      details: `Updated merchant ${merchant.businessName}`,
+      details: `Updated merchant ${merchant.businessName}${typeof body.isOnHold === 'boolean' ? ` — ${body.isOnHold ? 'PLACED ON HOLD' : 'released from hold'}` : ''}`,
     })
     return NextResponse.json(merchant)
   } catch {

@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2 } from 'lucide-react'
+import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -26,6 +26,10 @@ interface Merchant {
   deliveryType: string | null
   currency: string
   isActive: boolean
+  isOnHold: boolean
+  holdReason: string | null
+  holdSetAt: string | null
+  holdSetBy: string | null
   createdAt: string
   taxId: string | null
   address: string | null
@@ -49,11 +53,47 @@ interface Merchant {
   lastInboundAt: string | null
   lastOutboundAt: string | null
   lastPaymentAt: string | null
+  lastCommunicationAt: string | null
+  lastCommunicationType: string | null
+  lastCommunicationSubject: string | null
+  pendingFollowUps: number
   profitability: { revenue: number; commission: number; shrinkage: number; returns: number; net: number }
   statements: Array<{
     id: string; statementId: string; period: string; netPayable: number
     isPaid: boolean; status: string; createdAt: string
   }>
+}
+
+interface CommunicationEntry {
+  id: string
+  merchantId: string
+  type: string
+  direction: string
+  subject: string
+  notes: string | null
+  recordedBy: string
+  followUpAt: string | null
+  isResolved: boolean
+  createdAt: string
+}
+
+interface PerformanceData {
+  merchantId: string
+  businessName: string
+  currency: string
+  window: { days: number; since: string }
+  totals: {
+    orders: number; delivered: number; cancelled: number; failed: number; inTransit: number
+    returns: number; rma: number; shrinkageQty: number; shrinkageValue: number
+    inboundQty: number; inboundValue: number
+  }
+  rates: {
+    successRate: number; firstAttemptRate: number; returnsRate: number
+    cancellationRate: number; codRate: number
+  }
+  cycleTime: { avgHours: number; avgDays: number; samples: number }
+  cod: { totalSale: number; totalCollected: number; shortfall: number }
+  sparkline: Array<{ date: string; total: number; delivered: number }>
 }
 
 interface RateCard {
@@ -76,6 +116,7 @@ const FILTER_CHIPS = [
   { key: 'all', label: 'All', deliveryType: '', status: '' },
   { key: 'active', label: 'Active', deliveryType: '', status: 'active' },
   { key: 'inactive', label: 'Inactive', deliveryType: '', status: 'inactive' },
+  { key: 'onhold', label: 'On Hold', deliveryType: '', status: 'onhold' },
   { key: 'self-delivery', label: 'Self-Delivery', deliveryType: 'self-delivery', status: '' },
   { key: 'drop-ship', label: 'Drop-Ship', deliveryType: 'drop-ship', status: '' },
   { key: 'consignment', label: 'Consignment', deliveryType: 'consignment', status: '' },
@@ -100,6 +141,17 @@ export default function MerchantsModule() {
   const [activityLoading, setActivityLoading] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [importText, setImportText] = useState('')
+
+  // Slide-over tab state: 'overview' | 'performance' | 'communication'
+  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'communication'>('overview')
+  const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null)
+  const [performanceLoading, setPerformanceLoading] = useState(false)
+  const [perfWindow, setPerfWindow] = useState(30)
+  const [commEntries, setCommEntries] = useState<CommunicationEntry[]>([])
+  const [commLoading, setCommLoading] = useState(false)
+  const [commForm, setCommForm] = useState({ type: 'call', direction: 'outbound', subject: '', notes: '', followUpAt: '', isResolved: true })
+  const [holdDialogOpen, setHoldDialogOpen] = useState(false)
+  const [holdReason, setHoldReason] = useState('')
 
   const [form, setForm] = useState({
     businessName: '', contact: '', email: '', deliveryType: 'self-delivery',
@@ -126,15 +178,18 @@ export default function MerchantsModule() {
 
   const totalMerchants = data.length
   const activeMerchants = data.filter(m => m.isActive).length
+  const onHoldMerchants = data.filter(m => m.isOnHold).length
   const totalPending = data.reduce((s, m) => s + (m.pendingPayment || 0), 0)
   const totalStorage = data.reduce((s, m) => s + (m.storageLiabilityBalance || 0), 0)
+  const followUpsDue = data.reduce((s, m) => s + (m.pendingFollowUps || 0), 0)
 
   const kpiCells = [
     { label: 'MERCHANTS', value: totalMerchants },
     { label: 'ACTIVE', value: activeMerchants },
+    { label: 'ON HOLD', value: onHoldMerchants, highlight: onHoldMerchants > 0, highlightColor: 'red' as const },
+    { label: 'FOLLOW-UPS DUE', value: followUpsDue, highlight: followUpsDue > 0, highlightColor: 'orange' as const },
     { label: 'PENDING PAYMENTS', value: formatCurrencyCompact(totalPending), highlight: totalPending > 0, highlightColor: 'orange' as const },
     { label: 'STORAGE LIABILITY', value: formatCurrencyCompact(totalStorage) },
-    { label: 'TOTAL SALES', value: formatCurrencyCompact(data.reduce((s, m) => s + (m.totalSalesValue || 0), 0)) },
   ]
 
   const handleSubmit = async () => {
@@ -253,6 +308,9 @@ export default function MerchantsModule() {
   const handleExpand = async (merchant: Merchant) => {
     setSelectedMerchant(merchant)
     setProfileOpen(true)
+    setActiveTab('overview')
+    setPerformanceData(null)
+    setCommEntries([])
     setActivityLoading(true)
     try {
       const res = await fetch(`/api/merchants/${merchant.id}/activity?limit=15`)
@@ -263,6 +321,126 @@ export default function MerchantsModule() {
     } finally {
       setActivityLoading(false)
     }
+  }
+
+  // Load performance data when Performance tab is opened
+  const loadPerformance = async (merchant: Merchant, days: number) => {
+    setPerformanceLoading(true)
+    try {
+      const res = await fetch(`/api/merchants/${merchant.id}/performance?days=${days}`)
+      const d = await res.json()
+      setPerformanceData(d)
+    } catch {
+      setPerformanceData(null)
+      toast.error('Failed to load performance')
+    } finally {
+      setPerformanceLoading(false)
+    }
+  }
+
+  // Load communication entries when Communication tab is opened
+  const loadCommunication = async (merchant: Merchant) => {
+    setCommLoading(true)
+    try {
+      const res = await fetch(`/api/merchant-communication?merchantId=${merchant.merchantId}&limit=50`)
+      const d = await res.json()
+      setCommEntries(Array.isArray(d) ? d : [])
+    } catch {
+      setCommEntries([])
+    } finally {
+      setCommLoading(false)
+    }
+  }
+
+  // Switch tab + lazy-load data
+  const handleTabSwitch = (tab: 'overview' | 'performance' | 'communication') => {
+    setActiveTab(tab)
+    if (!selectedMerchant) return
+    if (tab === 'performance' && !performanceData) loadPerformance(selectedMerchant, perfWindow)
+    if (tab === 'communication' && commEntries.length === 0) loadCommunication(selectedMerchant)
+  }
+
+  // Change performance window
+  const handlePerfWindowChange = (days: number) => {
+    setPerfWindow(days)
+    if (selectedMerchant) loadPerformance(selectedMerchant, days)
+  }
+
+  // Save new communication entry
+  const handleSaveComm = async () => {
+    if (!selectedMerchant) return
+    if (!commForm.subject.trim()) { toast.error('Subject is required'); return }
+    try {
+      const res = await fetch('/api/merchant-communication', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantId: selectedMerchant.merchantId,
+          type: commForm.type,
+          direction: commForm.direction,
+          subject: commForm.subject,
+          notes: commForm.notes || null,
+          recordedBy: 'admin',
+          followUpAt: commForm.followUpAt ? new Date(commForm.followUpAt).toISOString() : null,
+          isResolved: commForm.isResolved,
+        }),
+      })
+      if (res.ok) {
+        toast.success('Communication logged')
+        setCommForm({ type: 'call', direction: 'outbound', subject: '', notes: '', followUpAt: '', isResolved: true })
+        loadCommunication(selectedMerchant)
+        fetchData()
+      } else { toast.error('Failed to log') }
+    } catch { toast.error('Failed to log') }
+  }
+
+  // Delete communication entry
+  const handleDeleteComm = async (id: string) => {
+    if (!selectedMerchant) return
+    await fetch(`/api/merchant-communication?id=${id}`, { method: 'DELETE' })
+    toast.success('Entry deleted')
+    loadCommunication(selectedMerchant)
+    fetchData()
+  }
+
+  // Toggle resolved state of a comm entry
+  const handleToggleResolved = async (entry: CommunicationEntry) => {
+    if (!selectedMerchant) return
+    await fetch('/api/merchant-communication', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, isResolved: !entry.isResolved }),
+    })
+    loadCommunication(selectedMerchant)
+    fetchData()
+  }
+
+  // Toggle hold status — opens dialog to capture reason when placing on hold
+  const handleHoldToggle = (merchant: Merchant) => {
+    if (merchant.isOnHold) {
+      // Release — no reason needed
+      fetch('/api/merchants', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: merchant.id, isOnHold: false }),
+      }).then(() => {
+        toast.success(`${merchant.businessName} released from hold`)
+        fetchData()
+        if (selectedMerchant?.id === merchant.id) setSelectedMerchant({ ...merchant, isOnHold: false })
+      })
+    } else {
+      setHoldReason('')
+      setHoldDialogOpen(true)
+    }
+  }
+
+  const handleConfirmHold = async () => {
+    if (!selectedMerchant) return
+    await fetch('/api/merchants', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: selectedMerchant.id, isOnHold: true, holdReason: holdReason || 'Overdue balance / dispute', holdSetBy: 'admin' }),
+    })
+    toast.success(`${selectedMerchant.businessName} placed on hold`)
+    setHoldDialogOpen(false)
+    setSelectedMerchant({ ...selectedMerchant, isOnHold: true, holdReason: holdReason || 'Overdue balance / dispute' })
+    fetchData()
   }
 
   // #17: CSV import — parse and bulk create
@@ -304,7 +482,8 @@ export default function MerchantsModule() {
     if (m.contractEnd && new Date(m.contractEnd) < now) return { label: 'EXPIRED', color: 'bg-red-100 text-red-700' }
     if (m.contractEnd) {
       const daysLeft = Math.ceil((new Date(m.contractEnd).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-      if (daysLeft <= 30) return { label: `EXPIRES IN ${daysLeft}d`, color: 'bg-orange-100 text-orange-700' }
+      if (daysLeft <= 7) return { label: `${daysLeft}d LEFT`, color: 'bg-red-100 text-red-700' }
+      if (daysLeft <= 30) return { label: `${daysLeft}d LEFT`, color: 'bg-orange-100 text-orange-700' }
     }
     if (m.contractStart && new Date(m.contractStart) > now) return { label: 'UPCOMING', color: 'bg-blue-100 text-blue-700' }
     return { label: 'ACTIVE', color: 'bg-green-100 text-green-700' }
@@ -332,8 +511,9 @@ export default function MerchantsModule() {
         <Filter size={14} className="text-gray-400" />
         {FILTER_CHIPS.map(chip => {
           const count = chip.key === 'all' ? data.length : data.filter(m => {
-            if (chip.status === 'active') return m.isActive
+            if (chip.status === 'active') return m.isActive && !m.isOnHold
             if (chip.status === 'inactive') return !m.isActive
+            if (chip.status === 'onhold') return m.isOnHold
             if (chip.deliveryType) return m.deliveryType === chip.deliveryType
             return true
           }).length
@@ -349,6 +529,44 @@ export default function MerchantsModule() {
           )
         })}
       </div>
+
+      {/* Follow-ups due banner — surfaces merchants with overdue follow-up communications */}
+      {followUpsDue > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3">
+          <AlertTriangle size={16} className="text-orange-600 shrink-0" />
+          <div className="flex-1 text-xs">
+            <p className="text-orange-800 font-semibold">{followUpsDue} follow-up{followUpsDue > 1 ? 's' : ''} overdue across {data.filter(m => m.pendingFollowUps > 0).length} merchant{data.filter(m => m.pendingFollowUps > 0).length > 1 ? 's' : ''}</p>
+            <p className="text-orange-600 text-[11px] mt-0.5">Open a merchant profile → Communication tab to resolve or reschedule.</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {data.filter(m => m.pendingFollowUps > 0).slice(0, 5).map(m => (
+              <button key={m.id} onClick={() => { handleExpand(m); setActiveTab('communication'); }}
+                className="bg-white border border-orange-300 hover:bg-orange-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-orange-700">
+                {m.businessName} · {m.pendingFollowUps}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* On-hold warning banner — surfaces merchants currently blocked */}
+      {onHoldMerchants > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
+          <Pause size={16} className="text-red-600 shrink-0" />
+          <div className="flex-1 text-xs">
+            <p className="text-red-800 font-semibold">{onHoldMerchants} merchant{onHoldMerchants > 1 ? 's' : ''} on hold — new inbounds/orders blocked</p>
+            <p className="text-red-600 text-[11px] mt-0.5">Click the red square in the status column to release a hold.</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {data.filter(m => m.isOnHold).slice(0, 5).map(m => (
+              <button key={m.id} onClick={() => handleExpand(m)}
+                className="bg-white border border-red-300 hover:bg-red-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-red-700">
+                {m.businessName}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Dense table */}
       {data.length === 0 ? (
@@ -373,9 +591,19 @@ export default function MerchantsModule() {
           <tbody>
             {data.map((m) => {
               return (
-                  <DenseTr key={m.id} onClick={() => handleExpand(m)} tint={m.isActive ? '' : 'bg-gray-50/50'}>
-                    <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
-                    <DenseTd className="text-gray-900 font-medium">{m.businessName}</DenseTd>
+                  <DenseTr key={m.id} onClick={() => handleExpand(m)} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
+                    <DenseTd mono className="text-gray-500">
+                      <div className="flex flex-col gap-0.5">
+                        <span>{m.merchantId}</span>
+                        {m.pendingFollowUps > 0 && <span className="text-[8px] text-orange-600 font-semibold" title={`${m.pendingFollowUps} follow-up(s) due`}>●{m.pendingFollowUps}FU</span>}
+                      </div>
+                    </DenseTd>
+                    <DenseTd className="text-gray-900 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        {m.isOnHold && <span title={`On hold: ${m.holdReason || 'no reason'}`}><Pause size={11} className="text-red-500" /></span>}
+                        <span>{m.businessName}</span>
+                      </div>
+                    </DenseTd>
                     <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
                     <DenseTd mono right className={m.productCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.productCount}</DenseTd>
                     <DenseTd mono right className={m.orderCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.orderCount}</DenseTd>
@@ -385,9 +613,14 @@ export default function MerchantsModule() {
                     <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
                     <DenseTd className="text-center">
                       <div className="flex flex-col items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
-                          <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
+                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); handleHoldToggle(m) }} title={m.isOnHold ? 'Click to release hold' : 'Click to place on hold'}>
+                            <span className={`inline-block w-2.5 h-2.5 rounded-sm ${m.isOnHold ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-200 hover:bg-gray-300'}`} />
+                          </button>
+                        </div>
                         {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[8px] px-1 py-0.5 rounded font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
                       </div>
                     </DenseTd>
@@ -420,11 +653,13 @@ export default function MerchantsModule() {
             <div className="space-y-3">
               {/* Header: status + badges + activity pills + action icons */}
               <div className="flex items-center gap-2 flex-wrap pb-3 border-b border-gray-100">
-                <span className={`w-3 h-3 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className={`w-3 h-3 rounded-full ${m.isOnHold ? 'bg-red-500' : m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
                 <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] font-mono">{m.merchantId}</Badge>
                 <span className="text-[10px] capitalize px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.currency}</span>
+                {m.isOnHold && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-700 flex items-center gap-1"><Pause size={9} /> ON HOLD</span>}
                 {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
+                {m.pendingFollowUps > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-orange-100 text-orange-700">{m.pendingFollowUps} follow-up{m.pendingFollowUps > 1 ? 's' : ''} due</span>}
                 <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
                   <span>In: <span className="font-medium text-gray-600">{timeAgo(m.lastInboundAt)}</span></span>
                   <span>·</span>
@@ -434,15 +669,52 @@ export default function MerchantsModule() {
                 </div>
               </div>
 
-              {/* Action icon buttons */}
-              <div className="flex items-center gap-2">
+              {/* Action icon buttons — now includes Hold toggle */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleEdit(m) }}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenRateCard(m) }}><FileText size={12} className="mr-1" /> Rate Card</Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenStatement(m) }}><Calendar size={12} className="mr-1" /> Statement</Button>
+                <Button variant="outline" size="sm" className={`h-7 text-xs rounded-md ${m.isOnHold ? 'text-red-600 border-red-200 hover:bg-red-50' : ''}`} onClick={() => handleHoldToggle(m)}>
+                  {m.isOnHold ? <><Play size={12} className="mr-1" /> Release Hold</> : <><Pause size={12} className="mr-1" /> Place on Hold</>}
+                </Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleToggleActive(m)}>{m.isActive ? 'Deactivate' : 'Activate'}</Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md text-red-600 border-red-200 hover:bg-red-50 ml-auto" onClick={() => { setProfileOpen(false); setDeletingId(m.id); setDeleteOpen(true) }}><Trash2 size={12} className="mr-1" /> Delete</Button>
               </div>
 
+              {/* On-hold banner when merchant is on hold */}
+              {m.isOnHold && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
+                  <AlertOctagon size={14} className="text-red-600 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <p className="font-semibold text-red-700">Service Held — new inbounds/orders blocked</p>
+                    <p className="text-red-600 mt-0.5">Reason: {m.holdReason || 'Not specified'}</p>
+                    {m.holdSetAt && <p className="text-red-500 text-[10px] mt-0.5">Set {timeAgo(m.holdSetAt)} by {m.holdSetBy || 'admin'}</p>}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab bar — Overview | Performance | Communication */}
+              <div className="flex items-center gap-1 border-b border-gray-200">
+                {[
+                  { key: 'overview' as const, label: 'Overview', icon: Building2 },
+                  { key: 'performance' as const, label: 'Performance', icon: BarChart3 },
+                  { key: 'communication' as const, label: 'Communication', icon: MessageSquare, badge: m.pendingFollowUps },
+                ].map(t => {
+                  const isActive = activeTab === t.key
+                  const Icon = t.icon
+                  return (
+                    <button key={t.key} onClick={() => handleTabSwitch(t.key)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${isActive ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                      <Icon size={12} /> {t.label}
+                      {t.badge && t.badge > 0 ? <span className="bg-orange-500 text-white text-[9px] px-1 py-0.5 rounded-full font-bold leading-none">{t.badge}</span> : null}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* ===== OVERVIEW TAB ===== */}
+              {activeTab === 'overview' && (
+                <>
               {/* KPI mini-ribbon */}
               <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
                 <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">SKUs</span><span className="font-mono font-bold text-sm block">{m.productCount}</span></div>
@@ -547,6 +819,201 @@ export default function MerchantsModule() {
                   )}
                 </div>
               </div>
+                </>
+              )}
+
+              {/* ===== PERFORMANCE TAB ===== */}
+              {activeTab === 'performance' && (
+                <div className="space-y-3">
+                  {/* Window selector */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Performance window:</span>
+                    {[7, 30, 90].map(d => (
+                      <button key={d} onClick={() => handlePerfWindowChange(d)}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${perfWindow === d ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                        {d}d
+                      </button>
+                    ))}
+                  </div>
+
+                  {performanceLoading ? (
+                    <div className="py-12 text-center text-xs text-gray-400">Computing performance metrics...</div>
+                  ) : performanceData ? (
+                    <>
+                      {/* Rate cards — 5 KPIs */}
+                      <div className="grid grid-cols-5 gap-2">
+                        {[
+                          { label: 'Success', value: `${performanceData.rates.successRate}%`, color: performanceData.rates.successRate >= 85 ? 'text-green-600' : performanceData.rates.successRate >= 60 ? 'text-orange-600' : 'text-red-600', sub: `${performanceData.totals.delivered}/${performanceData.totals.orders}` },
+                          { label: 'First Attempt', value: `${performanceData.rates.firstAttemptRate}%`, color: performanceData.rates.firstAttemptRate >= 70 ? 'text-green-600' : 'text-orange-600', sub: 'delivered 1st try' },
+                          { label: 'Returns', value: `${performanceData.rates.returnsRate}%`, color: performanceData.rates.returnsRate <= 5 ? 'text-green-600' : performanceData.rates.returnsRate <= 15 ? 'text-orange-600' : 'text-red-600', sub: `${performanceData.totals.returns} RTV` },
+                          { label: 'Cancelled', value: `${performanceData.rates.cancellationRate}%`, color: performanceData.rates.cancellationRate <= 5 ? 'text-green-600' : 'text-red-600', sub: `${performanceData.totals.cancelled} orders` },
+                          { label: 'COD Collected', value: `${performanceData.rates.codRate}%`, color: performanceData.rates.codRate >= 90 ? 'text-green-600' : 'text-orange-600', sub: `${formatCurrencyCompact(performanceData.cod.totalCollected, performanceData.currency)}` },
+                        ].map((k, i) => (
+                          <div key={i} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
+                            <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">{k.label}</p>
+                            <p className={`text-lg font-mono font-bold ${k.color}`}>{k.value}</p>
+                            <p className="text-[9px] text-gray-400 mt-0.5">{k.sub}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Cycle time + sparkline */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Order Cycle Time</p>
+                          <p className="text-2xl font-mono font-bold text-gray-900">{performanceData.cycleTime.avgDays}<span className="text-xs text-gray-400 ml-1">days</span></p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours} hours avg · {performanceData.cycleTime.samples} samples</p>
+                        </div>
+                        <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                          <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">7-Day Volume</p>
+                          <div className="flex items-end gap-1 h-12 mt-1">
+                            {performanceData.sparkline.map((d, i) => {
+                              const maxVol = Math.max(...performanceData.sparkline.map(s => s.total), 1)
+                              const totalH = (d.total / maxVol) * 100
+                              const delivH = d.total > 0 ? (d.delivered / d.total) * totalH : 0
+                              return (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.delivered}/${d.total} delivered`}>
+                                  <div className="w-full flex flex-col justify-end h-10 relative">
+                                    <div className="w-full bg-orange-200 rounded-t" style={{ height: `${totalH}%` }} />
+                                    <div className="w-full bg-orange-500 absolute bottom-0" style={{ height: `${delivH}%` }} />
+                                  </div>
+                                  <span className="text-[8px] text-gray-400">{d.date.slice(-2)}</span>
+                                </div>
+                              )
+                            })}
+                          </div>
+                          <p className="text-[9px] text-gray-400 mt-1">Orange = delivered, light = total</p>
+                        </div>
+                      </div>
+
+                      {/* Operational totals */}
+                      <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                        <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Operational Totals ({performanceData.window.days}d)</p>
+                        <div className="grid grid-cols-4 gap-3 text-xs">
+                          <div><p className="text-[10px] text-gray-400">Orders</p><p className="font-mono font-bold text-gray-900">{performanceData.totals.orders}</p></div>
+                          <div><p className="text-[10px] text-gray-400">In Transit</p><p className="font-mono font-bold text-blue-600">{performanceData.totals.inTransit}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Failed</p><p className="font-mono font-bold text-red-600">{performanceData.totals.failed}</p></div>
+                          <div><p className="text-[10px] text-gray-400">RMA</p><p className="font-mono font-bold text-red-500">{performanceData.totals.rma}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Inbound Qty</p><p className="font-mono font-bold text-blue-600">{performanceData.totals.inboundQty}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Inbound Value</p><p className="font-mono font-bold text-gray-900">{formatCurrencyCompact(performanceData.totals.inboundValue, performanceData.currency)}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Shrinkage Qty</p><p className="font-mono font-bold text-red-600">{performanceData.totals.shrinkageQty}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Shrinkage Value</p><p className="font-mono font-bold text-red-600">{formatCurrencyCompact(performanceData.totals.shrinkageValue, performanceData.currency)}</p></div>
+                        </div>
+                      </div>
+
+                      {/* COD reconciliation */}
+                      <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                        <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">COD Reconciliation ({performanceData.window.days}d)</p>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div><p className="text-[10px] text-gray-400">Total Sales</p><p className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.cod.totalSale, performanceData.currency)}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Cash Collected</p><p className="font-mono font-bold text-green-600">{formatCurrency(performanceData.cod.totalCollected, performanceData.currency)}</p></div>
+                          <div><p className="text-[10px] text-gray-400">Shortfall</p><p className={`font-mono font-bold ${performanceData.cod.shortfall > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(performanceData.cod.shortfall, performanceData.currency)}</p></div>
+                        </div>
+                        {performanceData.cod.shortfall > 0 && (
+                          <p className="text-[10px] text-orange-600 mt-2">⚠ Cash collection shortfall — investigate driver banking or undelivered orders.</p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="py-12 text-center text-xs text-gray-400">No performance data</div>
+                  )}
+                </div>
+              )}
+
+              {/* ===== COMMUNICATION TAB ===== */}
+              {activeTab === 'communication' && (
+                <div className="space-y-3">
+                  {/* Add new entry form */}
+                  <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 space-y-2">
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold flex items-center gap-1"><Plus size={10} /> Log New Communication</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select value={commForm.type} onChange={e => setCommForm({ ...commForm, type: e.target.value })}
+                        className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                        <option value="call">Call</option>
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="email">Email</option>
+                        <option value="visit">Visit</option>
+                        <option value="meeting">Meeting</option>
+                        <option value="other">Other</option>
+                      </select>
+                      <select value={commForm.direction} onChange={e => setCommForm({ ...commForm, direction: e.target.value })}
+                        className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                        <option value="outbound">Outbound (we reached out)</option>
+                        <option value="inbound">Inbound (they reached out)</option>
+                      </select>
+                      <Input type="datetime-local" value={commForm.followUpAt} onChange={e => setCommForm({ ...commForm, followUpAt: e.target.value })}
+                        className="rounded-md text-xs h-8" title="Schedule follow-up (optional)" />
+                    </div>
+                    <Input placeholder="Subject — e.g. 'Discussed late COD remittance for June statement'" value={commForm.subject}
+                      onChange={e => setCommForm({ ...commForm, subject: e.target.value })} className="rounded-md text-xs h-8" />
+                    <textarea placeholder="Notes — what was discussed, what was agreed..." value={commForm.notes}
+                      onChange={e => setCommForm({ ...commForm, notes: e.target.value })} rows={2}
+                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs" />
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer">
+                        <input type="checkbox" checked={commForm.isResolved} onChange={e => setCommForm({ ...commForm, isResolved: e.target.checked })}
+                          className="rounded" />
+                        Resolved (no follow-up needed)
+                      </label>
+                      <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveComm}>
+                        <Plus size={11} className="mr-1" /> Log Entry
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* List of entries */}
+                  {commLoading ? (
+                    <div className="py-8 text-center text-xs text-gray-400">Loading communication log...</div>
+                  ) : commEntries.length === 0 ? (
+                    <div className="py-8 text-center text-xs text-gray-400">No communication logged yet.<br />Use the form above to log the first call, WhatsApp, or visit.</div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {commEntries.map(e => {
+                        const isOverdue = !e.isResolved && e.followUpAt && new Date(e.followUpAt) < new Date()
+                        const typeColor: Record<string, string> = { call: 'bg-blue-500', whatsapp: 'bg-green-500', email: 'bg-purple-500', visit: 'bg-orange-500', meeting: 'bg-pink-500', other: 'bg-gray-400' }
+                        const typeIcon: Record<string, string> = { call: '📞', whatsapp: '💬', email: '✉', visit: '🚶', meeting: '👥', other: '•' }
+                        return (
+                          <div key={e.id} className={`bg-white border rounded-lg p-2.5 ${isOverdue ? 'border-orange-300 bg-orange-50/50' : 'border-gray-200'}`}>
+                            <div className="flex items-start gap-2">
+                              <span className={`w-6 h-6 rounded-full ${typeColor[e.type] || 'bg-gray-400'} text-white flex items-center justify-center text-xs shrink-0`}>{typeIcon[e.type] || '•'}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[9px] uppercase font-semibold text-gray-500">{e.type}</span>
+                                  <span className={`text-[9px] px-1 rounded ${e.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{e.direction === 'inbound' ? '← in' : '→ out'}</span>
+                                  {e.isResolved ? (
+                                    <span className="text-[9px] px-1 rounded bg-green-100 text-green-700">RESOLVED</span>
+                                  ) : (
+                                    <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ' · OVERDUE' : ''}</span>
+                                  )}
+                                  <span className="text-[9px] text-gray-400 ml-auto">{new Date(e.createdAt).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                                </div>
+                                <p className="text-xs text-gray-900 font-medium mt-0.5">{e.subject}</p>
+                                {e.notes && <p className="text-[11px] text-gray-600 mt-0.5">{e.notes}</p>}
+                                {e.followUpAt && (
+                                  <p className={`text-[10px] mt-0.5 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                    Follow-up: {new Date(e.followUpAt).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                                  </p>
+                                )}
+                                <p className="text-[9px] text-gray-400 mt-0.5">by {e.recordedBy}</p>
+                              </div>
+                              <div className="flex flex-col gap-1 shrink-0">
+                                <button onClick={() => handleToggleResolved(e)} title={e.isResolved ? 'Mark as open' : 'Mark as resolved'}
+                                  className={`p-1 rounded ${e.isResolved ? 'text-gray-400 hover:bg-gray-100' : 'text-green-600 hover:bg-green-100'}`}>
+                                  <CheckCircle2 size={12} />
+                                </button>
+                                <button onClick={() => handleDeleteComm(e.id)} title="Delete entry"
+                                  className="p-1 rounded text-gray-400 hover:bg-red-50 hover:text-red-500">
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })()}
@@ -665,6 +1132,27 @@ export default function MerchantsModule() {
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader><AlertDialogTitle>Delete Merchant</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
           <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction></AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Place on Hold dialog — captures reason */}
+      <AlertDialog open={holdDialogOpen} onOpenChange={setHoldDialogOpen}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Pause size={18} /> Place {selectedMerchant?.businessName} on Hold</AlertDialogTitle>
+            <AlertDialogDescription>
+              The merchant will be blocked from receiving new inbounds or orders. Existing inventory stays put. You can release the hold at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-3">
+            <Label className="text-sm font-medium mb-1.5 block">Reason for hold</Label>
+            <Input value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="e.g. Overdue June statement by UGX 1.2M / Quality dispute on batch B-045" className="rounded-xl" />
+            <p className="text-[10px] text-gray-400 mt-1">This reason is shown on the merchant's profile banner and logged in the audit trail.</p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmHold} className="bg-red-500 hover:bg-red-600 rounded-xl">Place on Hold</AlertDialogAction>
+          </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
       {/* #17: CSV Import dialog */}
