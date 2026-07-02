@@ -273,7 +273,7 @@ function DateRangeFilter({ label = 'Date', value, onChange }: {
 // ════════════════════════════════════════════
 // ── MAIN COMPONENT ──
 // ════════════════════════════════════════════
-export default function InboundModule() {
+export default function InboundModule({ onNavigate }: { onNavigate?: (module: string) => void } = {}) {
   // ── Data State ──
   const [data, setData] = useState<InboundRecord[]>([])
   const [merchants, setMerchants] = useState<Merchant[]>([])
@@ -415,9 +415,25 @@ export default function InboundModule() {
       const inboundValue = unitPrice ? qtyIn * unitPrice : null
       const fullName = [form.brand, form.productName, form.variant].filter(Boolean).join(' ')
       const payload = { ...form, qtyIn, unitPrice, inboundValue, productName: fullName, status: 'received' }
-      await fetch('/api/inbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
-      toast.success(`Inventory received successfully — ${qtyIn} units (IN record created)`)
-      setOpen(false); resetForm(); fetchData()
+      const res = await fetch('/api/inbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      if (res.ok) {
+        toast.success(`Inventory received successfully — ${qtyIn} units (IN record created)`)
+        setOpen(false); resetForm(); fetchData()
+      } else if (res.status === 409) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code === 'MERCHANT_ON_HOLD') {
+          toast.error(`${err.merchantName || 'Merchant'} is on hold`, {
+            description: `Reason: ${err.reason || 'Overdue balance / dispute'}`,
+            duration: 8000,
+            action: onNavigate ? { label: 'Release Hold', onClick: () => onNavigate('merchants') } : undefined,
+          })
+        } else {
+          toast.error(err.error || 'Failed to create inbound')
+        }
+      } else {
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'Failed to create inbound')
+      }
     } catch { toast.error('Failed to submit. Please try again.') } finally { setSubmitting(false) }
   }
 

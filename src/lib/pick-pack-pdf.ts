@@ -246,7 +246,7 @@ export async function generatePackingSlip(orderId: string): Promise<string> {
       .fontSize(9)
       .text('Subtotal', 280, totalsY + 8)
       .text(formatUGX(order.saleAmount || 0), 410, totalsY + 8, { width: 95, align: 'right' })
-      .text('Shipping', 280, totalsY + 22)
+      .text('Dispatch', 280, totalsY + 22)
       .text(formatUGX(0), 410, totalsY + 22, { width: 95, align: 'right' })
 
     // Grand total

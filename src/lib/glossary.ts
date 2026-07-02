@@ -16,7 +16,7 @@ export const glossary: Record<string, GlossaryTerm> = {
   storageLiability: {
     term: 'Storage Liability',
     short: 'The money a merchant owes us for keeping their stock in our warehouse, charged per unit per day.',
-    long: 'Storage Liability is the running total of what a merchant owes us for occupying warehouse space. Every day a unit of their stock sits on our shelves, a small fee is added to their account. The fee stops the moment that unit is shipped out, returned, or disposed. Think of it like rent — but charged per item, not per pallet or per square metre.',
+    long: 'Storage Liability is the running total of what a merchant owes us for occupying warehouse space. Every day a unit of their stock sits on our shelves, a small fee is added to their account. The fee stops the moment that unit is dispatched out, returned, or disposed. Think of it like rent — but charged per item, not per pallet or per square metre.',
     example: 'If a merchant delivers 100 units on Monday and our rate is UGX 50 per unit per day, by Friday they owe us 100 × 50 × 4 = UGX 20,000 in storage alone.',
   },
   storagePerUnitPerDay: {

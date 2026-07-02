@@ -90,6 +90,36 @@ model MerchantCommunication {
   @@index([createdAt])
 }
 
+/// Driver communication log — calls/SMS with customers during delivery attempts.
+/// Used to record "customer not at home", "customer refused delivery", "rescheduled", etc.
+model DriverCommunication {
+  id              String    @id @default(cuid())
+  driverId        String
+  driverName      String
+  /// Type of contact: call | whatsapp | sms | visit | other
+  type            String    @default("call")
+  /// Direction: outbound (driver called customer) | inbound (customer called driver)
+  direction       String    @default("outbound")
+  subject         String
+  notes           String?
+  /// Optional link to the outbound order this communication relates to
+  outboundId      String?
+  orderNumber     String?
+  customerName    String?
+  customerContact String?
+  /// Who recorded this (usually the driver themselves)
+  recordedBy      String
+  /// Optional follow-up date
+  followUpAt      DateTime?
+  isResolved      Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+
+  @@index([driverId])
+  @@index([outboundId])
+  @@index([followUpAt])
+  @@index([createdAt])
+}
+
 /// Per-merchant contracted rate card. One warehouse, many rate cards.
 /// All amounts in the merchant's currency (UGX by default).
 /// NOTE: no per-pallet storage fee — storage is charged per unit per day only.

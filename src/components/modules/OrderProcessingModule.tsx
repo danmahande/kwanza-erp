@@ -60,7 +60,7 @@ interface Product {
   merchantName: string
 }
 
-export default function OrderProcessingModule() {
+export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (module: string) => void } = {}) {
   const [data, setData] = useState<Order[]>([])
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -104,7 +104,7 @@ export default function OrderProcessingModule() {
     { key: 'all', label: 'All', statuses: [] as string[] },
     { key: 'new', label: 'New Orders', statuses: ['new_order'] },
     { key: 'processing', label: 'Processing', statuses: ['processing'] },
-    { key: 'shipped', label: 'Shipped', statuses: ['shipped'] },
+    { key: 'shipped', label: 'Dispatched', statuses: ['shipped'] },
     { key: 'delivered', label: 'Delivered', statuses: ['delivered'] },
     { key: 'exceptions', label: '⚠️ Exceptions', statuses: ['returned', 'cancelled', 'failed'] },
   ]
@@ -182,7 +182,7 @@ export default function OrderProcessingModule() {
     bulkActions.push({ toStatus: 'processing', label: 'Start Processing All' })
   }
   if (selectedOrders.every(o => o.status === 'processing')) {
-    bulkActions.push({ toStatus: 'shipped', label: 'Mark All Shipped' })
+    bulkActions.push({ toStatus: 'shipped', label: 'Mark All Dispatched' })
   }
   if (selectedOrders.every(o => o.status === 'shipped')) {
     bulkActions.push({ toStatus: 'delivered', label: 'Mark All Delivered' })
@@ -235,8 +235,20 @@ export default function OrderProcessingModule() {
           customerEmail: '', customerAddress: '', qty: '1', paymentMethod: 'Cash', createdBy: 'admin',
         })
         fetchData()
+      } else if (res.status === 409) {
+        const err = await res.json().catch(() => ({}))
+        if (err.code === 'MERCHANT_ON_HOLD') {
+          toast.error(`${err.merchantName || 'Merchant'} is on hold — order blocked`, {
+            description: `Reason: ${err.reason || 'Overdue balance / dispute'}`,
+            duration: 8000,
+            action: onNavigate ? { label: 'Release Hold', onClick: () => onNavigate('merchants') } : undefined,
+          })
+        } else {
+          toast.error(err.error || 'Failed to create order')
+        }
       } else {
-        toast.error('Failed to create order')
+        const err = await res.json().catch(() => ({}))
+        toast.error(err.error || 'Failed to create order')
       }
     } catch {
       toast.error('Failed to create order')

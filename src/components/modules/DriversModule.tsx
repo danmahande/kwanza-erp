@@ -14,6 +14,7 @@ import {
   Car, Shield, ShieldAlert, Loader2, Package,
   X, CheckSquare, Upload, Trash2, TrendingUp,
   Banknote, AlertTriangle, Bell, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
+  MessageSquare, Plus, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
@@ -162,6 +163,12 @@ export default function DriversModule() {
   const [driverPerf, setDriverPerf] = useState<Record<string, unknown> | null>(null)
   const [driverPerfLoading, setDriverPerfLoading] = useState(false)
   const [driverPerfWindow, setDriverPerfWindow] = useState(30)
+
+  // Driver communication log state
+  const [driverCommEntries, setDriverCommEntries] = useState<Array<Record<string, unknown>>>([])
+  const [driverCommLoading, setDriverCommLoading] = useState(false)
+  const [driverCommForm, setDriverCommForm] = useState({ type: 'call', direction: 'outbound', subject: '', notes: '', customerName: '', customerContact: '', orderNumber: '', followUpAt: '', isResolved: true })
+  const [driverCommLoaded, setDriverCommLoaded] = useState(false)
 
   const [form, setForm] = useState({
     name: '', phone: '', nationalId: '', licenseNumber: '',
@@ -420,12 +427,74 @@ export default function DriversModule() {
     loadDriverPerf(selectedRecord, days)
   }
 
-  // Open slide-over with perf data loading
+  // Load driver communication entries
+  const loadDriverComm = useCallback(async (driver: Driver | null) => {
+    if (!driver) return
+    setDriverCommLoading(true)
+    try {
+      const res = await fetch(`/api/driver-communication?driverId=${driver.driverId}&limit=50`)
+      const d = await res.json()
+      setDriverCommEntries(Array.isArray(d) ? d : [])
+      setDriverCommLoaded(true)
+    } catch {
+      setDriverCommEntries([])
+    } finally {
+      setDriverCommLoading(false)
+    }
+  }, [])
+
+  const handleSaveDriverComm = async () => {
+    if (!selectedRecord) return
+    if (!driverCommForm.subject.trim()) { toast.error('Subject is required'); return }
+    try {
+      const res = await fetch('/api/driver-communication', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId: selectedRecord.driverId,
+          driverName: selectedRecord.name,
+          type: driverCommForm.type, direction: driverCommForm.direction,
+          subject: driverCommForm.subject, notes: driverCommForm.notes || null,
+          customerName: driverCommForm.customerName || null,
+          customerContact: driverCommForm.customerContact || null,
+          orderNumber: driverCommForm.orderNumber || null,
+          recordedBy: 'admin',
+          followUpAt: driverCommForm.followUpAt ? new Date(driverCommForm.followUpAt).toISOString() : null,
+          isResolved: driverCommForm.isResolved,
+        }),
+      })
+      if (res.ok) {
+        toast.success('Driver communication logged')
+        setDriverCommForm({ type: 'call', direction: 'outbound', subject: '', notes: '', customerName: '', customerContact: '', orderNumber: '', followUpAt: '', isResolved: true })
+        loadDriverComm(selectedRecord)
+      } else { toast.error('Failed to log') }
+    } catch { toast.error('Failed to log') }
+  }
+
+  const handleDeleteDriverComm = async (id: string) => {
+    if (!selectedRecord) return
+    await fetch(`/api/driver-communication?id=${id}`, { method: 'DELETE' })
+    toast.success('Entry deleted')
+    loadDriverComm(selectedRecord)
+  }
+
+  const handleToggleDriverCommResolved = async (entry: Record<string, unknown>) => {
+    if (!selectedRecord) return
+    await fetch('/api/driver-communication', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: entry.id, isResolved: !entry.isResolved }),
+    })
+    loadDriverComm(selectedRecord)
+  }
+
+  // Open slide-over with perf + comm data loading
   const openDriverDetail = (driver: Driver) => {
     setSelectedRecord(driver)
     setDetailOpen(true)
     setDriverPerf(null)
+    setDriverCommEntries([])
+    setDriverCommLoaded(false)
     loadDriverPerf(driver, driverPerfWindow)
+    loadDriverComm(driver)
   }
 
   // ════════════════════════════════════════
@@ -938,6 +1007,115 @@ export default function DriversModule() {
                 </div>
               </div>
             )}
+
+            {/* ── Communication Log (customer calls/SMS during delivery) ── */}
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <MessageSquare size={13} /> Customer Communication Log
+              </h4>
+
+              {/* Add new entry form */}
+              <div className="bg-white rounded-lg border border-gray-100 p-3 space-y-2 mb-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold flex items-center gap-1"><Plus size={10} /> Log Customer Communication</p>
+                <p className="text-[10px] text-gray-500">Record calls/SMS with customers during delivery attempts — e.g. "customer not at home", "rescheduled", "refused delivery".</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <select value={driverCommForm.type} onChange={e => setDriverCommForm({ ...driverCommForm, type: e.target.value })}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                    <option value="call">Call</option>
+                    <option value="whatsapp">WhatsApp</option>
+                    <option value="sms">SMS</option>
+                    <option value="visit">Visit</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <select value={driverCommForm.direction} onChange={e => setDriverCommForm({ ...driverCommForm, direction: e.target.value })}
+                    className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
+                    <option value="outbound">Outbound (driver called)</option>
+                    <option value="inbound">Inbound (customer called)</option>
+                  </select>
+                  <Input type="datetime-local" value={driverCommForm.followUpAt} onChange={e => setDriverCommForm({ ...driverCommForm, followUpAt: e.target.value })}
+                    className="rounded-md text-xs h-8" title="Schedule follow-up (optional)" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input placeholder="Customer name (optional)" value={driverCommForm.customerName}
+                    onChange={e => setDriverCommForm({ ...driverCommForm, customerName: e.target.value })} className="rounded-md text-xs h-8" />
+                  <Input placeholder="Customer phone (optional)" value={driverCommForm.customerContact}
+                    onChange={e => setDriverCommForm({ ...driverCommForm, customerContact: e.target.value })} className="rounded-md text-xs h-8" />
+                </div>
+                <Input placeholder="Order # (optional, e.g. DS-001)" value={driverCommForm.orderNumber}
+                  onChange={e => setDriverCommForm({ ...driverCommForm, orderNumber: e.target.value })} className="rounded-md text-xs h-8" />
+                <Input placeholder="Subject — e.g. 'Customer not at home, rescheduled to tomorrow'" value={driverCommForm.subject}
+                  onChange={e => setDriverCommForm({ ...driverCommForm, subject: e.target.value })} className="rounded-md text-xs h-8" />
+                <textarea placeholder="Notes — what was discussed, what was agreed..." value={driverCommForm.notes}
+                  onChange={e => setDriverCommForm({ ...driverCommForm, notes: e.target.value })} rows={2}
+                  className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs" />
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer">
+                    <input type="checkbox" checked={driverCommForm.isResolved} onChange={e => setDriverCommForm({ ...driverCommForm, isResolved: e.target.checked })}
+                      className="rounded" />
+                    Resolved (no follow-up needed)
+                  </label>
+                  <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveDriverComm}>
+                    <Plus size={11} className="mr-1" /> Log Entry
+                  </Button>
+                </div>
+              </div>
+
+              {/* Entries list */}
+              {driverCommLoading ? (
+                <p className="text-xs text-gray-400 text-center py-4">Loading communication log...</p>
+              ) : driverCommEntries.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-4">No communication logged yet.<br />Use the form above to log the first call or WhatsApp with a customer.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {driverCommEntries.map((rawEntry) => {
+                    const entry = rawEntry as Record<string, unknown>
+                    const isOverdue = !entry.isResolved && entry.followUpAt && new Date(String(entry.followUpAt)) < new Date()
+                    const typeColor: Record<string, string> = { call: 'bg-blue-500', whatsapp: 'bg-green-500', sms: 'bg-teal-500', visit: 'bg-orange-500', other: 'bg-gray-400' }
+                    const typeIcon: Record<string, string> = { call: '📞', whatsapp: '💬', sms: '✉', visit: '🚶', other: '•' }
+                    const eType = String(entry.type || 'other')
+                    return (
+                      <div key={String(entry.id)} className={`bg-white border rounded-lg p-2.5 ${isOverdue ? 'border-orange-300 bg-orange-50/50' : 'border-gray-200'}`}>
+                        <div className="flex items-start gap-2">
+                          <span className={`w-6 h-6 rounded-full ${typeColor[eType] || 'bg-gray-400'} text-white flex items-center justify-center text-xs shrink-0`}>{typeIcon[eType] || '•'}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-[9px] uppercase font-semibold text-gray-500">{eType}</span>
+                              <span className={`text-[9px] px-1 rounded ${entry.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{entry.direction === 'inbound' ? '← in' : '→ out'}</span>
+                              {entry.isResolved ? (
+                                <span className="text-[9px] px-1 rounded bg-green-100 text-green-700">RESOLVED</span>
+                              ) : (
+                                <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ' · OVERDUE' : ''}</span>
+                              )}
+                              {entry.orderNumber ? <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-700 font-mono">{String(entry.orderNumber)}</span> : null}
+                              <span className="text-[9px] text-gray-400 ml-auto">{new Date(String(entry.createdAt)).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <p className="text-xs text-gray-900 font-medium mt-0.5">{String(entry.subject || '')}</p>
+                            {entry.notes ? <p className="text-[11px] text-gray-600 mt-0.5">{String(entry.notes)}</p> : null}
+                            {entry.customerName ? <p className="text-[10px] text-gray-500 mt-0.5">Customer: {String(entry.customerName)}{entry.customerContact ? ` · ${String(entry.customerContact)}` : ''}</p> : null}
+                            {entry.followUpAt ? (
+                              <p className={`text-[10px] mt-0.5 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                                Follow-up: {new Date(String(entry.followUpAt)).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            ) : null}
+                            <p className="text-[9px] text-gray-400 mt-0.5">by {String(entry.recordedBy || 'admin')}</p>
+                          </div>
+                          <div className="flex flex-col gap-1 shrink-0">
+                            <button onClick={() => handleToggleDriverCommResolved(entry)} title={entry.isResolved ? 'Mark as open' : 'Mark as resolved'}
+                              className={`p-1 rounded ${entry.isResolved ? 'text-gray-400 hover:bg-gray-100' : 'text-green-600 hover:bg-green-100'}`}>
+                              <CheckCircle2 size={12} />
+                            </button>
+                            <button onClick={() => handleDeleteDriverComm(String(entry.id))} title="Delete entry"
+                              className="p-1 rounded text-gray-400 hover:bg-red-50 hover:text-red-500">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </DetailSlideOver>

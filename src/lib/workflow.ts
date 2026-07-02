@@ -69,7 +69,7 @@ export const ORDER_PROCESSING_WORKFLOW: WorkflowDefinition = {
   stages: [
     { status: 'new_order',   label: 'New',         description: 'Order just created, awaiting warehouse action' },
     { status: 'processing',  label: 'Processing',  action: 'Start Processing', description: 'Warehouse is picking and packing' },
-    { status: 'shipped',     label: 'Shipped',     action: 'Mark Shipped', description: 'Dispatched to customer' },
+    { status: 'shipped',     label: 'Dispatched',  action: 'Mark Dispatched', description: 'Out for delivery to customer' },
     { status: 'delivered',   label: 'Delivered',   action: 'Mark Delivered', description: 'Customer received the order' },
     { status: 'returned',    label: 'Returned',    action: 'Mark Returned', isException: true, description: 'Customer returned the order' },
     { status: 'cancelled',   label: 'Cancelled',   isException: true, description: 'Order cancelled' },
@@ -118,7 +118,7 @@ export const RTV_WORKFLOW: WorkflowDefinition = {
     { status: 'pending_approval',   label: 'Pending Approval',   action: 'Submit to Vendor', description: 'Sent to vendor, waiting for their approval' },
     { status: 'approved',           label: 'Approved',           action: 'Vendor Approved', description: 'Vendor approved the return' },
     { status: 'rejected',           label: 'Rejected',           action: 'Vendor Rejected', isException: true, description: 'Vendor rejected the return' },
-    { status: 'shipped',            label: 'Shipped',            action: 'Ship to Vendor', description: 'Goods shipped back to vendor' },
+    { status: 'shipped',            label: 'Dispatched',         action: 'Dispatch to Vendor', description: 'Goods dispatched back to vendor' },
     { status: 'processed',          label: 'Processed',          action: 'Confirm Received', description: 'Vendor confirmed receipt' },
   ],
   transitions: {
