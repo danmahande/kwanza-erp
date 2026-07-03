@@ -54,16 +54,16 @@ interface AuthContextType {
 }
 
 const navItems: NavItem[] = [
-  { key: 'hub_today', label: 'Operations Desk', icon: LayoutDashboard, section: 'Overview' },
-  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Overview' },
-  { key: 'merchants', label: 'Merchants', icon: Store, section: 'Management' },
-  { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Management' },
-  { key: 'customers', label: 'Customers', icon: Users, section: 'Management' },
-  { key: 'products', label: 'Products', icon: Package, section: 'Management' },
-  { key: 'inventory', label: 'Inventory', icon: Package, section: 'Operations' },
-  { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Operations' },
-  { key: 'returns', label: 'Returns', icon: RotateCcw, section: 'Operations' },
-  { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Resources' },
+  { key: 'hub_today', label: 'Operations Desk', icon: LayoutDashboard, section: 'Dashboard' },
+  { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, section: 'Dashboard' },
+  { key: 'merchants', label: 'Merchants', icon: Store, section: 'Receiving' },
+  { key: 'products', label: 'Products', icon: Package, section: 'Receiving' },
+  { key: 'inventory', label: 'Inventory', icon: Package, section: 'Warehouse' },
+  { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Warehouse' },
+  { key: 'returns', label: 'Returns', icon: RotateCcw, section: 'Warehouse' },
+  { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Delivery' },
+  { key: 'customers', label: 'Customers', icon: Users, section: 'Delivery' },
+  { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Finance' },
   { key: 'users', label: 'Users', icon: UserCog, section: 'System' },
   { key: 'settings', label: 'Settings', icon: Settings, section: 'System' },
   { key: 'audit_log', label: 'Audit Log', icon: ClipboardList, section: 'System' },
@@ -429,12 +429,13 @@ function AppContent() {
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-4 lg:p-6">
             {/* Forward-moving flow breadcrumb — shows the physical goods pipeline */}
-            {['inventory', 'outbound', 'returns'].includes(activeModule) && (
+            {['merchants', 'inventory', 'outbound', 'returns'].includes(activeModule) && (
               <div className="mb-4 flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100 overflow-x-auto">
                 <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold px-2 shrink-0">Goods Flow:</span>
                 {[
-                  { key: 'inventory', label: 'Inventory', desc: 'Receive & store stock' },
-                  { key: 'outbound', label: 'Outbound', desc: 'Pick, pack & dispatch' },
+                  { key: 'merchants', label: 'Receive', desc: 'Merchant delivers stock' },
+                  { key: 'inventory', label: 'Store', desc: 'Put away on shelves' },
+                  { key: 'outbound', label: 'Dispatch', desc: 'Pick, pack & send out' },
                   { key: 'returns', label: 'Returns', desc: 'RMA, RTV & shrinkage' },
                 ].map((step, i, arr) => {
                   const isActive = activeModule === step.key
@@ -468,8 +469,6 @@ function AppContent() {
                     </div>
                   )
                 })}
-                <span className="text-[10px] text-gray-300 px-2 shrink-0">·</span>
-                <span className="text-[10px] text-gray-400 shrink-0">Payments settles separately</span>
               </div>
             )}
             <AnimatePresence mode="wait">
