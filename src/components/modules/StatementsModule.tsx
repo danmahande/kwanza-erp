@@ -307,70 +307,92 @@ export default function StatementsModule() {
         }
       >
         {editing ? (
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-400/30">
-              <p className="text-xs uppercase tracking-wider text-orange-700 font-semibold mb-1">Net Payable to Merchant</p>
-              <p className="text-3xl font-bold text-gray-900">{formatCurrency(editing.netPayable)}</p>
-              <p className="text-xs text-gray-500 mt-1">Period: {editing.period}</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Opening Balance</p>
-                <p className="font-semibold text-gray-900">{formatCurrency(editing.openingBalance)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Sales Value</p>
-                <p className="font-semibold text-green-700">{formatCurrency(editing.salesValue)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Inbound Fees</p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.inboundFees)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-                  Storage Fees <InfoTip term="storageLiability" size={11} />
-                </p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.storageFees)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Outbound Pick/Pack</p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.outboundFees)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Return Fees</p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.returnFees)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-                  Shrinkage <InfoTip term="shrinkage" size={11} />
-                </p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.shrinkageDebits)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-                  Commission <InfoTip term="commission" size={11} />
-                </p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.commissions)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-                  COD Collected <InfoTip term="codCollected" size={11} />
-                </p>
-                <p className="font-semibold text-green-700">{formatCurrency(editing.codCollected)}</p>
-              </div>
-              <div className="p-3 rounded-lg bg-white border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">COD Fees</p>
-                <p className="font-semibold text-red-600">{formatCurrency(editing.codFees)}</p>
+          <div className="space-y-3">
+            {/* Single dense card — statement details */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Statement Details</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Merchant</span>
+                  <span className="font-medium text-gray-900">{editing.merchantName} <span className="text-gray-400 font-mono">({editing.merchantId})</span></span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Period</span>
+                  <span className="font-mono font-bold text-gray-900">{editing.period}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Statement ID</span>
+                  <span className="font-mono text-gray-700">{editing.statementId}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Status</span>
+                  <span className="font-medium text-gray-900 uppercase">{editing.isPaid ? 'Paid' : editing.status.replace(/_/g, ' ')}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Generated</span>
+                  <span className="text-gray-700">{new Date(editing.createdAt).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">Net Payable</span>
+                  <span className="font-mono font-bold text-lg text-gray-900">{formatCurrency(editing.netPayable)}</span>
+                </div>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-4 border-t border-gray-100">
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => handleDownload(editing, 'excel')}>
-                <Download size={14} className="mr-2" /> Download Excel
+            {/* Single dense card — fee breakdown (stacked rows, not card grid) */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Fee Breakdown</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Opening Balance</span>
+                  <span className="font-mono font-bold text-gray-900">{formatCurrency(editing.openingBalance)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Sales Value</span>
+                  <span className="font-mono font-bold text-green-700">{formatCurrency(editing.salesValue)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Inbound Fees</span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.inboundFees)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Storage Fees <InfoTip term="storageLiability" size={11} /></span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.storageFees)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Outbound Pick/Pack</span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.outboundFees)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Return Fees</span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.returnFees)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Shrinkage <InfoTip term="shrinkage" size={11} /></span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.shrinkageDebits)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Commission <InfoTip term="commission" size={11} /></span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.commissions)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">COD Collected <InfoTip term="codCollected" size={11} /></span>
+                  <span className="font-mono text-green-700">{formatCurrency(editing.codCollected)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">COD Fees</span>
+                  <span className="font-mono text-red-600">{formatCurrency(editing.codFees)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Download buttons */}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1 rounded-xl text-xs h-8" onClick={() => handleDownload(editing, 'excel')}>
+                <Download size={12} className="mr-1.5" /> Excel
               </Button>
-              <Button variant="outline" className="flex-1 rounded-xl" onClick={() => handleDownload(editing, 'pdf')}>
-                <FileText size={14} className="mr-2" /> Download PDF
+              <Button variant="outline" className="flex-1 rounded-xl text-xs h-8" onClick={() => handleDownload(editing, 'pdf')}>
+                <FileText size={12} className="mr-1.5" /> PDF
               </Button>
             </div>
           </div>

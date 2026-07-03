@@ -293,7 +293,7 @@ export default function CODReconciliationModule() {
         open={bankingsOpen}
         onClose={() => setBankingsOpen(false)}
         title={selectedDriver ? `Bankings — ${selectedDriver.driverName}` : 'Bankings'}
-        subtitle={selectedDriver ? `${formatCurrency(selectedDriver.codCollected)} collected, ${formatCurrency(selectedDriver.codBanked)} banked, ${formatCurrency(selectedDriver.outstanding)} outstanding` : ''}
+        subtitle={selectedDriver ? `${selectedDriver.driverId}` : ''}
         width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
@@ -302,45 +302,87 @@ export default function CODReconciliationModule() {
         }
       >
         <div className="space-y-3">
-          {bankings.filter(b => !selectedDriver || b.driverId === selectedDriver.driverId).length === 0 ? (
-            <p className="text-sm text-gray-500 text-center py-8">No bankings recorded for this driver yet.</p>
-          ) : (
-            bankings
-              .filter(b => !selectedDriver || b.driverId === selectedDriver.driverId)
-              .map(b => (
-                <div key={b.id} className="p-3 rounded-xl border border-gray-100 bg-white">
-                  <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <p className="font-mono text-xs text-gray-400">{b.bankingId}</p>
-                      <p className="font-bold text-gray-900">{formatCurrency(b.amount)}</p>
-                      <p className="text-xs text-gray-500">{new Date(b.bankedAt).toLocaleString()}</p>
-                    </div>
-                    <Badge className={
-                      b.status === 'verified' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[10px]'
-                      : b.status === 'shortfall' ? 'bg-red-100 text-red-700 hover:bg-red-100 border-0 text-[10px]'
-                      : b.status === 'disputed' ? 'bg-orange-100 text-orange-700 hover:bg-orange-100 border-0 text-[10px]'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-100 border-0 text-[10px]'
-                    }>
-                      {b.status.toUpperCase()}
-                    </Badge>
-                  </div>
-                  {(b.bankName || b.bankReference) && (
-                    <p className="text-xs text-gray-600">
-                      {b.bankName} {b.bankReference && `· Ref: ${b.bankReference}`}
-                    </p>
-                  )}
-                  {b.shortfallAmount > 0 && (
-                    <p className="text-xs text-red-600 mt-1">Shortfall: {formatCurrency(b.shortfallAmount)}</p>
-                  )}
-                  {b.notes && <p className="text-xs text-gray-500 mt-1 italic">{b.notes}</p>}
-                  {b.status === 'pending' && (
-                    <Button variant="outline" size="sm" className="mt-2 h-7 text-[11px] rounded-lg" onClick={() => handleVerify(b)}>
-                      <CheckCircle2 size={12} className="mr-1" /> Verify
-                    </Button>
-                  )}
+          {/* Single dense card — driver COD summary */}
+          {selectedDriver && (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Summary</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">COD Collected</span>
+                  <span className="font-mono font-bold text-green-700">{formatCurrency(selectedDriver.codCollected)}</span>
                 </div>
-              ))
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">COD Banked</span>
+                  <span className="font-mono font-bold text-blue-700">{formatCurrency(selectedDriver.codBanked)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Outstanding</span>
+                  <span className={`font-mono font-bold ${selectedDriver.outstanding > 0 ? 'text-orange-700' : 'text-gray-400'}`}>{formatCurrency(selectedDriver.outstanding)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Pending Bankings</span>
+                  <span className="font-mono text-gray-700">{selectedDriver.pendingBankingsCount} ({formatCurrencyCompact(selectedDriver.pendingBankingsAmount)})</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">Shortfall Bankings</span>
+                  <span className={`font-mono ${selectedDriver.shortfallBankingsAmount > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}`}>
+                    {selectedDriver.shortfallBankingsCount} ({formatCurrencyCompact(selectedDriver.shortfallBankingsAmount)})
+                  </span>
+                </div>
+              </div>
+            </div>
           )}
+
+          {/* Banking records — DenseTable */}
+          <div className="space-y-1">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Banking Records</span>
+            {bankings.filter(b => !selectedDriver || b.driverId === selectedDriver.driverId).length === 0 ? (
+              <div className="py-8 text-center text-gray-400 text-sm">No bankings recorded for this driver yet.</div>
+            ) : (
+              <DenseTable>
+                <thead>
+                  <tr>
+                    <DenseTh className="w-24">Banking ID</DenseTh>
+                    <DenseTh className="w-28 text-right">Amount</DenseTh>
+                    <DenseTh className="w-32">Bank / Ref</DenseTh>
+                    <DenseTh className="w-24 text-center">Status</DenseTh>
+                    <DenseTh className="w-20 text-right">Action</DenseTh>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bankings
+                    .filter(b => !selectedDriver || b.driverId === selectedDriver.driverId)
+                    .map(b => (
+                      <DenseTr key={b.id} tint={b.status === 'shortfall' ? 'bg-red-50/30' : b.status === 'pending' ? 'bg-orange-50/30' : ''}>
+                        <DenseTd mono className="text-gray-500 text-[10px]">{b.bankingId}</DenseTd>
+                        <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(b.amount)}</DenseTd>
+                        <DenseTd className="text-gray-600 text-[10px] truncate max-w-[100px]">
+                          {b.bankName || '—'}{b.bankReference ? ` · ${b.bankReference}` : ''}
+                          {b.shortfallAmount > 0 && <span className="text-red-600 block">SF: {formatCurrencyCompact(b.shortfallAmount)}</span>}
+                        </DenseTd>
+                        <DenseTd className="text-center">
+                          <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-semibold ${
+                            b.status === 'verified' ? 'bg-green-100 text-green-700'
+                            : b.status === 'shortfall' ? 'bg-red-100 text-red-700'
+                            : b.status === 'disputed' ? 'bg-orange-100 text-orange-700'
+                            : 'bg-gray-100 text-gray-700'
+                          }`}>{b.status.toUpperCase()}</span>
+                        </DenseTd>
+                        <DenseTd right>
+                          {b.status === 'pending' ? (
+                            <button onClick={() => handleVerify(b)} className="text-[10px] text-green-600 hover:text-green-700 font-medium">
+                              <CheckCircle2 size={12} />
+                            </button>
+                          ) : (
+                            <span className="text-gray-300 text-[10px]">{new Date(b.bankedAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}</span>
+                          )}
+                        </DenseTd>
+                      </DenseTr>
+                    ))}
+                </tbody>
+              </DenseTable>
+            )}
+          </div>
         </div>
       </DetailSlideOver>
     </motion.div>

@@ -357,44 +357,63 @@ export default function PaymentBatchesModule() {
         }
       >
         {viewBatch && (
-          <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-blue-500/10 to-blue-500/5 border border-blue-400/30">
-              <p className="text-xs uppercase tracking-wider text-blue-700 font-semibold mb-1">Batch Total</p>
-              <p className="text-3xl font-bold text-gray-900">{formatCurrency(viewBatch.totalAmount)}</p>
-              <p className="text-xs text-gray-500 mt-1">{viewBatch.merchantCount} merchants · {viewBatch.paymentMethod}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Status</p>
-                <Badge className={
-                  viewBatch.status === 'disbursed' ? 'bg-green-100 text-green-700 border-0'
-                  : viewBatch.status === 'submitted' ? 'bg-blue-100 text-blue-700 border-0'
-                  : 'bg-gray-100 text-gray-700 border-0'
-                }>
-                  {viewBatch.status.toUpperCase()}
-                </Badge>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Created</p>
-                <p className="text-gray-700">{new Date(viewBatch.createdAt).toLocaleString()}</p>
-              </div>
-              {viewBatch.disbursedAt && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Disbursed</p>
-                  <p className="text-gray-700">{new Date(viewBatch.disbursedAt).toLocaleString()}</p>
+          <div className="space-y-3">
+            {/* Single dense card — batch details */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Batch Details</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Batch ID</span>
+                  <span className="font-mono text-gray-700">{viewBatch.batchId}</span>
                 </div>
-              )}
-              {viewBatch.bankReference && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Bank Reference</p>
-                  <p className="font-mono text-gray-700">{viewBatch.bankReference}</p>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Status</span>
+                  <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                    viewBatch.status === 'disbursed' ? 'bg-green-100 text-green-700'
+                    : viewBatch.status === 'submitted' ? 'bg-blue-100 text-blue-700'
+                    : 'bg-gray-100 text-gray-700'
+                  }`}>{viewBatch.status.toUpperCase()}</span>
                 </div>
-              )}
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Payment Method</span>
+                  <span className="font-medium text-gray-900">{viewBatch.paymentMethod}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Merchant Count</span>
+                  <span className="font-mono font-bold text-gray-900">{viewBatch.merchantCount}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Total Amount</span>
+                  <span className="font-mono font-bold text-lg text-gray-900">{formatCurrency(viewBatch.totalAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Recorded By</span>
+                  <span className="text-gray-700">{viewBatch.recordedBy}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Created</span>
+                  <span className="text-gray-700">{new Date(viewBatch.createdAt).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
+                {viewBatch.disbursedAt && (
+                  <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                    <span className="text-gray-500">Disbursed At</span>
+                    <span className="text-gray-700">{new Date(viewBatch.disbursedAt).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                  </div>
+                )}
+                {viewBatch.bankReference && (
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-gray-500">Bank Reference</span>
+                    <span className="font-mono text-gray-700">{viewBatch.bankReference}</span>
+                  </div>
+                )}
+              </div>
             </div>
+
+            {/* Notes card (only if notes exist) */}
             {viewBatch.notes && (
-              <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Notes</p>
-                <p className="text-sm text-gray-700">{viewBatch.notes}</p>
+              <div className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Notes</h3>
+                <p className="text-xs text-gray-700">{viewBatch.notes}</p>
               </div>
             )}
           </div>
