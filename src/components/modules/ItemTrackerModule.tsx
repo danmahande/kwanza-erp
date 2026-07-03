@@ -11,6 +11,7 @@ import {
   ChevronRight, MapPin, Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 
 // ── Types ──
 interface ItemEvent {
@@ -349,85 +350,69 @@ export default function ItemTrackerModule() {
   // ── List View (search results) ──
   // ── Main View ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Item Tracker</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Track any item through its complete lifecycle journey</p>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      <OpsHeader
+        title="Item Tracker"
+        description="Track any item through its complete lifecycle journey"
+        kpiCells={[
+          { label: 'TRACKED ITEMS', value: items.length },
+          { label: 'IN WAREHOUSE', value: items.filter(i => i.status === 'IN_WAREHOUSE').length },
+          { label: 'IN TRANSIT', value: items.filter(i => i.status === 'IN_TRANSIT').length },
+          { label: 'DELIVERED', value: items.filter(i => i.status === 'DELIVERED').length },
+        ]}
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        searchPlaceholder="Enter Item ID (e.g., ITM-123456)..."
+        actionLabel="Track Item"
+        onAction={handleSearch}
+      />
+
+      {/* Search hint */}
+      <div className="flex items-center gap-3 text-[11px] text-gray-400">
+        <button onClick={handleShowAll} disabled={!searchInput.trim()} className="text-[#FF6B35] hover:text-[#E55A25] font-medium disabled:text-gray-300">
+          Search all items matching "{searchInput || '...'}"
+        </button>
       </div>
 
-      {/* Search */}
-      <div className="bg-white/80 backdrop-blur-sm border border-gray-100 rounded-2xl p-5">
-        <div className="flex gap-2">
-          <div className="relative flex-1">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <Input
-              placeholder="Enter Item ID (e.g., ITM-123456)..."
-              value={searchInput}
-              onChange={e => setSearchInput(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleSearch() }}
-              className="pl-10 rounded-xl border-gray-200 font-mono"
-            />
-          </div>
-          <Button onClick={handleSearch} disabled={!searchInput.trim() || loading} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-            <Search size={16} className="mr-2" />
-            {loading ? 'Searching...' : 'Track Item'}
-          </Button>
-        </div>
-        <div className="flex items-center gap-3 mt-2">
-          <Button variant="link" size="sm" onClick={handleShowAll} disabled={!searchInput.trim()} className="text-xs text-gray-400 hover:text-[#FF6B35] p-0 h-auto">
-            {`Search all items matching "${searchInput || '...'}"`}
-          </Button>
-        </div>
-      </div>
-
-      {/* List Results */}
-      {listMode && items.length > 0 && (
-        <div className="bg-white/80 backdrop-blur-sm border border-gray-100 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-sm font-semibold text-gray-800">Results</span>
-            <Badge className="bg-gray-100 text-gray-600 border-0 text-xs">{items.length} items</Badge>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {items.slice(0, 50).map(item => {
+      {/* Dense table for list results */}
+      {listMode && items.length > 0 ? (
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh className="w-24">Item ID</DenseTh>
+              <DenseTh>Product</DenseTh>
+              <DenseTh>Merchant</DenseTh>
+              <DenseTh className="w-20 text-center">Status</DenseTh>
+              <DenseTh className="w-20 text-center">Condition</DenseTh>
+              <DenseTh className="w-20">Outbound</DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {items.slice(0, 100).map(item => {
               const sc = statusColor(item.status)
               return (
-                <button
-                  key={item.id}
-                  onClick={() => fetchItem(item.itemId)}
-                  className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50/50 transition-colors text-left"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono font-semibold text-gray-900">{item.itemId}</span>
-                      <Badge className={`text-[10px] font-semibold border ${sc.bg} ${sc.text} ${sc.border}`}>
-                        {item.status.replace(/_/g, ' ')}
-                      </Badge>
-                      {conditionBadge(item.condition)}
-                    </div>
-                    <p className="text-xs text-gray-400 mt-0.5">{item.productName} · {item.merchantName}</p>
-                  </div>
-                  {item.outboundId && (
-                    <span className="text-xs font-mono text-gray-400">{item.outboundId}</span>
-                  )}
-                  <ChevronRight size={14} className="text-gray-300" />
-                </button>
+                <DenseTr key={item.id} onClick={() => fetchItem(item.itemId)}>
+                  <DenseTd mono className="text-gray-900 font-semibold text-[10px]">{item.itemId}</DenseTd>
+                  <DenseTd>
+                    <p className="text-gray-900 text-xs font-medium truncate max-w-[150px]">{item.productName}</p>
+                  </DenseTd>
+                  <DenseTd className="text-gray-600 text-[11px]">{item.merchantName}</DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-semibold ${sc.bg} ${sc.text}`}>{item.status.replace(/_/g, ' ')}</span>
+                  </DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`text-[9px] font-medium ${item.condition === 'good' ? 'text-green-600' : item.condition === 'damaged' ? 'text-red-600' : 'text-gray-400'}`}>{item.condition}</span>
+                  </DenseTd>
+                  <DenseTd mono className="text-gray-400 text-[10px]">{item.outboundId || '—'}</DenseTd>
+                </DenseTr>
               )
             })}
-          </div>
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!item && !listMode && (
-        <div className="text-center py-20">
-          <div className="w-16 h-16 rounded-2xl bg-orange-50 flex items-center justify-center mx-auto mb-4">
-            <Search size={28} className="text-[#FF6B35]" />
-          </div>
-          <p className="text-gray-500 font-medium">Track any item</p>
-          <p className="text-sm text-gray-400 mt-1 max-w-md mx-auto">
-            Enter an Item ID above to see its complete journey — from receipt through storage, picking, dispatch, delivery, and any returns or failures.
-          </p>
+          </tbody>
+        </DenseTable>
+      ) : !item && !listMode && (
+        <div className="py-12 text-center text-gray-400 text-sm">
+          <Search size={32} className="mx-auto mb-3 text-gray-300" />
+          Enter an Item ID above to see its complete journey — from receipt through storage, picking, dispatch, delivery, and any returns or failures.
         </div>
       )}
     </motion.div>

@@ -14,9 +14,10 @@ import {
   ClipboardList, Plus, Truck, CheckCircle2, Clock, XCircle,
   MapPin, Package, DollarSign, ChevronRight, ArrowRight,
   AlertTriangle, FileText, Search, Eye, X,
-  ScanBarcode, Ban, CalendarClock,
+  ScanBarcode, Ban, CalendarClock, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 
 // ── Types ──
 interface Driver { id: string; driverId: string; name: string; phone: string; vehicleNumber: string | null; status: string }
@@ -697,159 +698,120 @@ export default function RunsheetModule() {
 
   // ── List View ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Runsheets</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Plan and track rider delivery trips</p>
-        </div>
-        <Button onClick={handleOpenCreate} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-          <Plus size={18} className="mr-2" /> Create Runsheet
-        </Button>
-      </div>
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      <OpsHeader
+        title="Runsheets"
+        description="Plan and track rider delivery trips"
+        kpiCells={[
+          { label: 'RUNSHEETS', value: data?.runsheets.length || 0 },
+          { label: 'IN PROGRESS', value: data?.runsheets.filter(r => r.status === 'in_progress').length || 0 },
+          { label: 'COMPLETED', value: data?.runsheets.filter(r => r.status === 'completed').length || 0 },
+          { label: 'UNASSIGNED', value: data?.unassigned.length || 0, highlight: (data?.unassigned.length || 0) > 0, highlightColor: 'orange' as const },
+        ]}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by rider, customer, or runsheet ID..."
+        actionLabel="Create Runsheet"
+        onAction={handleOpenCreate}
+      />
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
-        {statCards.map((stat, i) => (
-          <motion.div key={stat.title} initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35, delay: i * 0.05 }}>
-            <div className={`rounded-2xl bg-gradient-to-br ${stat.bgGradient} border ${stat.borderColor} p-4 hover:shadow-md transition-all duration-300 cursor-default`}>
-              <div className={`w-8 h-8 rounded-lg ${stat.bg} flex items-center justify-center mb-2`}>
-                <stat.icon size={16} style={{ color: stat.color }} />
-              </div>
-              <p className="text-lg font-extrabold text-gray-900">{stat.value}</p>
-              <p className="text-[10px] text-gray-500 uppercase tracking-wider font-medium mt-0.5">{stat.title}</p>
-            </div>
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Search + Filter */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input placeholder="Search runsheets by rider, customer, or ID..." value={search} onChange={e => setSearch(e.target.value)} className="pl-10 rounded-xl border-gray-200" />
-        </div>
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v)}>
-          <SelectTrigger className="w-full sm:w-44 rounded-xl border-gray-200">
-            <SelectValue placeholder="All Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="draft">Draft</SelectItem>
-            <SelectItem value="in_progress">In Progress</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {/* Runsheet Cards */}
-      <div className="space-y-4">
-        {data?.runsheets.map((rs, idx) => {
-          const st = rsStatusStyle(rs.status)
-          const StIcon = st.icon
-          const deliveryRate = rs.totalStops > 0 ? Math.round((rs.delivered / rs.totalStops) * 100) : 0
-
+      {/* Status filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-gray-400" />
+        {[
+          { key: 'all', label: 'All' },
+          { key: 'draft', label: 'Draft' },
+          { key: 'in_progress', label: 'In Progress' },
+          { key: 'completed', label: 'Completed' },
+        ].map(chip => {
+          const count = chip.key === 'all' ? (data?.runsheets.length || 0) : (data?.runsheets.filter(r => r.status === chip.key).length || 0)
+          const isActive = statusFilter === chip.key
           return (
-            <motion.div
-              key={rs.runsheetId}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: idx * 0.05 }}
-              onClick={() => setView(rs)}
-              className="bg-white/80 backdrop-blur-sm border border-gray-100 hover:shadow-lg hover:border-gray-200 rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 group"
-            >
-              <div className="p-5">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-xl ${st.bg} flex items-center justify-center`}>
-                      <StIcon size={20} style={{ color: st.iconColor }} />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-gray-900 group-hover:text-[#FF6B35] transition-colors">{rs.runsheetId}</h3>
-                      <p className="text-sm text-gray-500">{rs.driver} {rs.vehicleNumber ? `· ${rs.vehicleNumber}` : ''}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Badge className={`text-xs font-semibold border ${st.bg} ${st.text} ${st.border}`}>
-                      {rs.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
-                    </Badge>
-                    <ArrowRight size={16} className="text-gray-300 group-hover:text-[#FF6B35] group-hover:translate-x-1 transition-all" />
-                  </div>
-                </div>
-
-                {/* Progress bar */}
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-gray-500">{rs.delivered}/{rs.totalStops} stops delivered</span>
-                    <span className="text-xs font-semibold" style={{ color: deliveryRate >= 80 ? '#22C55E' : deliveryRate >= 50 ? '#F59E0B' : '#EF4444' }}>{deliveryRate}%</span>
-                  </div>
-                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <motion.div initial={{ width: 0 }} animate={{ width: `${deliveryRate}%` }} transition={{ duration: 0.6 }} className="h-full rounded-full" style={{ backgroundColor: deliveryRate >= 80 ? '#22C55E' : deliveryRate >= 50 ? '#F59E0B' : '#EF4444' }} />
-                  </div>
-                </div>
-
-                {/* Stop summary + bottom row */}
-                <div className="flex flex-wrap items-center gap-4 text-sm">
-                  {rs.stops.slice(0, 4).map((stop, i) => (
-                    <div key={stop.id} className="flex items-center gap-1.5">
-                      {stopStatusIcon(stop.status)}
-                      <span className="text-gray-600 font-medium">{stop.customerName.split(' ')[0]}</span>
-                      {i < Math.min(rs.stops.length, 4) - 1 && <ChevronRight size={12} className="text-gray-300" />}
-                    </div>
-                  ))}
-                  {rs.totalStops > 4 && (
-                    <span className="text-xs text-gray-400">+{rs.totalStops - 4} more</span>
-                  )}
-                  <div className="ml-auto flex items-center gap-4">
-                    {rs.totalCOD > 0 && (
-                      <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">COD {fmtUGX(rs.totalCOD)}</span>
-                    )}
-                    <span className="text-xs text-gray-400">{new Date(rs.date).toLocaleDateString()}</span>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
+            <button key={chip.key} onClick={() => setStatusFilter(chip.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              {chip.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+            </button>
           )
         })}
-
-        {/* Empty state */}
-        {(!data?.runsheets || data.runsheets.length === 0) && (
-          <div className="text-center py-16">
-            <ClipboardList size={48} className="mx-auto text-gray-200 mb-3" />
-            <p className="text-gray-500 font-medium">No runsheets found</p>
-            <p className="text-sm text-gray-400 mt-1">Create a runsheet from unassigned outbound orders</p>
-          </div>
-        )}
       </div>
+
+      {/* Dense table */}
+      {(!data?.runsheets || data.runsheets.length === 0) ? (
+        <div className="py-12 text-center text-gray-400 text-sm">
+          <ClipboardList size={32} className="mx-auto mb-3 text-gray-300" />
+          No runsheets found. Create one from unassigned orders.
+        </div>
+      ) : (
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh className="w-24">Runsheet ID</DenseTh>
+              <DenseTh>Driver</DenseTh>
+              <DenseTh className="w-20 text-right">Stops</DenseTh>
+              <DenseTh className="w-20 text-right">Delivered</DenseTh>
+              <DenseTh className="w-20 text-right">Rate</DenseTh>
+              <DenseTh className="w-24 text-right">COD</DenseTh>
+              <DenseTh className="w-20 text-center">Status</DenseTh>
+              <DenseTh className="w-20">Date</DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {data.runsheets.map(rs => {
+              const deliveryRate = rs.totalStops > 0 ? Math.round((rs.delivered / rs.totalStops) * 100) : 0
+              const st = rsStatusStyle(rs.status)
+              return (
+                <DenseTr key={rs.runsheetId} onClick={() => setView(rs)}
+                  tint={rs.status === 'completed' ? 'bg-green-50/30' : rs.status === 'in_progress' ? 'bg-blue-50/30' : ''}>
+                  <DenseTd mono className="text-gray-500 text-[10px]">{rs.runsheetId}</DenseTd>
+                  <DenseTd>
+                    <p className="text-gray-900 font-medium text-xs">{rs.driver}</p>
+                    {rs.vehicleNumber && <p className="text-[10px] text-gray-400">{rs.vehicleNumber}</p>}
+                  </DenseTd>
+                  <DenseTd mono right className="text-gray-700">{rs.totalStops}</DenseTd>
+                  <DenseTd mono right className={rs.delivered > 0 ? 'text-green-700 font-bold' : 'text-gray-400'}>{rs.delivered}</DenseTd>
+                  <DenseTd mono right className={deliveryRate >= 80 ? 'text-green-600 font-bold' : deliveryRate >= 50 ? 'text-orange-600 font-bold' : 'text-red-600 font-bold'}>{deliveryRate}%</DenseTd>
+                  <DenseTd mono right className={rs.totalCOD > 0 ? 'text-purple-700 font-bold' : 'text-gray-300'}>{rs.totalCOD > 0 ? fmtUGX(rs.totalCOD) : '—'}</DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${st.bg} ${st.text} ${st.border}`}>{rs.status.replace(/_/g, ' ').toUpperCase()}</span>
+                  </DenseTd>
+                  <DenseTd className="text-gray-500 text-[10px]">{new Date(rs.date).toLocaleDateString('en-UG')}</DenseTd>
+                </DenseTr>
+              )
+            })}
+          </tbody>
+        </DenseTable>
+      )}
 
       {/* Unassigned Orders Section */}
       {data && data.unassigned.length > 0 && (
-        <div className="bg-white/80 backdrop-blur-sm border border-amber-100 rounded-2xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-amber-50 flex items-center justify-between bg-amber-50/30">
-            <div className="flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-500" />
-              <span className="text-sm font-semibold text-gray-800">Unassigned Orders</span>
-              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">{data.unassigned.length}</Badge>
-            </div>
+        <div className="bg-white rounded-lg border border-amber-200 overflow-hidden">
+          <div className="px-3 py-2 border-b border-amber-100 bg-amber-50 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider flex items-center gap-1">
+              <AlertTriangle size={12} /> Unassigned Orders
+            </span>
+            <span className="text-[11px] text-amber-700 font-mono font-bold">{data.unassigned.length}</span>
           </div>
-          <div className="divide-y divide-gray-50">
-            {data.unassigned.map(order => (
-              <div key={order.id} className="flex items-center gap-4 px-5 py-3 hover:bg-gray-50/50 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center shrink-0">
-                  <Package size={14} className="text-[#FF6B35]" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900">{order.customerName}</p>
-                  <p className="text-xs text-gray-400">{order.productName} · {order.qty} units · {order.outboundId}</p>
-                </div>
-                <span className="text-xs text-gray-400 hidden sm:block">{order.customerContact}</span>
-                <Button size="sm" variant="outline" className="rounded-lg text-xs border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white" onClick={(e) => { e.stopPropagation(); handleOpenCreate(); setSelectedOrders([order.id]) }}>
-                  Assign
-                </Button>
-              </div>
-            ))}
-          </div>
+          <DenseTable>
+            <thead>
+              <tr>
+                <DenseTh className="w-24">Outbound ID</DenseTh>
+                <DenseTh>Customer</DenseTh>
+                <DenseTh>Product</DenseTh>
+                <DenseTh className="w-16 text-right">Qty</DenseTh>
+              </tr>
+            </thead>
+            <tbody>
+              {data.unassigned.map(order => (
+                <DenseTr key={order.id} tint="bg-amber-50/20">
+                  <DenseTd mono className="text-gray-500 text-[10px]">{order.outboundId}</DenseTd>
+                  <DenseTd className="text-gray-900 text-xs font-medium">{order.customerName}</DenseTd>
+                  <DenseTd className="text-gray-600 text-[11px] truncate max-w-[150px]">{order.productName}</DenseTd>
+                  <DenseTd mono right className="text-gray-700">{order.qty}</DenseTd>
+                </DenseTr>
+              ))}
+            </tbody>
+          </DenseTable>
         </div>
       )}
 
