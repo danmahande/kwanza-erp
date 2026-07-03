@@ -2,30 +2,36 @@
 
 import { useState } from 'react'
 import { motion } from 'framer-motion'
-import { CreditCard, FileText, Layers, Wallet } from 'lucide-react'
+import { CreditCard, FileText, Layers, Wallet, ClipboardList, AlertTriangle } from 'lucide-react'
 import PaymentsModule from './PaymentsModule'
 import StatementsModule from './StatementsModule'
 import PaymentBatchesModule from './PaymentBatchesModule'
 import CODReconciliationModule from './CODReconciliationModule'
+import ChargesModule from './ChargesModule'
+import DisputesModule from './DisputesModule'
 
-type Tab = 'records' | 'statements' | 'batches' | 'cod'
+type Tab = 'charges' | 'statements' | 'batches' | 'records' | 'cod' | 'disputes'
 
 const tabs: { key: Tab; label: string; icon: typeof CreditCard }[] = [
-  { key: 'records', label: 'Payment Records', icon: CreditCard },
+  { key: 'charges', label: 'Charge Ledger', icon: ClipboardList },
   { key: 'statements', label: 'Statements', icon: FileText },
   { key: 'batches', label: 'Payment Batches', icon: Layers },
+  { key: 'records', label: 'Payment Records', icon: CreditCard },
   { key: 'cod', label: 'COD Reconciliation', icon: Wallet },
+  { key: 'disputes', label: 'Disputes', icon: AlertTriangle },
 ]
 
 /**
- * Payments parent module — composes the 4 finance submodules as tabs.
+ * Payments parent module — composes the 6 finance submodules as tabs.
  *
  * Reflects the financial workflow:
- *   Statement (monthly) → Batch (grouped payout) → Records (individual payments)
+ *   Charges (per-event ledger) → Statements (monthly rollup, approval-gated)
+ *     → Batches (grouped payout) → Records (individual payments)
  *   COD Reconciliation runs in parallel (cash coming IN from drivers vs going OUT to merchants)
+ *   Disputes run in parallel (merchant challenges → credit memos)
  */
 export default function PaymentsParentModule() {
-  const [activeTab, setActiveTab] = useState<Tab>('records')
+  const [activeTab, setActiveTab] = useState<Tab>('charges')
 
   return (
     <div className="space-y-4">
@@ -38,7 +44,7 @@ export default function PaymentsParentModule() {
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`
-                flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+                flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap
                 ${isActive
                   ? 'bg-white text-[#FF6B35] shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -58,10 +64,12 @@ export default function PaymentsParentModule() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
       >
-        {activeTab === 'records' && <PaymentsModule />}
+        {activeTab === 'charges' && <ChargesModule />}
         {activeTab === 'statements' && <StatementsModule />}
         {activeTab === 'batches' && <PaymentBatchesModule />}
+        {activeTab === 'records' && <PaymentsModule />}
         {activeTab === 'cod' && <CODReconciliationModule />}
+        {activeTab === 'disputes' && <DisputesModule />}
       </motion.div>
     </div>
   )

@@ -215,7 +215,16 @@ model MerchantStatement {
   paidAt            DateTime?
   pdfUrl            String?
   excelUrl          String?
+  /// Status: draft → pending_approval → approved → issued → paid
   status            String    @default("draft")
+  /// Approval workflow (maker-checker)
+  submittedBy       String?
+  submittedAt       DateTime?
+  approvedBy        String?
+  approvedAt        DateTime?
+  rejectedBy        String?
+  rejectedAt        DateTime?
+  rejectionReason   String?
   /// Line items JSON for full audit (SQLite stores as TEXT)
   lineItems         String?
   generatedBy       String
@@ -224,6 +233,77 @@ model MerchantStatement {
 
   @@index([merchantId])
   @@index([period])
+  @@index([status])
+}
+
+/// Charge ledger — individual fee events that accrue before being rolled into a statement.
+/// Replaces the "recompute everything at statement time" approach with a reviewable ledger.
+/// Every fee event (inbound received, storage accrued, pick performed, shrinkage recorded)
+/// writes a row here. Finance reviews and approves charges before they hit a statement.
+model Charge {
+  id              String    @id @default(cuid())
+  chargeId        String    @unique
+  merchantId      String
+  merchantName    String
+  /// Type: inbound_receiving | storage | pick | pack | return_processing | shrinkage | cod_fee | commission | ad_hoc
+  chargeType      String
+  amount          Float
+  description     String
+  /// Source: inbound | outbound | shrinkage | storage_liability | manual
+  sourceType      String    @default("manual")
+  sourceId        String?
+  /// Period "YYYY-MM" for grouping into statements
+  period          String
+  /// Status: pending → approved → invoiced | rejected
+  status          String    @default("pending")
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  /// Set when rolled into a statement
+  statementId     String?
+  recordedBy      String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([merchantId])
+  @@index([period])
+  @@index([status])
+  @@index([chargeType])
+}
+
+/// Statement dispute — merchant challenges a charge or line item on their statement.
+/// Resolution can issue a credit memo (negative MerchantPayment) linked back here.
+model StatementDispute {
+  id                      String    @id @default(cuid())
+  disputeId               String    @unique
+  merchantId              String
+  merchantName            String
+  statementId             String
+  /// Which line item is disputed (free text — matches line item reference)
+  lineItemReference       String?
+  /// Type: overcharge | missing_credit | wrong_rate | duplicate_charge | other
+  disputeType             String    @default("overcharge")
+  reason                  String
+  /// Amount the merchant is claiming back
+  creditAmountRequested   Float
+  /// Amount finance approved (may differ from requested)
+  creditAmountApproved    Float?
+  /// Status: open → under_review → credited → rejected
+  status                  String    @default("open")
+  resolvedBy              String?
+  resolvedAt              DateTime?
+  resolutionNotes         String?
+  /// Link to the credit memo MerchantPayment (negative amount) issued on resolution
+  paymentId               String?
+  createdBy               String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  @@index([merchantId])
+  @@index([statementId])
+  @@index([status])
 }
 
 /// Payment batch — groups multiple MerchantPayments into one payout run.

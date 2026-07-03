@@ -6,6 +6,7 @@ import {
 } from '@/lib/statement-generator'
 import { generateStatementExcel } from '@/lib/statement-excel'
 import { generateStatementPDF } from '@/lib/statement-pdf'
+import { logAudit } from '@/lib/audit'
 
 type StatementLineItemShape = {
   date: string
@@ -25,6 +26,12 @@ type StatementLineItemShape = {
  * GET  /api/merchant-statements?id=...&format=pdf      → download PDF for one statement
  * POST /api/merchant-statements                        → generate a statement
  *      body: { merchantId, period: "YYYY-MM", allMerchants?: boolean, generatedBy }
+ * PATCH /api/merchant-statements                       → approval workflow
+ *      body: { action: 'submit' | 'approve' | 'reject' | 'issue', id, reason?, by }
+ *
+ * Statement status machine:
+ *   draft → pending_approval → approved → issued → paid
+ *                ↑___________|  (reject returns to draft with reason)
  */
 export async function GET(req: NextRequest) {
   try {
@@ -122,6 +129,98 @@ export async function POST(req: NextRequest) {
     console.error('Error generating merchant statement:', error)
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to generate statement' },
+      { status: 500 },
+    )
+  }
+}
+
+// PATCH — approval workflow: submit / approve / reject / issue
+export async function PATCH(req: NextRequest) {
+  try {
+    const body = await req.json()
+    const { action, id, reason, by } = body as {
+      action: 'submit' | 'approve' | 'reject' | 'issue'
+      id: string
+      reason?: string
+      by?: string
+    }
+
+    if (!action || !id || !['submit', 'approve', 'reject', 'issue'].includes(action)) {
+      return NextResponse.json({ error: 'action (submit|approve|reject|issue) and id are required' }, { status: 400 })
+    }
+
+    const performer = by || 'admin'
+    const now = new Date()
+    const stmt = await db.merchantStatement.findUnique({ where: { id } })
+    if (!stmt) return NextResponse.json({ error: 'Statement not found' }, { status: 404 })
+
+    // Validate transitions
+    const validTransitions: Record<string, string[]> = {
+      draft: ['pending_approval'],
+      pending_approval: ['approved', 'draft'],
+      approved: ['issued'],
+      issued: [],
+      paid: [],
+    }
+    const allowed = validTransitions[stmt.status] || []
+    const actionToStatus: Record<string, string> = {
+      submit: 'pending_approval',
+      approve: 'approved',
+      reject: 'draft',
+      issue: 'issued',
+    }
+    const newStatus = actionToStatus[action]
+    if (!allowed.includes(newStatus)) {
+      return NextResponse.json({
+        error: `Cannot ${action} a statement in '${stmt.status}' state. Allowed: ${allowed.join(', ') || 'none'}`,
+      }, { status: 400 })
+    }
+
+    const updateData: Record<string, unknown> = { status: newStatus }
+    if (action === 'submit') {
+      updateData.submittedBy = performer
+      updateData.submittedAt = now
+    } else if (action === 'approve') {
+      updateData.approvedBy = performer
+      updateData.approvedAt = now
+    } else if (action === 'reject') {
+      updateData.rejectedBy = performer
+      updateData.rejectedAt = now
+      updateData.rejectionReason = reason || 'Rejected by approver'
+    } else if (action === 'issue') {
+      // Issuing locks the statement — generates PDF/Excel if not already
+      if (!stmt.pdfUrl) {
+        try {
+          const stmtData = {
+            statementId: stmt.statementId, merchantId: stmt.merchantId, merchantName: stmt.merchantName,
+            period: stmt.period, openingBalance: stmt.openingBalance, inboundFees: stmt.inboundFees,
+            storageFees: stmt.storageFees, outboundFees: stmt.outboundFees, returnFees: stmt.returnFees,
+            shrinkageDebits: stmt.shrinkageDebits, codCollected: stmt.codCollected, codFees: stmt.codFees,
+            commissions: stmt.commissions, salesValue: stmt.salesValue, netPayable: stmt.netPayable,
+            lineItems: stmt.lineItems ? (JSON.parse(stmt.lineItems) as StatementLineItemShape[]) : [],
+          }
+          const pdfPath = await generateStatementPDF(stmtData)
+          const excelPath = await generateStatementExcel(stmtData)
+          updateData.pdfUrl = pdfPath
+          updateData.excelUrl = excelPath
+        } catch (e) {
+          console.error('Statement file generation failed (non-blocking):', e)
+        }
+      }
+    }
+
+    const updated = await db.merchantStatement.update({ where: { id }, data: updateData })
+    await logAudit({
+      action: action.toUpperCase(),
+      module: 'statements',
+      entityId: stmt.statementId,
+      details: `Statement ${stmt.statementId} ${action}ed by ${performer}${reason ? ` — ${reason}` : ''}`,
+    })
+    return NextResponse.json(updated)
+  } catch (error) {
+    console.error('Error updating statement:', error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Failed to update statement' },
       { status: 500 },
     )
   }

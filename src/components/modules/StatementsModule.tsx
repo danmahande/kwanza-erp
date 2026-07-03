@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   FileText, Download, Search, Plus, Wallet, CheckCircle2, Clock,
+  Send, Check, X, AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
@@ -35,6 +36,12 @@ interface Statement {
   isPaid: boolean
   paidAt: string | null
   status: string
+  submittedBy: string | null
+  submittedAt: string | null
+  approvedBy: string | null
+  approvedAt: string | null
+  rejectedBy: string | null
+  rejectionReason: string | null
   pdfUrl: string | null
   excelUrl: string | null
   createdAt: string
@@ -125,6 +132,32 @@ export default function StatementsModule() {
     }
   }
 
+  // ── Approval workflow actions ──
+  const handleStatementAction = async (stmt: Statement, action: 'submit' | 'approve' | 'reject' | 'issue') => {
+    let reason: string | undefined
+    if (action === 'reject') {
+      const r = prompt('Reason for rejection:')
+      if (r === null) return
+      reason = r || 'Rejected by approver'
+    }
+    try {
+      const res = await fetch('/api/merchant-statements', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id: stmt.id, reason, by: 'admin' }),
+      })
+      const result = await res.json()
+      if (res.ok) {
+        toast.success(`Statement ${action}ed`)
+        fetchData()
+        if (editing?.id === stmt.id) setEditing({ ...stmt, ...result })
+      } else {
+        toast.error(result.error || `Failed to ${action} statement`)
+      }
+    } catch {
+      toast.error(`Failed to ${action} statement`)
+    }
+  }
+
   const openCreate = () => {
     setEditing(null)
     setForm({ merchantId: '', period: new Date().toISOString().slice(0, 7) })
@@ -202,10 +235,13 @@ export default function StatementsModule() {
                       <td className="px-4 py-3 text-center">
                         <Badge className={
                           stmt.isPaid ? 'bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[10px]'
-                          : stmt.status === 'disputed' ? 'bg-red-100 text-red-700 hover:bg-red-100 border-0 text-[10px]'
-                          : 'bg-orange-100 text-orange-700 hover:bg-orange-100 border-0 text-[10px]'
+                          : stmt.status === 'issued' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-[10px]'
+                          : stmt.status === 'approved' ? 'bg-purple-100 text-purple-700 hover:bg-purple-100 border-0 text-[10px]'
+                          : stmt.status === 'pending_approval' ? 'bg-amber-100 text-amber-700 hover:bg-amber-100 border-0 text-[10px]'
+                          : stmt.status === 'rejected' ? 'bg-red-100 text-red-700 hover:bg-red-100 border-0 text-[10px]'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-100 border-0 text-[10px]'
                         }>
-                          {stmt.isPaid ? 'PAID' : stmt.status.toUpperCase()}
+                          {stmt.isPaid ? 'PAID' : stmt.status === 'pending_approval' ? 'PENDING APPROVAL' : stmt.status.toUpperCase()}
                         </Badge>
                       </td>
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
@@ -234,13 +270,46 @@ export default function StatementsModule() {
         subtitle={editing ? `${editing.merchantName} — ${editing.period}` : 'Select a merchant and the monthly period to generate for'}
         width="lg"
         footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Close</Button>
-            {!editing && (
-              <Button onClick={handleGenerate} disabled={generating} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-                {generating ? 'Generating...' : 'Generate'}
-              </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            {editing && !editing.isPaid && (
+              <>
+                {editing.status === 'draft' && (
+                  <Button variant="outline" className="rounded-xl text-[#FF6B35] border-[#FF6B35]/30 hover:bg-[#FF6B35]/5"
+                    onClick={() => handleStatementAction(editing, 'submit')}>
+                    <Send size={14} className="mr-1.5" /> Submit for Approval
+                  </Button>
+                )}
+                {editing.status === 'pending_approval' && (
+                  <>
+                    <Button className="rounded-xl bg-green-600 hover:bg-green-700 text-white"
+                      onClick={() => handleStatementAction(editing, 'approve')}>
+                      <Check size={14} className="mr-1.5" /> Approve
+                    </Button>
+                    <Button variant="outline" className="rounded-xl text-red-600 border-red-200 hover:bg-red-50"
+                      onClick={() => handleStatementAction(editing, 'reject')}>
+                      <X size={14} className="mr-1.5" /> Reject
+                    </Button>
+                  </>
+                )}
+                {editing.status === 'approved' && (
+                  <Button className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={() => handleStatementAction(editing, 'issue')}>
+                    <FileText size={14} className="mr-1.5" /> Issue to Merchant
+                  </Button>
+                )}
+                {editing.status === 'rejected' && (
+                  <span className="text-xs text-red-600 italic mr-2">Rejected: {editing.rejectionReason}</span>
+                )}
+              </>
             )}
+            <div className="flex gap-3 ml-auto">
+              <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Close</Button>
+              {!editing && (
+                <Button onClick={handleGenerate} disabled={generating} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
+                  {generating ? 'Generating...' : 'Generate'}
+                </Button>
+              )}
+            </div>
           </div>
         }
       >
