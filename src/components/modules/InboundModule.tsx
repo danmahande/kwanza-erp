@@ -330,7 +330,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
   const fetchData = useCallback(() => {
     setLoading(true)
     fetch(`/api/inbound?search=${search}`)
-      .then(r => r.json()).then(d => { setData(d); setLoading(false) }).catch(() => setLoading(false))
+      .then(r => r.json()).then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) }).catch(() => setLoading(false))
   }, [search])
 
   const handleSearchChange = useCallback((value: string) => { setSearch(value); setLoading(true); setPage(1) }, [])
@@ -481,7 +481,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
     { label: 'Total Receipts', value: data.length, icon: Inbox, color: '#22C55E', bg: 'bg-green-500/15', border: 'border-green-500/20', gradient: 'from-green-500/10 to-green-500/5' },
     { label: 'This Month', value: thisMonth, icon: BarChart3, color: '#FF6B35', bg: 'bg-orange-500/15', border: 'border-orange-500/20', gradient: 'from-orange-500/10 to-orange-500/5' },
     { label: 'Pending', value: pendingCount, icon: Clock, color: '#F59E0B', bg: 'bg-amber-500/15', border: 'border-amber-500/20', gradient: 'from-amber-500/10 to-amber-500/5' },
-    { label: 'Total Value', value: `KES ${fmt(totalValue)}`, icon: DollarSign, color: '#8B5CF6', bg: 'bg-purple-500/15', border: 'border-purple-500/20', gradient: 'from-purple-500/10 to-purple-500/5' },
+    { label: 'Total Value', value: `UGX ${fmt(totalValue)}`, icon: DollarSign, color: '#8B5CF6', bg: 'bg-purple-500/15', border: 'border-purple-500/20', gradient: 'from-purple-500/10 to-purple-500/5' },
   ]
 
   // ── Filter Chips ──
@@ -505,8 +505,8 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
     { key: 'productName', label: 'Product', sortable: true, className: 'font-semibold text-gray-900 max-w-[200px] truncate' },
     { key: 'merchantName', label: 'Supplier', sortable: true, render: (_v, row) => <span className="flex items-center gap-1"><Building2 size={12} className="text-gray-400 shrink-0" />{String(row.merchantName)}</span> },
     { key: 'qtyIn', label: 'Qty', sortable: true, className: 'tabular-nums font-bold text-gray-800', render: (val) => (val as number).toLocaleString() },
-    { key: 'unitPrice', label: 'Unit Price', sortable: true, className: 'tabular-nums', render: (val) => val ? `KES ${fmt(val as number)}` : '—' },
-    { key: 'inboundValue', label: 'Value', sortable: true, className: 'tabular-nums font-semibold', render: (val) => val ? `KES ${fmt(val as number)}` : '—' },
+    { key: 'unitPrice', label: 'Unit Price', sortable: true, className: 'tabular-nums', render: (val) => val ? `UGX ${fmt(val as number)}` : '—' },
+    { key: 'inboundValue', label: 'Value', sortable: true, className: 'tabular-nums font-semibold', render: (val) => val ? `UGX ${fmt(val as number)}` : '—' },
     { key: 'storageLocation', label: 'Location', sortable: true, render: (val) => val ? <span className="bg-[#1B2A4A]/5 text-[#1B2A4A] px-2 py-0.5 rounded-md text-xs font-medium inline-flex items-center gap-1"><MapPin size={10} />{String(val)}</span> : <span className="text-gray-300">—</span> },
     { key: 'expiryDate', label: 'Expiry', sortable: true, className: 'text-xs', render: (val) => { if (!val) return <span className="text-gray-300">—</span>; const s = getExpiryStatus(val as string); return s ? <span className={`px-1.5 py-0.5 rounded-md font-medium ${s.color}`}>{s.label}</span> : <span>{String(val)}</span> } },
     { key: 'status', label: 'Status', sortable: true, render: (val) => statusBadge(String(val)) },
@@ -673,11 +673,11 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
               </div>
               <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200/60 rounded-xl p-4 text-center">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Unit Price</p>
-                <p className="text-xl font-bold text-gray-900">{selectedRecord.unitPrice ? `KES ${fmt(selectedRecord.unitPrice)}` : '—'}</p>
+                <p className="text-xl font-bold text-gray-900">{selectedRecord.unitPrice ? `UGX ${fmt(selectedRecord.unitPrice)}` : '—'}</p>
               </div>
               <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200/60 rounded-xl p-4 text-center">
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Value</p>
-                <p className="text-xl font-bold text-gray-900">{selectedRecord.inboundValue ? `KES ${fmt(selectedRecord.inboundValue)}` : '—'}</p>
+                <p className="text-xl font-bold text-gray-900">{selectedRecord.inboundValue ? `UGX ${fmt(selectedRecord.inboundValue)}` : '—'}</p>
               </div>
             </div>
 
@@ -782,7 +782,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
           {form.qtyIn && form.unitPrice && (
             <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/60 rounded-xl p-3">
               <p className="text-xs text-gray-500">Total Inbound Value</p>
-              <p className="text-lg font-bold text-green-700">KES {(parseInt(form.qtyIn) * parseFloat(form.unitPrice)).toLocaleString()}</p>
+              <p className="text-lg font-bold text-green-700">UGX {(parseInt(form.qtyIn) * parseFloat(form.unitPrice)).toLocaleString()}</p>
             </div>
           )}
 

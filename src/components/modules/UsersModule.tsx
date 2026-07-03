@@ -56,11 +56,11 @@ export default function UsersModule() {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'viewer' })
 
   const fetchData = () => {
-    fetch('/api/users').then(r => r.json()).then(setData)
+    fetch('/api/users').then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }
 
   useEffect(() => {
-    fetch('/api/users').then(r => r.json()).then(setData)
+    fetch('/api/users').then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }, [])
 
   const activeCount = data.filter(u => u.isActive).length

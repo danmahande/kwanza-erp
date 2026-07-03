@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 // GET /api/merchant-communication?merchantId=MCH-001&followUpsDue=true
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId') || ''
     const followUpsDue = req.nextUrl.searchParams.get('followUpsDue') === 'true'
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '50', 10)
@@ -47,6 +50,8 @@ export async function GET(req: NextRequest) {
 // POST /api/merchant-communication — create new entry
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { merchantId, type, direction, subject, notes, recordedBy, followUpAt, isResolved } = body
     if (!merchantId || !subject) {
@@ -79,6 +84,8 @@ export async function POST(req: NextRequest) {
 // DELETE /api/merchant-communication?id=xxx
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
     await db.merchantCommunication.delete({ where: { id } })
@@ -91,6 +98,8 @@ export async function DELETE(req: NextRequest) {
 // PATCH /api/merchant-communication — mark resolved
 export async function PATCH(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, isResolved } = body
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })

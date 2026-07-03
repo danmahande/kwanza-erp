@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Merchant Rate Card API
@@ -11,6 +12,8 @@ import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId')
     const where: Record<string, unknown> = {}
     if (merchantId) where.merchantId = merchantId
@@ -28,6 +31,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
 
     // If a previous active rate card exists for this merchant, supersede it
@@ -73,6 +78,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, ...data } = body
 
@@ -95,6 +102,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

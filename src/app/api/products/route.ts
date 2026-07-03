@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const search = req.nextUrl.searchParams.get('search') || ''
     const products = await db.product.findMany({
       where: {
@@ -23,6 +26,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const count = await db.product.count()
     const productId = `PRD-${String(count + 1).padStart(3, '0')}`
@@ -37,6 +42,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, ...data } = body
     const product = await db.product.update({ where: { id }, data })
@@ -48,6 +55,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.product.delete({ where: { id: id! } })

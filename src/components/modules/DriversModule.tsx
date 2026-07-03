@@ -57,8 +57,8 @@ const DRIVER_STATUSES = [
 
 // ── Helpers ──
 const fmtMoney = (n: number) => {
-  if (n == null || isNaN(n)) return 'KES 0'
-  return `KES ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+  if (n == null || isNaN(n)) return 'UGX 0'
+  return `UGX ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
 }
 
 const statusBadge = (status: string) => {
@@ -196,7 +196,7 @@ export default function DriversModule() {
     if (filterStatus) params.set('status', filterStatus)
     fetch(`/api/drivers?${params}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(() => { setLoading(false); toast.error('Failed to load drivers') })
   }, [search, filterStatus])
 

@@ -7,6 +7,7 @@ import {
 import { generateStatementExcel } from '@/lib/statement-excel'
 import { generateStatementPDF } from '@/lib/statement-pdf'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 type StatementLineItemShape = {
   date: string
@@ -35,6 +36,8 @@ type StatementLineItemShape = {
  */
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId')
     const id = req.nextUrl.searchParams.get('id')
     const format = req.nextUrl.searchParams.get('format') // 'excel' | 'pdf'
@@ -106,6 +109,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
 
     if (body.allMerchants) {
@@ -137,6 +142,8 @@ export async function POST(req: NextRequest) {
 // PATCH — approval workflow: submit / approve / reject / issue
 export async function PATCH(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { action, id, reason, by } = body as {
       action: 'submit' | 'approve' | 'reject' | 'issue'

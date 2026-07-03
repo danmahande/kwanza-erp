@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Payment Batches API — Workflow 6
@@ -18,6 +19,8 @@ import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
 
     if (id) {
@@ -46,6 +49,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { statementIds, paymentMethod, recordedBy, notes } = body
 
@@ -70,82 +75,77 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = unpaidStatements.reduce((s, st) => s + st.netPayable, 0)
 
-    // Create the batch
-    const batchCount = await db.paymentBatch.count()
-    const batchId = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(batchCount + 1).padStart(3, '0')}`
-
-    const batch = await db.paymentBatch.create({
-      data: {
-        batchId,
-        totalAmount,
-        merchantCount: unpaidStatements.length,
-        paymentMethod: paymentMethod || 'bank_transfer',
-        status: 'submitted',
-        recordedBy: recordedBy || 'system',
-        notes: notes || null,
-      },
-    })
-
-    // Create a MerchantPayment per statement, linked back to the batch
+    // ── Create batch + payments + update statements + update merchants in ONE transaction ──
     const paymentDate = new Date()
     const year = paymentDate.getFullYear()
     const month = paymentDate.getMonth() + 1
     const day = paymentDate.getDate()
 
     let paymentCounter = await db.merchantPayment.count()
-    const createdPayments = []
-    for (const stmt of unpaidStatements) {
-      paymentCounter += 1
-      const paymentId = `PAY-${String(paymentCounter).padStart(3, '0')}`
 
-      const payment = await db.merchantPayment.create({
+    const result = await db.$transaction(async (tx) => {
+      // Create the batch
+      const batchCount = await tx.paymentBatch.count()
+      const batchId = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(batchCount + 1).padStart(3, '0')}`
+
+      const batch = await tx.paymentBatch.create({
         data: {
-          paymentId,
-          merchantId: stmt.merchantId,
-          merchantName: stmt.merchantName,
-          vendorId: stmt.merchantId, // merchant acts as vendor in the existing schema
-          amount: stmt.netPayable,
+          batchId,
+          totalAmount,
+          merchantCount: unpaidStatements.length,
           paymentMethod: paymentMethod || 'bank_transfer',
-          reference: `${batchId} / ${stmt.statementId}`,
-          comment: `Payout for statement ${stmt.statementId} (period ${stmt.period})`,
-          deductions: 0,
-          netAmount: stmt.netPayable,
-          recordedBy: recordedBy || 'system',
-          statementId: stmt.statementId,
-          batchId: batch.batchId,
-          year,
-          month,
-          day,
           status: 'submitted',
-        },
-      })
-      createdPayments.push(payment)
-
-      // Mark the statement as paid
-      await db.merchantStatement.update({
-        where: { id: stmt.id },
-        data: {
-          isPaid: true,
-          paidAt: paymentDate,
-          status: 'paid',
+          recordedBy: recordedBy || 'system',
+          notes: notes || null,
         },
       })
 
-      // Update merchant cumulative figures
-      await db.merchant.update({
-        where: { merchantId: stmt.merchantId },
-        data: {
-          actualPayment: { increment: stmt.netPayable },
-          pendingPayment: { decrement: stmt.netPayable },
-        },
-      })
-    }
+      const createdPayments = []
+      for (const stmt of unpaidStatements) {
+        paymentCounter += 1
+        const paymentId = `PAY-${String(paymentCounter).padStart(3, '0')}`
 
-    return NextResponse.json({
-      batch,
-      paymentsCreated: createdPayments.length,
-      totalAmount,
-    }, { status: 201 })
+        const payment = await tx.merchantPayment.create({
+          data: {
+            paymentId,
+            merchantId: stmt.merchantId,
+            merchantName: stmt.merchantName,
+            vendorId: stmt.merchantId,
+            amount: stmt.netPayable,
+            paymentMethod: paymentMethod || 'bank_transfer',
+            reference: `${batchId} / ${stmt.statementId}`,
+            comment: `Payout for statement ${stmt.statementId} (period ${stmt.period})`,
+            deductions: 0,
+            netAmount: stmt.netPayable,
+            recordedBy: recordedBy || 'system',
+            statementId: stmt.statementId,
+            batchId: batch.batchId,
+            year, month, day,
+            status: 'submitted',
+          },
+        })
+        createdPayments.push(payment)
+
+        // Mark the statement as paid
+        await tx.merchantStatement.update({
+          where: { id: stmt.id },
+          data: { isPaid: true, paidAt: paymentDate, status: 'paid' },
+        })
+
+        // Update merchant cumulative figures
+        await tx.merchant.update({
+          where: { merchantId: stmt.merchantId },
+          data: {
+            actualPayment: { increment: stmt.netPayable },
+            pendingPayment: { decrement: stmt.netPayable },
+          },
+        })
+      }
+
+      return { batch, paymentsCreated: createdPayments.length, totalAmount }
+    })
+
+    return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error('Error creating payment batch:', error)
     return NextResponse.json({ error: 'Failed to create payment batch' }, { status: 500 })
@@ -154,6 +154,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, ...data } = body
 
@@ -185,6 +187,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

@@ -4,6 +4,7 @@ import PDFDocument from 'pdfkit'
 import fs from 'fs'
 import path from 'path'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Invoice PDF generation — Workflow 4 #4
@@ -21,6 +22,8 @@ function formatUGX(n: number): string {
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

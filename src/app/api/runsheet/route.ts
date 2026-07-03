@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 // GET /api/runsheet — list all runsheets + unassigned orders
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const search = req.nextUrl.searchParams.get('search') || ''
     const statusFilter = req.nextUrl.searchParams.get('status') || ''
 
@@ -93,6 +96,8 @@ export async function GET(req: NextRequest) {
 // POST /api/runsheet — create runsheet from pending orders
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { driver, vehicleNumber, outboundIds, notes } = body
 
@@ -131,6 +136,8 @@ export async function POST(req: NextRequest) {
 // PUT /api/runsheet — update stop status, handle reschedule + cancel
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, actualDeliveredQty, codCollected, deliveryNotes, stopSequence } = body
 

@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 // GET /api/drivers/[id]/performance?days=30
 // Computes per-driver delivery performance metrics from existing data.
 // Parity with /api/merchants/[id]/performance.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const { id } = await params
     const days = parseInt(req.nextUrl.searchParams.get('days') || '30', 10)
     const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)

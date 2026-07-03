@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Audit Log API
@@ -13,6 +14,8 @@ import { db } from '@/lib/db'
  */
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const search = req.nextUrl.searchParams.get('search') || ''
     const moduleFilter = req.nextUrl.searchParams.get('module') || 'all'
 

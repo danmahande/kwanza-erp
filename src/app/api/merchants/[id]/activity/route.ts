@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Merchant Activity Timeline API (#20)
@@ -20,6 +21,8 @@ import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const { id } = await params
     const limit = parseInt(req.nextUrl.searchParams.get('limit') || '20')
 

@@ -118,11 +118,11 @@ export default function RTVModule() {
   useEffect(() => { fetch('/api/merchants').then(r => r.json()).then(setMerchants) }, [])
 
   const fetchData = useCallback(() => {
-    fetch(`/api/rtv?search=${search}`).then(r => r.json()).then(setData)
+    fetch(`/api/rtv?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }, [search])
 
   useEffect(() => {
-    fetch(`/api/rtv?search=${search}`).then(r => r.json()).then(setData)
+    fetch(`/api/rtv?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }, [search])
 
   // ── Form Handlers ──

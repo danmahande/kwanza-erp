@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * After-Sales (RMA) API — Workflow 3: Customer Returns + Disposition
@@ -18,6 +19,8 @@ import { logAudit } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const search = req.nextUrl.searchParams.get('search') || ''
     const afterSalesRecords = await db.afterSalesRecord.findMany({
       where: {
@@ -39,6 +42,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const count = await db.afterSalesRecord.count()
     const afterSalesId = `AS-${String(count + 1).padStart(4, '0')}`
@@ -134,6 +139,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, ...data } = body
 
@@ -259,6 +266,8 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.afterSalesRecord.delete({ where: { id: id! } })

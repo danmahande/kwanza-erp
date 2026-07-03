@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Disputes API — Statement dispute / credit-memo sub-system (Tier 1)
@@ -18,6 +19,8 @@ import { logAudit } from '@/lib/audit'
  */
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId') || ''
     const statementId = req.nextUrl.searchParams.get('statementId') || ''
     const status = req.nextUrl.searchParams.get('status') || ''
@@ -62,6 +65,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { merchantId, merchantName, statementId, lineItemReference, disputeType, reason, creditAmountRequested, createdBy } = body
     if (!merchantId || !statementId || !reason || !creditAmountRequested) {
@@ -111,6 +116,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { action, id, creditAmountApproved, resolutionNotes, by } = body as {
       action: 'review' | 'credit' | 'reject'
@@ -150,64 +157,66 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json(updated)
     }
 
-    // action === 'credit' — issue a credit memo (negative MerchantPayment)
+    // action === 'credit' — issue a credit memo (negative MerchantPayment) in ONE transaction
     const creditAmount = creditAmountApproved || dispute.creditAmountRequested
     if (creditAmount <= 0) {
       return NextResponse.json({ error: 'creditAmountApproved must be > 0' }, { status: 400 })
     }
 
-    // Create the credit memo payment (negative amount)
-    const paymentCount = await db.merchantPayment.count()
-    const paymentId = `PAY-${String(paymentCount + 1).padStart(3, '0')}`
-    const paymentDate = new Date()
-    const creditMemo = await db.merchantPayment.create({
-      data: {
-        paymentId,
-        merchantId: dispute.merchantId,
-        merchantName: dispute.merchantName,
-        vendorId: dispute.merchantId,
-        amount: -creditAmount, // NEGATIVE — this is a credit, not a payout
-        paymentMethod: 'credit_memo',
-        reference: `CREDIT-MEMO / ${dispute.disputeId} / ${dispute.statementId}`,
-        comment: `Credit memo for dispute ${dispute.disputeId}: ${dispute.reason}`,
-        deductions: 0,
-        netAmount: -creditAmount,
-        recordedBy: performer,
-        statementId: dispute.statementId,
-        year: paymentDate.getFullYear(),
-        month: paymentDate.getMonth() + 1,
-        day: paymentDate.getDate(),
-        status: 'completed',
-      },
-    })
+    const { updated, creditMemo } = await db.$transaction(async (tx) => {
+      const paymentCount = await tx.merchantPayment.count()
+      const paymentId = `PAY-${String(paymentCount + 1).padStart(3, '0')}`
+      const paymentDate = new Date()
 
-    // Update the dispute
-    const updated = await db.statementDispute.update({
-      where: { id },
-      data: {
-        status: 'credited',
-        creditAmountApproved: creditAmount,
-        resolvedBy: performer,
-        resolvedAt: now,
-        resolutionNotes: resolutionNotes || `Credit memo ${paymentId} issued`,
-        paymentId,
-      },
-    })
+      const creditMemo = await tx.merchantPayment.create({
+        data: {
+          paymentId,
+          merchantId: dispute.merchantId,
+          merchantName: dispute.merchantName,
+          vendorId: dispute.merchantId,
+          amount: -creditAmount,
+          paymentMethod: 'credit_memo',
+          reference: `CREDIT-MEMO / ${dispute.disputeId} / ${dispute.statementId}`,
+          comment: `Credit memo for dispute ${dispute.disputeId}: ${dispute.reason}`,
+          deductions: 0,
+          netAmount: -creditAmount,
+          recordedBy: performer,
+          statementId: dispute.statementId,
+          year: paymentDate.getFullYear(),
+          month: paymentDate.getMonth() + 1,
+          day: paymentDate.getDate(),
+          status: 'completed',
+        },
+      })
 
-    // Update merchant cumulative figures — credit memo reduces pending payment
-    await db.merchant.update({
-      where: { merchantId: dispute.merchantId },
-      data: {
-        pendingPayment: { decrement: creditAmount },
-        actualPayment: { decrement: creditAmount }, // reduces what they've been credited
-      },
+      const updated = await tx.statementDispute.update({
+        where: { id },
+        data: {
+          status: 'credited',
+          creditAmountApproved: creditAmount,
+          resolvedBy: performer,
+          resolvedAt: now,
+          resolutionNotes: resolutionNotes || `Credit memo ${paymentId} issued`,
+          paymentId,
+        },
+      })
+
+      await tx.merchant.update({
+        where: { merchantId: dispute.merchantId },
+        data: {
+          pendingPayment: { decrement: creditAmount },
+          actualPayment: { decrement: creditAmount },
+        },
+      })
+
+      return { updated, creditMemo }
     })
 
     await logAudit({
       action: 'CREDIT',
       module: 'disputes',
       entityId: dispute.disputeId,
-      details: `Credit memo ${paymentId} issued for ${creditAmount} (dispute ${dispute.disputeId})`,
+      details: `Credit memo ${creditMemo.paymentId} issued for ${creditAmount} (dispute ${dispute.disputeId})`,
     })
     return NextResponse.json({ dispute: updated, creditMemo })
   } catch (e) {

@@ -54,7 +54,7 @@ interface RunsheetData {
 }
 
 // ── Helpers ──
-const fmtKES = (n: number) => n >= 1e6 ? `KES ${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `KES ${(n / 1e3).toFixed(1)}K` : `KES ${n.toLocaleString()}`
+const fmtUGX = (n: number) => n >= 1e6 ? `UGX ${(n / 1e6).toFixed(1)}M` : n >= 1e3 ? `UGX ${(n / 1e3).toFixed(1)}K` : `UGX ${n.toLocaleString()}`
 
 const statusStyle = (status: string) => {
   switch (status) {
@@ -433,7 +433,7 @@ export default function RunsheetModule() {
     { title: 'In Progress', value: inProgressRunsheets, icon: Truck, color: '#3B82F6', bg: 'bg-blue-50', bgGradient: 'from-blue-500/10 to-sky-50', borderColor: 'border-blue-200/60' },
     { title: 'Completed', value: completedRunsheets, icon: CheckCircle2, color: '#22C55E', bg: 'bg-green-50', bgGradient: 'from-green-500/10 to-emerald-50', borderColor: 'border-green-200/60' },
     { title: 'Unassigned Orders', value: unassignedCount, icon: AlertTriangle, color: '#F59E0B', bg: 'bg-amber-50', bgGradient: 'from-amber-500/10 to-yellow-50', borderColor: 'border-amber-200/60' },
-    { title: 'COD Collected', value: fmtKES(totalCOD), icon: DollarSign, color: '#8B5CF6', bg: 'bg-purple-50', bgGradient: 'from-purple-500/10 to-violet-50', borderColor: 'border-purple-200/60' },
+    { title: 'COD Collected', value: fmtUGX(totalCOD), icon: DollarSign, color: '#8B5CF6', bg: 'bg-purple-50', bgGradient: 'from-purple-500/10 to-violet-50', borderColor: 'border-purple-200/60' },
     { title: 'Total Stops', value: totalStopsCount, icon: MapPin, color: '#1B2A4A', bg: 'bg-slate-50', bgGradient: 'from-slate-500/10 to-gray-50', borderColor: 'border-slate-200/60' },
   ]
 
@@ -471,7 +471,7 @@ export default function RunsheetModule() {
             { label: 'Pending', val: rs.pending, color: '#F59E0B' },
             { label: 'Failed', val: rs.failed, color: '#EF4444' },
             { label: 'Cancelled', val: rs.cancelled ?? 0, color: '#6B7280' },
-            { label: 'COD', val: fmtKES(rs.totalCOD), color: '#8B5CF6' },
+            { label: 'COD', val: fmtUGX(rs.totalCOD), color: '#8B5CF6' },
           ].map(item => (
             <div key={item.label} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-100">
               <div className="text-sm font-bold text-gray-900">{item.val}</div>
@@ -537,7 +537,7 @@ export default function RunsheetModule() {
                         {stop.actualDeliveredQty ?? '-'}
                       </span>
                     </TableCell>
-                    <TableCell className={`text-right text-sm ${stop.status === 'cancelled' ? 'opacity-60' : ''}`}>{stop.codCollected ? fmtKES(stop.codCollected) : '-'}</TableCell>
+                    <TableCell className={`text-right text-sm ${stop.status === 'cancelled' ? 'opacity-60' : ''}`}>{stop.codCollected ? fmtUGX(stop.codCollected) : '-'}</TableCell>
                     <TableCell>
                       <Badge className={`text-xs font-semibold ${statusStyle(stop.status)}`}>
                         {stop.status}
@@ -803,7 +803,7 @@ export default function RunsheetModule() {
                   )}
                   <div className="ml-auto flex items-center gap-4">
                     {rs.totalCOD > 0 && (
-                      <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">COD {fmtKES(rs.totalCOD)}</span>
+                      <span className="text-xs font-semibold text-purple-600 bg-purple-50 px-2 py-1 rounded-lg">COD {fmtUGX(rs.totalCOD)}</span>
                     )}
                     <span className="text-xs text-gray-400">{new Date(rs.date).toLocaleDateString()}</span>
                   </div>

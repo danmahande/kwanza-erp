@@ -90,11 +90,11 @@ export default function ShrinkageModule() {
   useEffect(() => { fetch('/api/products').then(r => r.json()).then(setProducts) }, [])
 
   const fetchData = useCallback(() => {
-    fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
+    fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }, [search])
 
   useEffect(() => {
-    fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(setData)
+    fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }, [search])
 
   // ── Form Handlers ──

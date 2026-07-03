@@ -536,7 +536,7 @@ export default function InventoryModule() {
 
   const stats = [
     { label: 'Total Products', value: data.length, icon: Package, color: '#1B2A4A', bg: 'bg-slate-500/15', border: 'border-slate-500/20', gradient: 'from-slate-500/10 to-slate-500/5' },
-    { label: 'Total Value', value: `KES ${fmt(totalStockValue)}`, icon: BarChart3, color: '#22C55E', bg: 'bg-green-500/15', border: 'border-green-500/20', gradient: 'from-green-500/10 to-green-500/5' },
+    { label: 'Total Value', value: `UGX ${fmt(totalStockValue)}`, icon: BarChart3, color: '#22C55E', bg: 'bg-green-500/15', border: 'border-green-500/20', gradient: 'from-green-500/10 to-green-500/5' },
     { label: 'Low Stock', value: lowStockCount, icon: AlertTriangle, color: '#F59E0B', bg: 'bg-amber-500/15', border: 'border-amber-500/20', gradient: 'from-amber-500/10 to-amber-500/5' },
     { label: 'Out of Stock', value: outOfStockCount, icon: Warehouse, color: '#EF4444', bg: 'bg-red-500/15', border: 'border-red-500/20', gradient: 'from-red-500/10 to-red-500/5' },
   ]
@@ -585,8 +585,8 @@ export default function InventoryModule() {
     { key: 'merchantName', label: 'Merchant', sortable: true, className: 'text-gray-600', render: (_v, row) => <span className="flex items-center gap-1"><Building2 size={12} className="text-gray-400 shrink-0" />{String(row.merchantName)}</span> },
     { key: 'computedCurrentQty', label: 'Stock', sortable: true, className: 'tabular-nums font-bold', render: (val) => { const q = safe(val as number); return <span className={q < 0 ? 'text-red-600' : q === 0 ? 'text-gray-400' : 'text-[#1B2A4A]'}>{fmt(q)}</span> } },
     { key: 'unit', label: 'Unit', sortable: true, className: 'text-gray-500' },
-    { key: 'unitSellingPrice', label: 'Price', sortable: true, className: 'tabular-nums', render: (val) => `KES ${fmt(val as number)}` },
-    { key: 'currentStockValue', label: 'Stock Value', sortable: true, className: 'tabular-nums font-semibold', render: (val) => { const v = val as number; return <span className={v < 0 ? 'text-red-600' : 'text-gray-800'}>KES {fmt(v)}</span> } },
+    { key: 'unitSellingPrice', label: 'Price', sortable: true, className: 'tabular-nums', render: (val) => `UGX ${fmt(val as number)}` },
+    { key: 'currentStockValue', label: 'Stock Value', sortable: true, className: 'tabular-nums font-semibold', render: (val) => { const v = val as number; return <span className={v < 0 ? 'text-red-600' : 'text-gray-800'}>UGX {fmt(v)}</span> } },
   ], [])
 
   // ════════════════════════════════════════

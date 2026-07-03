@@ -72,7 +72,7 @@ export default function StatementsModule() {
   }, [])
 
   const fetchData = () => {
-    fetch(`/api/merchant-statements?search=${search}`).then(r => r.json()).then(setData)
+    fetch(`/api/merchant-statements?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
   }
 
   useEffect(() => { fetchData() }, [search])

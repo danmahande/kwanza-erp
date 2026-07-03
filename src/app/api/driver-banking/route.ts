@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Driver Banking API — Workflow 2
@@ -15,6 +16,8 @@ import { db } from '@/lib/db'
 
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const driverId = req.nextUrl.searchParams.get('driverId')
     const runsheetId = req.nextUrl.searchParams.get('runsheetId')
     const status = req.nextUrl.searchParams.get('status')
@@ -38,6 +41,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const count = await db.driverBanking.count()
     const bankingId = `BNK-${String(count + 1).padStart(5, '0')}`
@@ -82,6 +87,8 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { id, ...data } = body
 
@@ -171,6 +178,8 @@ async function reconcileBankingForRunsheet(runsheetId: string) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAllowedTransitions, getNextMainStep, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Scan Advance API
@@ -26,6 +27,8 @@ import { logAudit } from '@/lib/audit'
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { scanValue, performedBy } = body
     if (!scanValue || typeof scanValue !== 'string') {

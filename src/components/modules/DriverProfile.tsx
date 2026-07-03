@@ -51,7 +51,7 @@ interface TripData {
 
 // ── Helpers ──
 const fmt = (n: number) => n == null || isNaN(n) ? '0' : n.toLocaleString(undefined, { maximumFractionDigits: 0 })
-const fmtMoney = (n: number) => `KES ${fmt(n)}`
+const fmtMoney = (n: number) => `UGX ${fmt(n)}`
 
 const statusBadge = (status: string) => {
   const map: Record<string, string> = {

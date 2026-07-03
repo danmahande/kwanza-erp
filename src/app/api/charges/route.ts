@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Charges API — Charge ledger (Tier 1 internal-controls upgrade)
@@ -14,6 +15,8 @@ import { logAudit } from '@/lib/audit'
  */
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId') || ''
     const period = req.nextUrl.searchParams.get('period') || ''
     const status = req.nextUrl.searchParams.get('status') || ''
@@ -68,6 +71,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { merchantId, merchantName, chargeType, amount, description, sourceType, sourceId, period, recordedBy } = body
     if (!merchantId || !chargeType || !amount || !period) {
@@ -114,6 +119,8 @@ export async function POST(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { action, ids, reason, by } = body as { action: 'approve' | 'reject'; ids: string[]; reason?: string; by?: string }
 
@@ -157,6 +164,8 @@ export async function PATCH(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
     await db.charge.delete({ where: { id } })

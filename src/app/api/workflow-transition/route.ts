@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isLegalTransition, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Generic Workflow Transition API
@@ -41,6 +42,8 @@ const STATUS_FIELD: Record<string, string> = {
 
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { module, id, toStatus, performedBy, reason } = body
 
@@ -166,6 +169,8 @@ export async function POST(req: NextRequest) {
  */
 export async function PUT(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
     const { module, ids, toStatus, performedBy, reason } = body
 

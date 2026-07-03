@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { runDailyStorageAccrual } from '@/lib/storage-liability'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Storage Liability API
@@ -10,6 +11,8 @@ import { runDailyStorageAccrual } from '@/lib/storage-liability'
  */
 export async function GET(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const merchantId = req.nextUrl.searchParams.get('merchantId')
     const status = req.nextUrl.searchParams.get('status')
 
@@ -54,6 +57,8 @@ export async function GET(req: NextRequest) {
  */
 export async function POST(req: NextRequest) {
   try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
     const action = req.nextUrl.searchParams.get('action')
     if (action !== 'accrue') {
       return NextResponse.json({ error: 'Unknown action. Use ?action=accrue' }, { status: 400 })
