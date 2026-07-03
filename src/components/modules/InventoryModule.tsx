@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
@@ -592,388 +593,247 @@ export default function InventoryModule() {
   // ── RENDER ──
   // ════════════════════════════════════════
   return (
-    <div className="space-y-4">
-      {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Inventory Office"
-        description="Manage products, stock levels, and valuations"
-        icon={Warehouse}
-        stats={stats}
-        actionLabel="Add Product"
-        onAction={() => { resetForm(); setOpen(true) }}
+    <div className="space-y-3">
+      <OpsHeader
+        title="Stock"
+        description="Current stock levels across all products"
+        kpiCells={[
+          { label: 'SKUS', value: data.length },
+          { label: 'STOCK VALUE', value: `UGX ${fmt(totalStockValue)}` },
+          { label: 'LOW STOCK', value: lowStockCount, highlight: lowStockCount > 0, highlightColor: 'orange' as const },
+          { label: 'OUT OF STOCK', value: outOfStockCount, highlight: outOfStockCount > 0, highlightColor: 'red' as const },
+        ]}
+        searchValue={search}
+        onSearchChange={handleSearchChange}
+        searchPlaceholder="Search products, vendors, IDs..."
       >
-        {/* Toolbar */}
-        <div className="relative flex-1 max-w-sm">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input ref={searchInputRef} placeholder="Search products, vendors, IDs..." value={search} onChange={e => handleSearchChange(e.target.value)}
-            className="pl-9 h-9 rounded-xl border-gray-200 text-sm bg-white" />
-        </div>
-        <SearchableFilter label="Vendor" options={vendors} selected={filterVendor.length > 1 ? filterVendor : filterVendor[0] || null} onSelect={handleFilterVendorChange} counts={vendorCounts} multi />
-        <SearchableFilter label="Category" options={categories} selected={filterCategory.length > 1 ? filterCategory : filterCategory[0] || null} onSelect={handleFilterCategoryChange} counts={categoryCounts} multi />
-        <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={STOCK_STATUSES} counts={statusCounts} />
-        <NumericRangeFilter label="Qty" value={filterQtyRange} onChange={setFilterQtyRange} presets={qtyPresets} />
-        <NumericRangeFilter label="Value" value={filterValueRange} onChange={setFilterValueRange} presets={valuePresets} />
-        <ViewToggle value={viewMode} onChange={setViewMode} />
-        <Select value={String(pageSize)} onValueChange={v => handlePageSizeChange(Number(v))}>
-          <SelectTrigger className="h-9 w-[100px] rounded-xl border-gray-200 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>)}</SelectContent>
-        </Select>
-      </OfficeHeader>
+        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs rounded-md">
+          <Upload size={12} className="mr-1" /> Import
+        </Button>
+        <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" onChange={handleCSVUpload} className="hidden" />
+        <Button variant="outline" size="sm" onClick={handleExportAll} className="h-7 text-xs rounded-md">
+          <Upload size={12} className="mr-1" /> Export
+        </Button>
+      </OpsHeader>
 
-      {/* ── Active Filters ── */}
-      <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
-
-      {/* ── Batch Actions Bar ── */}
-      <AnimatePresence>
-        {selectedIds.size > 0 && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-[#1B2A4A] text-white rounded-xl p-2.5 flex items-center gap-3">
-            <CheckSquare size={16} className="text-[#FF6B35]" />
-            <span className="text-sm font-semibold">{selectedIds.size.toLocaleString()} selected</span>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" className="rounded-lg text-xs border-white/20 text-white hover:bg-white/10" onClick={handleExportAll}><Upload size={13} className="mr-1.5" /> Export All</Button>
-            <Button variant="outline" size="sm" className="rounded-lg text-xs border-white/20 text-white hover:bg-white/10" onClick={handleBatchExport}><Upload size={13} className="mr-1.5" /> Export Selected</Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="rounded-lg text-xs border-red-400/30 text-red-300 hover:bg-red-500/20"><Trash2 size={13} className="mr-1.5" /> Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {selectedIds.size} products?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleBatchDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button variant="ghost" size="sm" className="rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/10" onClick={clearSelection}>Clear</Button>
-          </motion.div>
+      {/* Status filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-gray-400" />
+        {[
+          { key: '', label: 'All' },
+          { key: 'in-stock', label: 'In Stock' },
+          { key: 'low-stock', label: 'Low Stock' },
+          { key: 'out-of-stock', label: 'Out of Stock' },
+          { key: 'negative', label: 'Negative' },
+        ].map(chip => {
+          const count = chip.key === '' ? data.length : statusCounts[chip.key] || 0
+          const isActive = filterStatus === chip.key || (chip.key === '' && !filterStatus)
+          return (
+            <button key={chip.key || 'all'} onClick={() => handleFilterStatusChange(chip.key || null)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              {chip.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+            </button>
+          )
+        })}
+        {/* Vendor filter */}
+        {vendors.length > 0 && (
+          <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
+            className="ml-auto px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white">
+            <option value="">All Vendors</option>
+            {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
         )}
-      </AnimatePresence>
+      </div>
 
-      {/* ── Results count ── */}
-      {viewMode === 'card' && (
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>{filteredData.length.toLocaleString()} product{filteredData.length !== 1 ? 's' : ''} found</span>
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" checked={allOnPageSelected} ref={el => { if (el) el.indeterminate = someOnPageSelected }} onChange={() => {
-              if (allOnPageSelected) clearSelection()
-              else setSelectedIds(prev => { const n = new Set(prev); paginatedData.forEach(p => n.add(p.id)); return n })
-            }} className="rounded" />
-            <span>Select page</span>
-          </label>
-          <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" onChange={handleCSVUpload} className="hidden" aria-label="Import CSV or TSV file" title="Import CSV or TSV file" />
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="rounded-lg border-gray-200 text-xs h-7">
-            <Upload size={12} className="mr-1.5" /> Import
-          </Button>
-        </div>
-        </div>
-      )}
-
-      {/* ── Card Grid / Table View ── */}
+      {/* Dense table */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
       ) : paginatedData.length === 0 ? (
-        <div className="text-center py-20 text-gray-400"><Package size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm font-medium">No products found</p><p className="text-xs mt-1">Try adjusting your filters or add a new product</p></div>
-      ) : viewMode === 'card' ? (
-        <motion.div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
-          {paginatedData.map((product) => {
-            const status = stockStatus(product)
-            const qty = safe(product.computedCurrentQty)
-            const isSelected = selectedIds.has(product.id)
-            const isNeg = qty < 0
-            const maxBar = Math.max(product.minStock * 3, Math.abs(qty), 1)
-            const barPct = Math.min((Math.abs(qty) / maxBar) * 100, 100)
-            return (
-              <motion.div key={product.id} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                className={`group relative bg-white rounded-2xl border-2 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${isSelected ? 'border-[#FF6B35] shadow-md' : 'border-gray-100'}`}
-                onClick={() => { setSelectedRecord(product); setDetailOpen(true) }}>
-                {/* Checkbox */}
-                <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
-                  <button onClick={() => toggleSelect(product.id)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]' : 'border-gray-300 bg-transparent'}`}>
-                    {isSelected && <span className="text-white text-[10px]">✓</span>}
-                  </button>
-                </div>
-                {/* Top row: ID + Status */}
-                <div className="flex items-center gap-2 mb-3 pr-8">
-                  <span className="font-mono text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">{product.productId}</span>
-                  {statusBadge(status)}
-                </div>
-                {/* Product name */}
-                <h3 className="text-base font-semibold text-gray-900 leading-snug mb-1 line-clamp-2 group-hover:text-[#FF6B35] transition-colors">{product.productLabel}</h3>
-                {/* Brand + Merchant */}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-1">
-                  {product.brand && <span className="truncate">{product.brand}</span>}
-                  {product.brand && product.variant && <span className="text-gray-300">·</span>}
-                  {product.variant && <span className="truncate text-gray-400">{product.variant}</span>}
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
-                  <Building2 size={12} /><span className="truncate">{product.merchantName}</span>
-                </div>
-                {/* Stock quantity bar */}
-                <div className="mb-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Stock</span>
-                    <span className={`text-sm font-bold tabular-nums ${isNeg ? 'text-red-600' : qty === 0 ? 'text-gray-400' : 'text-[#1B2A4A]'}`}>
-                      {isNeg ? `(${fmt(qty)})` : fmt(qty)} <span className="text-[10px] text-gray-400 font-normal">{product.unit}</span>
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className={`h-full rounded-full transition-all duration-300 ${stockBarColor(qty, product.minStock)}`} style={{ width: `${barPct}%` }} />
-                  </div>
-                  {qty > 0 && qty <= product.minStock && (
-                    <p className="text-[10px] text-amber-600 mt-1 font-medium">⚠ Below minimum ({product.minStock})</p>
-                  )}
-                </div>
-                {/* Metrics row */}
-                <div className="grid grid-cols-2 gap-2 mb-3">
-                  <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Price</p>
-                    <p className="text-sm font-bold text-gray-800">KES {fmt(product.unitSellingPrice)}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Stock Value</p>
-                    <p className={`text-sm font-bold ${isNeg ? 'text-red-600' : 'text-gray-800'}`}>
-                      {isNeg ? `(${fmt(Math.abs(safe(product.currentStockValue)))})` : `KES ${fmt(product.currentStockValue)}`}
-                    </p>
-                  </div>
-                </div>
-                {/* Bottom row: Category + Commission */}
-                <div className="flex items-center justify-between text-xs">
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700">{product.category}</span>
-                  <span className="text-gray-400">{product.commissionPercent}% comm</span>
-                </div>
-              </motion.div>
-            )
-          })}
-        </motion.div>
+        <div className="py-12 text-center text-gray-400 text-sm">
+          <Package size={32} className="mx-auto mb-3 text-gray-300" />
+          No products found. Adjust filters or add products in the Products tab.
+        </div>
       ) : (
-        <DataTable
-          data={paginatedData}
-          columns={tableColumns}
-          keyExtractor={(p) => p.id}
-          onRowClick={(p) => { setSelectedRecord(p); setDetailOpen(true) }}
-          rowClassName={(p) => selectedIds.has(p.id) ? 'bg-[#FF6B35]/5' : ''}
-          pageSize={100}
-        />
-      )}
-
-      {/* ── Pagination (card mode only, table has its own) ── */}
-      {viewMode === 'card' && sortedData.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-          <div className="text-xs text-gray-500">
-            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length.toLocaleString()}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(1)}><ChevronsLeft size={14} /></Button>
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              let pageNum: number
-              if (totalPages <= 7) pageNum = i + 1
-              else if (page <= 4) pageNum = i + 1
-              else if (page >= totalPages - 3) pageNum = totalPages - 6 + i
-              else pageNum = page - 3 + i
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh className="w-20">SKU</DenseTh>
+              <DenseTh>Product</DenseTh>
+              <DenseTh>Merchant</DenseTh>
+              <DenseTh className="w-16 text-right">Stock</DenseTh>
+              <DenseTh className="w-16 text-right">Min</DenseTh>
+              <DenseTh className="w-20 text-center">Status</DenseTh>
+              <DenseTh className="w-24 text-right">Unit Cost</DenseTh>
+              <DenseTh className="w-24 text-right">Stock Value</DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {paginatedData.map(p => {
+              const status = stockStatus(p)
+              const qty = safe(p.computedCurrentQty)
               return (
-                <Button key={pageNum} variant={pageNum === page ? 'default' : 'outline'} size="icon"
-                  className={`h-7 w-7 text-xs rounded-lg ${pageNum === page ? 'bg-[#1B2A4A] hover:bg-[#1B2A4A]' : ''}`}
-                  onClick={() => setPage(pageNum)}>{pageNum}</Button>
+                <DenseTr key={p.id} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
+                  tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
+                  <DenseTd mono className="text-gray-400 text-[10px]">{p.productId}</DenseTd>
+                  <DenseTd>
+                    <p className="text-gray-900 font-medium text-xs truncate max-w-[200px]">{p.productLabel}</p>
+                    {p.brand && <p className="text-[10px] text-gray-400">{p.brand}{p.variant ? ` · ${p.variant}` : ''}</p>}
+                  </DenseTd>
+                  <DenseTd className="text-gray-600 text-[11px]">{p.merchantName}</DenseTd>
+                  <DenseTd mono right className={qty < 0 ? 'text-red-600 font-bold' : qty === 0 ? 'text-gray-400' : 'text-gray-900 font-bold'}>
+                    {fmt(qty)}
+                  </DenseTd>
+                  <DenseTd mono right className="text-gray-400">{p.minStock}</DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
+                  </DenseTd>
+                  <DenseTd mono right className="text-gray-600">{fmt(p.unitCost)}</DenseTd>
+                  <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
+                    {fmt(safe(p.currentStockValue))}
+                  </DenseTd>
+                </DenseTr>
               )
             })}
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(totalPages)}><ChevronsRight size={14} /></Button>
+          </tbody>
+        </DenseTable>
+      )}
+
+      {/* Pagination */}
+      {sortedData.length > pageSize && (
+        <div className="flex items-center justify-between text-xs text-gray-500">
+          <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length}</span>
+          <div className="flex items-center gap-1">
+            <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
+            <span className="px-2 text-gray-600">{page} / {totalPages}</span>
+            <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
           </div>
         </div>
       )}
 
-      {/* ── Detail SlideOver ── */}
+      {/* Detail slide-over — single dense card pattern */}
       <DetailSlideOver
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
-        title={selectedRecord?.productLabel || 'Product Details'}
-        subtitle={selectedRecord?.productId}
-        width="xl"
-        footer={selectedRecord ? (
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => handleEdit(selectedRecord)} className="rounded-xl"><Pencil size={14} className="mr-1.5" />Edit</Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"><Trash2 size={14} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this product?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteRecord(selectedRecord.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white rounded-xl">Close</Button>
+        title={selectedRecord?.productLabel || ''}
+        subtitle={selectedRecord?.productId || ''}
+        width="lg"
+        footer={
+          <div className="flex gap-3 ml-auto">
+            <Button variant="outline" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl">Close</Button>
           </div>
-        ) : undefined}
+        }
       >
         {selectedRecord && (
-          <div className="space-y-5">
-            {/* Status & Date */}
-            <div className="flex items-center justify-between">
-              <div>{statusBadge(stockStatus(selectedRecord))}</div>
-              <div className="text-xs text-gray-400">{new Date(selectedRecord.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-            </div>
-
-            {/* Merchant */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Supplier / Merchant</p>
-              <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><Building2 size={14} />{selectedRecord.merchantName}</p>
-              <p className="text-xs text-gray-400 mt-0.5">ID: {selectedRecord.merchantId}</p>
-            </div>
-
-            {/* Product Details */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Product Details</p>
-              <p className="text-sm font-semibold text-gray-800 mb-1">{selectedRecord.productLabel}</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-400 text-xs">Product ID:</span><p className="font-mono font-medium">{selectedRecord.productId}</p></div>
-                {selectedRecord.brand && <div><span className="text-gray-400 text-xs">Brand:</span><p className="font-medium">{selectedRecord.brand}</p></div>}
-                {selectedRecord.variant && <div><span className="text-gray-400 text-xs">Variant:</span><p className="font-medium">{selectedRecord.variant}</p></div>}
-                <div><span className="text-gray-400 text-xs">Category:</span><p><span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-purple-50 text-purple-700">{selectedRecord.category}</span></p></div>
-                <div><span className="text-gray-400 text-xs">Unit:</span><p className="font-medium">{selectedRecord.unit}</p></div>
-                {selectedRecord.weight && <div><span className="text-gray-400 text-xs">Weight:</span><p className="font-medium">{selectedRecord.weight}</p></div>}
-              </div>
-            </div>
-
-            {/* Pricing */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Pricing</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-400 text-xs">Unit Cost:</span><p className="font-semibold">KES {fmt(selectedRecord.unitCost)}</p></div>
-                <div><span className="text-gray-400 text-xs">Selling Price:</span><p className="font-semibold">KES {fmt(selectedRecord.unitSellingPrice)}</p></div>
-                <div><span className="text-gray-400 text-xs">Commission:</span><p className="font-medium">{selectedRecord.commissionPercent}%</p></div>
-                <div><span className="text-gray-400 text-xs">Margin:</span>
-                  <p className={`font-semibold ${(selectedRecord.unitSellingPrice - selectedRecord.unitCost) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    KES {fmt(selectedRecord.unitSellingPrice - selectedRecord.unitCost)}
-                  </p>
+          <div className="space-y-3">
+            {/* Single dense card — product details */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Product Details</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Product ID</span>
+                  <span className="font-mono text-gray-700">{selectedRecord.productId}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Product</span>
+                  <span className="font-medium text-gray-900">{selectedRecord.productLabel}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Brand / Variant</span>
+                  <span className="text-gray-700">{selectedRecord.brand || '—'}{selectedRecord.variant ? ` · ${selectedRecord.variant}` : ''}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Category</span>
+                  <span className="text-gray-700">{selectedRecord.category}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Merchant</span>
+                  <span className="text-gray-900 font-medium">{selectedRecord.merchantName}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Unit / Weight</span>
+                  <span className="text-gray-700">{selectedRecord.unit}{selectedRecord.weight ? ` · ${selectedRecord.weight}` : ''}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Status</span>
+                  <span className={`inline-flex items-center gap-1 text-xs font-semibold ${statusBadge(stockStatus(selectedRecord)).props.className || ''}`}>
+                    <span className={`w-2 h-2 rounded-full ${stockStatus(selectedRecord).dot}`} />
+                    {stockStatus(selectedRecord).label}
+                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Stock Levels */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Stock Levels</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-400 text-xs">Current Stock:</span>
-                  <p className={`text-lg font-bold ${safe(selectedRecord.computedCurrentQty) < 0 ? 'text-red-600' : 'text-[#1B2A4A]'}`}>
-                    {fmt(safe(selectedRecord.computedCurrentQty))} <span className="text-xs font-normal text-gray-400">{selectedRecord.unit}</span>
-                  </p>
+            {/* Single dense card — stock + pricing */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Stock & Pricing</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Current Stock</span>
+                  <span className={`font-mono font-bold text-lg ${safe(selectedRecord.computedCurrentQty) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                    {fmt(safe(selectedRecord.computedCurrentQty))} <span className="text-[10px] text-gray-400">{selectedRecord.unit}</span>
+                  </span>
                 </div>
-                <div><span className="text-gray-400 text-xs">Min Stock Level:</span><p className="font-medium">{selectedRecord.minStock} {selectedRecord.unit}</p></div>
-                <div><span className="text-gray-400 text-xs">Stock Value:</span>
-                  <p className={`font-bold ${safe(selectedRecord.computedCurrentQty) < 0 ? 'text-red-600' : 'text-[#1B2A4A]'}`}>
-                    {safe(selectedRecord.computedCurrentQty) < 0 ? `(${fmt(Math.abs(safe(selectedRecord.currentStockValue)))})` : `KES ${fmt(selectedRecord.currentStockValue)}`}
-                  </p>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Min Stock Level</span>
+                  <span className="font-mono text-gray-700">{selectedRecord.minStock} {selectedRecord.unit}</span>
                 </div>
-                <div><span className="text-gray-400 text-xs">Active:</span>
-                  <p><Badge className={selectedRecord.isActive ? 'bg-green-100 text-green-700 hover:bg-green-100' : 'bg-gray-100 text-gray-500 hover:bg-gray-100'}>{selectedRecord.isActive ? 'Active' : 'Inactive'}</Badge></p>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Stock Value</span>
+                  <span className={`font-mono font-bold ${safe(selectedRecord.currentStockValue) < 0 ? 'text-red-600' : 'text-gray-900'}`}>UGX {fmt(safe(selectedRecord.currentStockValue))}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Unit Cost</span>
+                  <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitCost)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Selling Price</span>
+                  <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitSellingPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Margin</span>
+                  <span className={`font-mono font-bold ${(selectedRecord.unitSellingPrice - selectedRecord.unitCost) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                    UGX {fmt(selectedRecord.unitSellingPrice - selectedRecord.unitCost)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">Commission</span>
+                  <span className="font-mono text-gray-700">{selectedRecord.commissionPercent}%</span>
                 </div>
               </div>
             </div>
 
-            {/* Movement Summary */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Movement Summary</p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div><span className="text-gray-400 text-xs">Received:</span><p className="font-semibold text-green-600 flex items-center gap-1"><ArrowDownRight size={12} />{fmt(safe(selectedRecord.inQty))}</p></div>
-                <div><span className="text-gray-400 text-xs">Sent Out:</span><p className="font-semibold text-orange-600 flex items-center gap-1"><ArrowUpRight size={12} />{fmt(safe(selectedRecord.outQty))}</p></div>
-                <div><span className="text-gray-400 text-xs">Shrinkage:</span><p className="font-semibold text-red-500 flex items-center gap-1"><TrendingDown size={12} />{fmt(safe(selectedRecord.shrinkQty))}</p></div>
-                <div><span className="text-gray-400 text-xs">RTV:</span><p className="font-semibold text-purple-500 flex items-center gap-1"><RotateCcw size={12} />{fmt(safe(selectedRecord.rtvQty))}</p></div>
+            {/* Single dense card — movement summary */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement Summary</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500 flex items-center gap-1"><ArrowDownRight size={11} className="text-green-600" /> Received (In)</span>
+                  <span className="font-mono font-bold text-green-700">{fmt(safe(selectedRecord.inQty))}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500 flex items-center gap-1"><ArrowUpRight size={11} className="text-orange-600" /> Sent Out</span>
+                  <span className="font-mono font-bold text-orange-700">{fmt(safe(selectedRecord.outQty))}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500 flex items-center gap-1"><TrendingDown size={11} className="text-red-500" /> Shrinkage</span>
+                  <span className="font-mono font-bold text-red-600">{fmt(safe(selectedRecord.shrinkQty))}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500 flex items-center gap-1"><RotateCcw size={11} className="text-purple-500" /> RTV</span>
+                  <span className="font-mono font-bold text-purple-700">{fmt(safe(selectedRecord.rtvQty))}</span>
+                </div>
               </div>
             </div>
 
-            {/* Cross-Reference */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Cross-Reference</p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => { window.dispatchEvent(new CustomEvent('navigate-module', { detail: { module: 'inbound', search: selectedRecord.productId } })) }}>
-                  <ArrowDownRight size={13} className="mr-1.5" /> Inbound History
-                </Button>
-                <Button variant="outline" size="sm" className="rounded-lg text-xs" onClick={() => { window.dispatchEvent(new CustomEvent('navigate-module', { detail: { module: 'outbound', search: selectedRecord.productId } })) }}>
-                  <ArrowUpRight size={13} className="mr-1.5" /> Outbound History
-                </Button>
-              </div>
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
+              Product details and stock can be edited in the Products tab. Use Inbound tab to receive new stock.
             </div>
           </div>
         )}
       </DetailSlideOver>
 
-      {/* ── Create/Edit SlideOver ── */}
-      <DetailSlideOver
-        open={open}
-        onClose={() => { setOpen(false); resetForm() }}
-        title={editing ? 'Edit Product' : 'Add New Product'}
-        subtitle={editing ? editing.productId : 'Fill in product details'}
-        width="lg"
-        footer={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => { setOpen(false); resetForm() }} className="rounded-xl">Cancel</Button>
-            <Button size="sm" onClick={handleSubmit} disabled={submitting} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-              {submitting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : null}
-              {editing ? 'Update Product' : 'Create Product'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label className="text-xs font-medium">Product Name *</Label>
-            <Input placeholder="e.g. Coca-Cola 500ml" value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Brand</Label>
-              <Input placeholder="e.g. Coca-Cola" value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Variant</Label>
-              <Input placeholder="e.g. 500ml" value={form.variant} onChange={e => setForm({ ...form, variant: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-medium">Category *</Label>
-            <Input placeholder="e.g. Beverages" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-          </div>
-          <div className="space-y-2">
-            <Label className="text-xs font-medium">Supplier / Merchant *</Label>
-            <Select value={form.merchantId} onValueChange={handleMerchantSelect}>
-              <SelectTrigger className="h-9 rounded-lg border-gray-200 text-sm"><SelectValue placeholder="Select merchant" /></SelectTrigger>
-              <SelectContent>
-                {merchants.map(m => <SelectItem key={m.merchantId} value={m.merchantId}>{m.businessName}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Unit Cost (KES) *</Label>
-              <Input type="number" placeholder="0" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Selling Price (KES) *</Label>
-              <Input type="number" placeholder="0" value={form.unitSellingPrice} onChange={e => setForm({ ...form, unitSellingPrice: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Commission %</Label>
-              <Input type="number" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Min Stock</Label>
-              <Input type="number" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Unit</Label>
-              <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Weight</Label>
-              <Input placeholder="e.g. 500g" value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-            <div className="space-y-2">
-              <Label className="text-xs font-medium">Opening Stock</Label>
-              <Input type="number" value={form.currentStock} onChange={e => setForm({ ...form, currentStock: e.target.value })} className="h-9 rounded-lg border-gray-200 text-sm" />
-            </div>
-          </div>
-        </div>
-      </DetailSlideOver>
-
-      {/* ── CSV Import Dialog ── */}
+      {/* CSV Import Dialog */}
       <AnimatePresence>
         {importOpen && (
           <>
@@ -983,7 +843,7 @@ export default function InventoryModule() {
               className="fixed inset-0 z-50 flex items-center justify-center p-4">
               <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
                 <h2 className="text-lg font-bold text-gray-900 mb-1">Import Products</h2>
-                <p className="text-xs text-gray-400 mb-4">Paste tab-separated data (TSV) with headers. Required columns: product label, unit cost, selling price.</p>
+                <p className="text-xs text-gray-400 mb-4">Paste tab-separated data (TSV) with headers. Required: product label, unit cost, selling price.</p>
                 <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8} placeholder="Paste your data here..."
                   className="w-full h-32 text-xs font-mono border border-gray-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] resize-none" />
                 <div className="flex justify-end gap-2 mt-3">
