@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Disputes API — Statement dispute / credit-memo sub-system (Tier 1)
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const merchantId = req.nextUrl.searchParams.get('merchantId') || ''
     const statementId = req.nextUrl.searchParams.get('statementId') || ''
     const status = req.nextUrl.searchParams.get('status') || ''
@@ -67,6 +68,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { merchantId, merchantName, statementId, lineItemReference, disputeType, reason, creditAmountRequested, createdBy } = body
     if (!merchantId || !statementId || !reason || !creditAmountRequested) {
@@ -98,7 +100,7 @@ export async function POST(req: NextRequest) {
         reason,
         creditAmountRequested: parseFloat(creditAmountRequested),
         status: 'open',
-        createdBy: createdBy || 'admin',
+        createdBy: createdBy || _user.name,
       },
     })
     await logAudit({
@@ -118,6 +120,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { action, id, creditAmountApproved, resolutionNotes, by } = body as {
       action: 'review' | 'credit' | 'reject'
@@ -131,7 +134,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'action (review|credit|reject) and id are required' }, { status: 400 })
     }
 
-    const performer = by || 'admin'
+    const performer = by || _user.name
     const now = new Date()
     const dispute = await db.statementDispute.findUnique({ where: { id } })
     if (!dispute) return NextResponse.json({ error: 'Dispute not found' }, { status: 404 })

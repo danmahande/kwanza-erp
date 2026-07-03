@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { createStorageLiabilityOnInbound } from '@/lib/storage-liability'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const records = await db.inboundRecord.findMany({
       where: {
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
 
     // ── Operational Hold enforcement (Workflow 1 gate) ──
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
         await fetch(`${process.env.NEXT_PUBLIC_BASE_URL || ''}/api/items`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ items, performedBy: body.receivedBy || 'system' }),
+          body: JSON.stringify({ items, performedBy: body.receivedBy || _user.name }),
         }).catch(() => {
           // Non-blocking — InventoryItem table may not exist yet
         })
@@ -141,6 +143,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 

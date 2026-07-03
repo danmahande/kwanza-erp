@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 // GET /api/runsheet — list all runsheets + unassigned orders
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const statusFilter = req.nextUrl.searchParams.get('status') || ''
 
@@ -98,6 +99,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { driver, vehicleNumber, outboundIds, notes } = body
 
@@ -138,6 +140,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, actualDeliveredQty, codCollected, deliveryNotes, stopSequence } = body
 
@@ -205,7 +208,7 @@ export async function PUT(req: NextRequest) {
               itemId: item.itemId,
               eventType: 'DELIVERY_FAILED',
               description: `Attempt ${newAttemptCount}: ${failReason}`,
-              performedBy: performedBy || record.assignedDriver || 'system',
+              performedBy: performedBy || record.assignedDriver || _user.name,
               runsheetId: record.runsheetId,
               outboundId: record.outboundId,
               reason: failReason,

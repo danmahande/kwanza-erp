@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { isLegalTransition, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Generic Workflow Transition API
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { module, id, toStatus, performedBy, reason } = body
 
@@ -84,28 +85,28 @@ export async function POST(req: NextRequest) {
       if (toStatus === 'delivered') updateData.deliveredAt = new Date()
       if (toStatus === 'cancelled') {
         updateData.cancelledAt = new Date()
-        updateData.cancelledBy = performedBy || 'system'
+        updateData.cancelledBy = performedBy || _user.name
         if (reason) updateData.cancellationReason = reason
       }
     }
     if (module === 'after_sales') {
       if (toStatus === 'approved') {
-        updateData.approvedBy = performedBy || 'system'
+        updateData.approvedBy = performedBy || _user.name
         updateData.approvedAt = new Date()
       }
     }
     if (module === 'rtv') {
       if (toStatus === 'approved') {
-        updateData.approvedBy = performedBy || 'system'
+        updateData.approvedBy = performedBy || _user.name
         updateData.approvedAt = new Date()
       }
       if (toStatus === 'processed') {
-        updateData.processedBy = performedBy || 'system'
+        updateData.processedBy = performedBy || _user.name
       }
     }
     if (module === 'shrinkage') {
       if (toStatus === 'resolved') {
-        updateData.resolvedBy = performedBy || 'system'
+        updateData.resolvedBy = performedBy || _user.name
         updateData.resolvedAt = new Date()
         // If debitMerchant is true and totalValue exists, increment merchant's shrinkage total
         if (record.debitMerchant && record.merchantId && record.totalValue) {
@@ -122,7 +123,7 @@ export async function POST(req: NextRequest) {
     }
     if (module === 'driver_banking') {
       if (toStatus === 'verified') {
-        updateData.verifiedBy = performedBy || 'system'
+        updateData.verifiedBy = performedBy || _user.name
         updateData.verifiedAt = new Date()
       }
     }
@@ -171,6 +172,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { module, ids, toStatus, performedBy, reason } = body
 

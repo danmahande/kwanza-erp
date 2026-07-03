@@ -3,7 +3,7 @@ import { db } from '@/lib/db'
 import { decrementStorageLiability } from '@/lib/storage-liability'
 import { logAudit } from '@/lib/audit'
 import { formatCurrency } from '@/lib/currency'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Order Processing API — Workflow 2: Order → Outbound Cascade
@@ -27,6 +27,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const orderProcessingRecords = await db.orderProcessing.findMany({
       where: {
@@ -50,6 +51,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const count = await db.orderProcessing.count()
     const orderId = `OP-${String(count + 1).padStart(4, '0')}`
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
           address: body.customerAddress || '',
           totalOrders: 1,
           totalOrderValue: body.totalAmount || 0,
-          createdBy: body.createdBy || 'system',
+          createdBy: body.createdBy || _user.name,
         },
       })
     } else {
@@ -179,7 +181,7 @@ export async function POST(req: NextRequest) {
         status: body.status || 'new_order',
         trackingNumber,
         invoiceGenerated: false,
-        createdBy: body.createdBy || 'system',
+        createdBy: body.createdBy || _user.name,
       },
     })
 
@@ -255,6 +257,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
@@ -289,6 +292,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.orderProcessing.delete({ where: { id: id! } })

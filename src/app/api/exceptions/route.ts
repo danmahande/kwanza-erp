@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Exception Reporting API — Phase 4
@@ -24,6 +24,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const shrinkages = await db.shrinkageRecord.findMany({
       where: {
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { module, recordId, exceptionType, notes, reportedBy, qtyAffected } = body
 
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest) {
         unitCost,
         totalValue,
         reason: `[${exceptionType}] ${notes || ''}`.trim(),
-        reportedBy: reportedBy || 'system',
+        reportedBy: reportedBy || _user.name,
         status: 'pending',
         debitMerchant: false, // supervisor decides this at resolution
       },

@@ -7,7 +7,7 @@ import {
 import { generateStatementExcel } from '@/lib/statement-excel'
 import { generateStatementPDF } from '@/lib/statement-pdf'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 type StatementLineItemShape = {
   date: string
@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const merchantId = req.nextUrl.searchParams.get('merchantId')
     const id = req.nextUrl.searchParams.get('id')
     const format = req.nextUrl.searchParams.get('format') // 'excel' | 'pdf'
@@ -111,13 +112,14 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
 
     if (body.allMerchants) {
       // Generate statements for all active merchants for the given period
       const results = await generateStatementsForAllMerchants({
         period: body.period,
-        generatedBy: body.generatedBy || 'system',
+        generatedBy: body.generatedBy || _user.name,
       })
       return NextResponse.json({ success: true, results }, { status: 201 })
     }
@@ -126,7 +128,7 @@ export async function POST(req: NextRequest) {
     const result = await generateMerchantStatement({
       merchantId: body.merchantId,
       period: body.period,
-      generatedBy: body.generatedBy || 'system',
+      generatedBy: body.generatedBy || _user.name,
     })
 
     return NextResponse.json({ success: true, ...result }, { status: 201 })
@@ -144,6 +146,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { action, id, reason, by } = body as {
       action: 'submit' | 'approve' | 'reject' | 'issue'
@@ -156,7 +159,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'action (submit|approve|reject|issue) and id are required' }, { status: 400 })
     }
 
-    const performer = by || 'admin'
+    const performer = by || _user.name
     const now = new Date()
     const stmt = await db.merchantStatement.findUnique({ where: { id } })
     if (!stmt) return NextResponse.json({ error: 'Statement not found' }, { status: 404 })

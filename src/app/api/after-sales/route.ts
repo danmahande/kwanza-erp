@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * After-Sales (RMA) API — Workflow 3: Customer Returns + Disposition
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const afterSalesRecords = await db.afterSalesRecord.findMany({
       where: {
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const count = await db.afterSalesRecord.count()
     const afterSalesId = `AS-${String(count + 1).padStart(4, '0')}`
@@ -114,7 +116,7 @@ export async function POST(req: NextRequest) {
               itemId,
               eventType: 'RETURNED_TO_WAREHOUSE',
               description: `Returned by customer ${body.customerName}. RMA: ${afterSalesId}`,
-              performedBy: body.agentId || 'system',
+              performedBy: body.agentId || _user.name,
               outboundId: body.originalOrderId || null,
               // disposition is null here — set on approval
             },
@@ -141,6 +143,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
@@ -199,7 +202,7 @@ export async function PUT(req: NextRequest) {
                 : 'DISPOSED', // LIQUIDATE → treated as disposed for event type
               disposition: d.disposition,
               description: `Disposition decision: ${d.disposition} (RMA ${afterSalesRecord.afterSalesId})`,
-              performedBy: data.approvedBy || 'system',
+              performedBy: data.approvedBy || _user.name,
             },
           })
 
@@ -268,6 +271,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.afterSalesRecord.delete({ where: { id: id! } })

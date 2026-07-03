@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Day Close API
@@ -94,6 +94,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { performedBy } = body
 
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
       inboundUnits: inboundToday._sum.qtyIn ?? 0,
       inboundValue: inboundToday._sum.inboundValue ?? 0,
       closedAt: now.toISOString(),
-      closedBy: performedBy || 'admin',
+      closedBy: performedBy || _user.name,
     }
 
     await logAudit({

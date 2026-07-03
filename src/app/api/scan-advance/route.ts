@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getAllowedTransitions, getNextMainStep, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Scan Advance API
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { scanValue, performedBy } = body
     if (!scanValue || typeof scanValue !== 'string') {
@@ -47,13 +48,13 @@ export async function POST(req: NextRequest) {
       },
     })
     if (outbound) {
-      return await advanceOutbound(outbound, performedBy)
+      return await advanceOutbound(outbound, performedBy || _user.name)
     }
 
     // ── 2. Inbound record lookup ──
     const inbound = await db.inboundRecord.findUnique({ where: { inboundId: v } })
     if (inbound) {
-      return await advanceInbound(inbound, performedBy)
+      return await advanceInbound(inbound, performedBy || _user.name)
     }
 
     // ── 3. After-Sales (RMA) lookup ──
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       },
     })
     if (rma) {
-      return await advanceRma(rma, performedBy)
+      return await advanceRma(rma, performedBy || _user.name)
     }
 
     // ── 4. InventoryItem lookup (by itemId) ──
@@ -91,7 +92,8 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function advanceOutbound(record: Record<string, unknown>, performedBy?: string) {
+async function advanceOutbound(record: Record<string, unknown>, performedBy: string) {
+  const _performer = performedBy
   const currentStatus = String(record.status || 'pending')
   const module = 'outbound'
   const next = getNextMainStep(module, currentStatus)
@@ -129,7 +131,7 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy?: st
     action: 'SCAN_ADVANCE',
     module,
     entityId: String(record.orderNumber || record.outboundId),
-    details: `${currentStatus} → ${next.status} (scanned by ${performedBy || 'system'})`,
+    details: `${currentStatus} → ${next.status} (scanned by ${_performer})`,
   })
 
   return NextResponse.json({
@@ -152,6 +154,7 @@ function mapOutboundToOrderStatus(outboundStatus: string): string {
 }
 
 async function advanceInbound(record: Record<string, unknown>, performedBy?: string) {
+  const _performer = performedBy || 'system'
   const currentStatus = String(record.status || 'received')
   const module = 'inbound'
   const next = getNextMainStep(module, currentStatus)
@@ -174,7 +177,7 @@ async function advanceInbound(record: Record<string, unknown>, performedBy?: str
     action: 'SCAN_ADVANCE',
     module,
     entityId: String(record.inboundId),
-    details: `${currentStatus} → ${next.status} (scanned by ${performedBy || 'system'})`,
+    details: `${currentStatus} → ${next.status} (scanned by ${_performer})`,
   })
 
   return NextResponse.json({
@@ -187,6 +190,7 @@ async function advanceInbound(record: Record<string, unknown>, performedBy?: str
 }
 
 async function advanceRma(record: Record<string, unknown>, performedBy?: string) {
+  const _performer = performedBy || 'system'
   const currentStatus = String(record.returnStatus || 'initiated')
   const module = 'after_sales'
   const next = getNextMainStep(module, currentStatus)
@@ -202,7 +206,7 @@ async function advanceRma(record: Record<string, unknown>, performedBy?: string)
 
   const updateData: Record<string, unknown> = { returnStatus: next.status }
   if (next.status === 'approved') {
-    updateData.approvedBy = performedBy || 'system'
+    updateData.approvedBy = _performer
     updateData.approvedAt = new Date()
   }
 
@@ -215,7 +219,7 @@ async function advanceRma(record: Record<string, unknown>, performedBy?: string)
     action: 'SCAN_ADVANCE',
     module,
     entityId: String(record.afterSalesId),
-    details: `${currentStatus} → ${next.status} (scanned by ${performedBy || 'system'})`,
+    details: `${currentStatus} → ${next.status} (scanned by ${_performer})`,
   })
 
   return NextResponse.json({

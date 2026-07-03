@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Payment Batches API — Workflow 6
@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const id = req.nextUrl.searchParams.get('id')
 
     if (id) {
@@ -51,6 +52,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { statementIds, paymentMethod, recordedBy, notes } = body
 
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
           merchantCount: unpaidStatements.length,
           paymentMethod: paymentMethod || 'bank_transfer',
           status: 'submitted',
-          recordedBy: recordedBy || 'system',
+          recordedBy: recordedBy || _user.name,
           notes: notes || null,
         },
       })
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest) {
             comment: `Payout for statement ${stmt.statementId} (period ${stmt.period})`,
             deductions: 0,
             netAmount: stmt.netPayable,
-            recordedBy: recordedBy || 'system',
+            recordedBy: recordedBy || _user.name,
             statementId: stmt.statementId,
             batchId: batch.batchId,
             year, month, day,
@@ -156,6 +158,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
@@ -189,6 +192,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
 

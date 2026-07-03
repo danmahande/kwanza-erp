@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 // GET /api/items — list inventory items with optional filters
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const status = req.nextUrl.searchParams.get('status') || ''
     const productId = req.nextUrl.searchParams.get('productId') || ''
@@ -60,6 +61,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { items, performedBy } = body
 
@@ -104,7 +106,7 @@ export async function POST(req: NextRequest) {
           itemId: itemIdVal,
           eventType: 'RECEIVED',
           description: `Item received into warehouse${storageLocation ? ` at ${storageLocation}` : ''}`,
-          performedBy: performedBy || 'system',
+          performedBy: performedBy || _user.name,
           inboundId: inboundId || null,
           previousStatus: null,
           newStatus: 'IN_WAREHOUSE',
@@ -126,6 +128,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { itemId, status, condition, outboundId, runsheetId, assignedRider, performedBy, finalOutcome, cancellationReason, cancelledBy } = body
 
@@ -162,7 +165,7 @@ export async function PUT(req: NextRequest) {
         itemId,
         eventType,
         description: `Item updated: ${Object.keys(updateData).join(', ')}`,
-        performedBy: performedBy || 'system',
+        performedBy: performedBy || _user.name,
         outboundId: outboundId || null,
         runsheetId: runsheetId || null,
         previousStatus: existing.status,

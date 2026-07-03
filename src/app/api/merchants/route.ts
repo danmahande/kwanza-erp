@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { logAudit } from '@/lib/audit'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const deliveryType = req.nextUrl.searchParams.get('deliveryType') || ''
     const status = req.nextUrl.searchParams.get('status') || ''
@@ -105,6 +106,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const count = await db.merchant.count()
     const merchantId = `MCH-${String(count + 1).padStart(3, '0')}`
@@ -127,6 +129,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
@@ -134,7 +137,7 @@ export async function PUT(req: NextRequest) {
     if (typeof data.isOnHold === 'boolean') {
       if (data.isOnHold) {
         data.holdSetAt = new Date()
-        data.holdSetBy = data.holdSetBy || 'admin'
+        data.holdSetBy = data.holdSetBy || _user.name
       } else {
         data.holdSetAt = null
         data.holdSetBy = null
@@ -159,6 +162,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.merchant.delete({ where: { id: id! } })

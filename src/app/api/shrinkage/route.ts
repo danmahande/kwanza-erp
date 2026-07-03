@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { requireAuth } from '@/lib/auth-api'
+import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
  * Shrinkage API — Workflow 4: Shrinkage → Merchant Debit
@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const merchantId = req.nextUrl.searchParams.get('merchantId')
 
@@ -44,6 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const count = await db.shrinkageRecord.count()
     const shrinkageId = `SHR-${String(count + 1).padStart(3, '0')}`
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
         unitCost,
         totalValue,
         reason: body.reason || '',
-        reportedBy: body.reportedBy || 'system',
+        reportedBy: body.reportedBy || _user.name,
         status: body.status || 'pending',
         debitMerchant: body.debitMerchant ?? false,
       },
@@ -110,7 +112,7 @@ export async function POST(req: NextRequest) {
             where: { id: body.rtvId },
             data: {
               status: 'processed',
-              processedBy: body.reportedBy || 'system',
+              processedBy: body.reportedBy || _user.name,
             },
           })
         }
@@ -130,6 +132,7 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
@@ -178,6 +181,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
     await db.shrinkageRecord.delete({ where: { id: id! } })
