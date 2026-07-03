@@ -21,6 +21,7 @@ interface Product {
   id: string
   productId: string
   productLabel: string
+  description: string | null
   brand: string | null
   variant: string | null
   category: string
@@ -54,6 +55,7 @@ export default function ProductsModule() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState({
     productLabel: '',
+    description: '',
     brand: '',
     variant: '',
     category: '',
@@ -65,6 +67,7 @@ export default function ProductsModule() {
     unitCost: '',
     unitSellingPrice: '',
     commissionPercent: '0',
+    isActive: true,
   })
 
   const fetchData = () => {
@@ -98,6 +101,7 @@ export default function ProductsModule() {
     const merchant = merchants.find(m => m.merchantId === form.merchantId)
     const payload = {
       productLabel: form.productLabel,
+      description: form.description || null,
       brand: form.brand || null,
       variant: form.variant || null,
       category: form.category,
@@ -109,8 +113,8 @@ export default function ProductsModule() {
       unitCost: parseFloat(form.unitCost) || 0,
       unitSellingPrice: parseFloat(form.unitSellingPrice) || 0,
       commissionPercent: parseFloat(form.commissionPercent) || 0,
-      currentStock: 0,
-      isActive: true,
+      currentStock: editing ? editing.currentStock : 0,
+      isActive: editing ? form.isActive : true,
     }
     try {
       if (editing) {
@@ -131,8 +135,8 @@ export default function ProductsModule() {
       setOpen(false)
       setEditing(null)
       setForm({
-        productLabel: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
-        unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0',
+        productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
+        unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
       })
       fetchData()
     } catch {
@@ -144,6 +148,7 @@ export default function ProductsModule() {
     setEditing(item)
     setForm({
       productLabel: item.productLabel,
+      description: item.description || '',
       brand: item.brand || '',
       variant: item.variant || '',
       category: item.category,
@@ -155,6 +160,7 @@ export default function ProductsModule() {
       unitCost: String(item.unitCost),
       unitSellingPrice: String(item.unitSellingPrice),
       commissionPercent: String(item.commissionPercent),
+      isActive: item.isActive,
     })
     setOpen(true)
   }
@@ -175,16 +181,23 @@ export default function ProductsModule() {
   const openCreate = () => {
     setEditing(null)
     setForm({
-      productLabel: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
-      unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0',
+      productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
+      unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
     })
     setOpen(true)
   }
 
   const stockBadge = (p: Product) => {
+    if (!p.isActive) return <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px]">Inactive</Badge>
     if (p.currentStock === 0) return <Badge className="bg-red-100 text-red-700 border-0 text-[10px]">Out of stock</Badge>
     if (p.currentStock <= p.minStock) return <Badge className="bg-orange-100 text-orange-700 border-0 text-[10px]">Low ({p.currentStock})</Badge>
     return <Badge className="bg-green-100 text-green-700 border-0 text-[10px]">In stock ({p.currentStock})</Badge>
+  }
+
+  const handleToggleActive = async (p: Product) => {
+    await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, isActive: !p.isActive }) })
+    toast.success(`${p.productLabel} ${p.isActive ? 'deactivated' : 'activated'}`)
+    fetchData()
   }
 
   return (
@@ -256,6 +269,9 @@ export default function ProductsModule() {
                         <td className="px-4 py-2 text-center">{stockBadge(p)}</td>
                         <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
+                            <button onClick={() => handleToggleActive(p)} title={p.isActive ? 'Deactivate' : 'Activate'} className="p-1.5 rounded hover:bg-gray-100">
+                              <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                            </button>
                             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(p)}>
                               <Edit3 size={12} className="text-gray-600" />
                             </Button>
@@ -276,6 +292,7 @@ export default function ProductsModule() {
                                 <p className="text-gray-500 font-mono">{p.productId}</p>
                                 {p.brand && <p className="text-gray-500">Brand: {p.brand}</p>}
                                 {p.variant && <p className="text-gray-500">Variant: {p.variant}</p>}
+                                {p.description && <p className="text-gray-500 italic mt-1 text-[11px]">"{p.description}"</p>}
                               </div>
                               <div>
                                 <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Stock</p>
@@ -344,6 +361,10 @@ export default function ProductsModule() {
               <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Label <span className="text-red-400">*</span></Label>
               <Input value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} placeholder="e.g. Dettol Soap 500g" className="rounded-xl" />
             </div>
+            <div className="col-span-2">
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Description</Label>
+              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description for catalogs and invoices..." rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+            </div>
             <div>
               <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Brand</Label>
               <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Dettol" className="rounded-xl" />
@@ -393,6 +414,18 @@ export default function ProductsModule() {
               <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Commission (%)</Label>
               <Input type="number" step="0.1" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="rounded-xl" />
             </div>
+            {editing && (
+              <div className="flex items-center gap-2">
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Status</Label>
+                <button
+                  onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${form.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}
+                >
+                  <span className={`w-2.5 h-2.5 rounded-full ${form.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  {form.isActive ? 'Active' : 'Inactive'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </DetailSlideOver>

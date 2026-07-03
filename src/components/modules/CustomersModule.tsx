@@ -5,10 +5,14 @@ import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Search, User, Users, ShoppingCart, Banknote, Mail, Phone, MapPin, Package } from 'lucide-react'
+import { Search, User, Users, ShoppingCart, Banknote, Mail, Phone, MapPin, Package, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface Customer {
@@ -55,6 +59,8 @@ export default function CustomersModule() {
   const [open, setOpen] = useState(false)
   const [viewing, setViewing] = useState<Customer | null>(null)
   const [form, setForm] = useState({ name: '', contact: '', email: '', address: '' })
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
 
   const fetchData = () => {
     fetch(`/api/customers?search=${search}`).then(r => r.json()).then(setData)
@@ -99,11 +105,41 @@ export default function CustomersModule() {
     setForm({ name: '', contact: '', email: '', address: '' })
   }
 
+  // CSV import — parse and bulk create customers
+  const handleImport = async () => {
+    if (!importText.trim()) { toast.error('Paste CSV data first'); return }
+    const lines = importText.trim().split('\n')
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim())
+    if (!header.includes('name') || !header.includes('contact')) {
+      toast.error('CSV must have columns: name, contact (and optionally: email, address)')
+      return
+    }
+    let success = 0, failed = 0
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim())
+      if (vals.length < 2) continue
+      const row: Record<string, string> = {}
+      header.forEach((h, j) => { row[h] = vals[j] || '' })
+      try {
+        await fetch('/api/customers', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: row.name, contact: row.contact, email: row.email || '',
+            address: row.address || '', createdBy: 'admin',
+          }),
+        })
+        success++
+      } catch { failed++ }
+    }
+    toast.success(`Imported ${success} customers${failed > 0 ? `, ${failed} failed` : ''}`)
+    setImportOpen(false); setImportText(''); fetchData()
+  }
+
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Customers"
-        description="Auto-created from Order Processing. Manual creation disabled per business rule."
+        description="Auto-created from Order Processing. Import CSV or add manually."
         kpiCells={[
           { label: 'TOTAL', value: data.length },
           { label: 'WITH ORDERS', value: data.filter(c => c.totalOrders > 0).length },
@@ -113,7 +149,13 @@ export default function CustomersModule() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by name or phone..."
-      />
+        actionLabel="Add Customer"
+        onAction={openCreate}
+      >
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
+          <Upload size={12} className="mr-1" /> Import CSV
+        </Button>
+      </OpsHeader>
 
       {/* Card Grid */}
       {data.length === 0 ? (
@@ -321,6 +363,35 @@ export default function CustomersModule() {
           </div>
         )}
       </DetailSlideOver>
+
+      {/* CSV Import dialog */}
+      <AlertDialog open={importOpen} onOpenChange={setImportOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Upload size={18} /> Import Customers from CSV</AlertDialogTitle>
+            <AlertDialogDescription>
+              Paste CSV data below. Required columns: name, contact.
+              Optional: email, address.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <textarea
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={'name,contact,email,address\nJohn Doe,0700123456,john@gmail.com,Kampala\nJane Smith,0700789012,,Entebbe'}
+              rows={8}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-mono"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              First line must be the header row. Each subsequent line is one customer.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImport} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Import</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

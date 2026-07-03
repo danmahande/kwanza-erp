@@ -359,6 +359,8 @@ model Product {
   id               String   @id @default(cuid())
   productId        String   @unique
   productLabel     String
+  /// Editable product description for catalogs and invoices
+  description      String?  @default("")
   /// Brand name (e.g., "Supreme", "Dettol")
   brand            String?
   /// Variant descriptor (e.g., "BLUE-50PCs", "500ml")

@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon } from 'lucide-react'
+import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Download, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -475,6 +475,46 @@ export default function MerchantsModule() {
     setImportOpen(false); setImportText(''); fetchData()
   }
 
+  // Generate merchant financial report as CSV
+  const handleExportReport = () => {
+    if (data.length === 0) { toast.error('No merchants to export'); return }
+    const headers = [
+      'Merchant ID', 'Business Name', 'Delivery Type', 'Status', 'On Hold',
+      'Contact', 'Email', 'Currency',
+      'Total Inbound Value', 'Total Sales Value', 'Total Shrinkage Value', 'Total Return Value',
+      'Expected Payment', 'Actual Payment', 'Pending Payment', 'Storage Liability',
+      'Product Count', 'Order Count',
+      'Profitability Revenue', 'Profitability Commission', 'Profitability Shrinkage', 'Profitability Returns', 'Profitability Net',
+      'Last Inbound', 'Last Outbound', 'Last Payment', 'Last Communication',
+      'Pending Follow-ups', 'Contract Start', 'Contract End',
+    ]
+    const rows = data.map(m => [
+      m.merchantId, m.businessName, m.deliveryType || 'self-delivery',
+      m.isActive ? 'Active' : 'Inactive', m.isOnHold ? 'Yes' : 'No',
+      m.contact, m.email, m.currency,
+      m.totalInboundValue, m.totalSalesValue, m.totalShrinkageValue, m.totalReturnValue,
+      m.expectedPayment, m.actualPayment, m.pendingPayment, m.storageLiabilityBalance,
+      m.productCount, m.orderCount,
+      m.profitability.revenue, m.profitability.commission, m.profitability.shrinkage, m.profitability.returns, m.profitability.net,
+      m.lastInboundAt ? new Date(m.lastInboundAt).toLocaleDateString('en-UG') : '',
+      m.lastOutboundAt ? new Date(m.lastOutboundAt).toLocaleDateString('en-UG') : '',
+      m.lastPaymentAt ? new Date(m.lastPaymentAt).toLocaleDateString('en-UG') : '',
+      m.lastCommunicationAt ? new Date(m.lastCommunicationAt).toLocaleDateString('en-UG') : '',
+      m.pendingFollowUps,
+      m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '',
+      m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : '',
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v ?? ''}"`).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `merchant-report-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success(`Exported ${data.length} merchants to CSV`)
+  }
+
   // #13: Contract status helper
   const contractStatus = (m: Merchant): { label: string; color: string } | null => {
     if (!m.contractStart && !m.contractEnd) return null
@@ -501,6 +541,9 @@ export default function MerchantsModule() {
         actionLabel="Add Merchant"
         onAction={() => { setEditing(null); setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' }); setOpen(true) }}
       >
+        <Button variant="outline" size="sm" onClick={handleExportReport} className="h-7 text-xs rounded-md">
+          <Download size={12} className="mr-1" /> Export Report
+        </Button>
         <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
           <Upload size={12} className="mr-1" /> Import CSV
         </Button>

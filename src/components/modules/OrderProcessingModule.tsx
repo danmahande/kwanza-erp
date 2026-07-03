@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  ShoppingCart, Search, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight,
+  ShoppingCart, Search, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
@@ -82,6 +82,8 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
     paymentMethod: 'Cash',
     createdBy: 'admin',
   })
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
 
   const fetchData = useCallback(() => {
     fetch(`/api/order-processing?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
@@ -255,6 +257,50 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
     }
   }
 
+  // CSV import — parse and bulk create orders
+  const handleImport = async () => {
+    if (!importText.trim()) { toast.error('Paste CSV data first'); return }
+    const lines = importText.trim().split('\n')
+    const header = lines[0].toLowerCase().split(',').map(h => h.trim())
+    const requiredCols = ['merchantid', 'productid', 'customername', 'customercontact']
+    for (const col of requiredCols) {
+      if (!header.includes(col)) { toast.error(`CSV must have columns: ${requiredCols.join(', ')} (and optionally: customeremail, customeraddress, qty, paymentmethod)`); return }
+    }
+    let success = 0, failed = 0
+    for (let i = 1; i < lines.length; i++) {
+      const vals = lines[i].split(',').map(v => v.trim())
+      if (vals.length < 4) continue
+      const row: Record<string, string> = {}
+      header.forEach((h, j) => { row[h] = vals[j] || '' })
+      const merchant = merchants.find(m => m.merchantId === row.merchantid)
+      const product = products.find(p => p.productId === row.productid)
+      const qty = parseInt(row.qty) || 1
+      const totalAmount = (product?.unitSellingPrice || 0) * qty
+      try {
+        const res = await fetch('/api/order-processing', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            merchantId: row.merchantid,
+            productId: row.productid,
+            productName: product?.productLabel || '',
+            customerName: row.customername,
+            customerContact: row.customercontact,
+            customerEmail: row.customeremail || '',
+            customerAddress: row.customeraddress || '',
+            qty,
+            totalAmount,
+            paymentMethod: row.paymentmethod || 'Cash',
+            createdBy: 'admin',
+            merchantName: merchant?.businessName,
+          }),
+        })
+        if (res.ok) success++; else failed++
+      } catch { failed++ }
+    }
+    toast.success(`Imported ${success} orders${failed > 0 ? `, ${failed} failed` : ''}`)
+    setImportOpen(false); setImportText(''); fetchData()
+  }
+
   const handlePrintInvoice = async (order: Order) => {
     try {
       toast.info(`Generating invoice for ${order.orderNumber}...`)
@@ -340,7 +386,11 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
         searchPlaceholder="Search by order, customer, or tracking..."
         actionLabel="New Order"
         onAction={openCreate}
-      />
+      >
+        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
+          <Upload size={12} className="mr-1" /> Import CSV
+        </Button>
+      </OpsHeader>
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -734,6 +784,36 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* CSV Import dialog */}
+      <AlertDialog open={importOpen} onOpenChange={setImportOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Upload size={18} /> Import Orders from CSV</AlertDialogTitle>
+            <AlertDialogDescription>
+              Paste CSV data below. Required: merchantId, productId, customerName, customerContact.
+              Optional: customerEmail, customerAddress, qty, paymentMethod.
+              Customers are auto-created if they don't exist. Total amount is auto-calculated from product sell price × qty.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <textarea
+              value={importText}
+              onChange={e => setImportText(e.target.value)}
+              placeholder={'merchantId,productId,customerName,customerContact,customerEmail,customerAddress,qty,paymentMethod\nMCH-001,PROD-001,John Doe,0700123456,john@gmail.com,Kampala,2,Cash\nMCH-001,PROD-002,Jane Smith,0700789012,,Entebbe Road,1,M-Pesa'}
+              rows={8}
+              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-mono"
+            />
+            <p className="text-[10px] text-gray-400 mt-1">
+              Each line creates an order + outbound record automatically. Customer is auto-created or matched by phone.
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImport} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Import</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
