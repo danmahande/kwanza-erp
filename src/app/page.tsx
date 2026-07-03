@@ -428,6 +428,49 @@ function AppContent() {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-4 lg:p-6">
+            {/* Forward-moving flow breadcrumb — shows the operational pipeline */}
+            {['inventory', 'outbound', 'returns', 'payments'].includes(activeModule) && (
+              <div className="mb-4 flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100 overflow-x-auto">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold px-2 shrink-0">Flow:</span>
+                {[
+                  { key: 'inventory', label: 'Inventory', desc: 'Receive & store stock' },
+                  { key: 'outbound', label: 'Outbound', desc: 'Pick, pack & dispatch' },
+                  { key: 'returns', label: 'Returns', desc: 'RMA, RTV & shrinkage' },
+                  { key: 'payments', label: 'Payments', desc: 'Statements & payouts' },
+                ].map((step, i, arr) => {
+                  const isActive = activeModule === step.key
+                  const stepIndex = arr.findIndex(s => s.key === activeModule)
+                  const isPast = stepIndex > i
+                  const isNext = stepIndex >= 0 && i === stepIndex + 1
+                  return (
+                    <div key={step.key} className="flex items-center shrink-0">
+                      <button
+                        onClick={() => handleNavClick(step.key as ModuleKey)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                          isActive
+                            ? 'bg-[#FF6B35] text-white shadow-sm'
+                            : isPast
+                            ? 'bg-green-50 text-green-700 hover:bg-green-100'
+                            : isNext
+                            ? 'bg-orange-50 text-orange-700 hover:bg-orange-100 ring-1 ring-orange-200'
+                            : 'text-gray-500 hover:bg-gray-100'
+                        }`}
+                        title={step.desc}
+                      >
+                        <span className={`w-1.5 h-1.5 rounded-full ${
+                          isActive ? 'bg-white' : isPast ? 'bg-green-500' : isNext ? 'bg-orange-500' : 'bg-gray-300'
+                        }`} />
+                        {step.label}
+                        {isNext && <span className="text-[9px] font-bold uppercase tracking-wider opacity-70">Next →</span>}
+                      </button>
+                      {i < arr.length - 1 && (
+                        <ChevronRight size={12} className={`mx-0.5 ${isPast ? 'text-green-400' : 'text-gray-300'}`} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
             <AnimatePresence mode="wait">
               <motion.div
                 key={activeModule}

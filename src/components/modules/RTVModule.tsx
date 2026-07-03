@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight } from 'lucide-react'
+import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -33,6 +33,26 @@ interface RTVRecord {
   reason: string
   status: string
   processedBy: string | null
+  createdAt: string
+}
+
+interface ShrinkageRecord {
+  id: string
+  shrinkageId: string
+  rtvId: string | null
+  merchantId: string | null
+  merchantName: string | null
+  productId: string
+  productName: string
+  qty: number
+  unitCost: number | null
+  totalValue: number | null
+  reason: string
+  reportedBy: string
+  status: string
+  debitMerchant: boolean
+  resolvedBy: string | null
+  resolvedAt: string | null
   createdAt: string
 }
 
@@ -87,6 +107,8 @@ export default function RTVModule() {
   const [createOpen, setCreateOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<RTVRecord | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [linkedShrinkage, setLinkedShrinkage] = useState<ShrinkageRecord[]>([])
+  const [linkedShrinkageLoading, setLinkedShrinkageLoading] = useState(false)
 
   const [form, setForm] = useState({
     merchantId: '', merchantName: '', productId: '', productName: '', qty: '', reason: '', processedBy: '',
@@ -131,9 +153,23 @@ export default function RTVModule() {
   }
 
   // ── Card click → detail ──
-  const openDetail = (record: RTVRecord) => {
+  const openDetail = async (record: RTVRecord) => {
     setSelectedRecord(record)
     setDetailOpen(true)
+    setLinkedShrinkage([])
+    setLinkedShrinkageLoading(true)
+    try {
+      // Fetch shrinkage records linked to this RTV by rtvId
+      const res = await fetch(`/api/shrinkage?search=${record.rtvId}`)
+      const d = await res.json()
+      // Filter to only those where rtvId exactly matches
+      const linked = (Array.isArray(d) ? d : []).filter((s: ShrinkageRecord) => s.rtvId === record.rtvId)
+      setLinkedShrinkage(linked)
+    } catch {
+      setLinkedShrinkage([])
+    } finally {
+      setLinkedShrinkageLoading(false)
+    }
   }
 
   // Workflow transition (Phase 1-2-4)
@@ -344,6 +380,60 @@ export default function RTVModule() {
               </div>
               <p className="text-sm font-medium text-gray-800">{selectedRecord.productName}</p>
               <p className="text-xs text-gray-400 mt-0.5">Product ID: {selectedRecord.productId}</p>
+            </div>
+
+            {/* Linked Shrinkage Records — sub-component of RTV */}
+            <div className="bg-white rounded-xl border border-gray-200 p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertTriangle size={14} className="text-red-500" />
+                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Linked Shrinkage Records</span>
+                <span className="text-[10px] text-gray-400 ml-auto">Sub-component of this RTV</span>
+              </div>
+              {linkedShrinkageLoading ? (
+                <p className="text-xs text-gray-400 text-center py-3">Loading...</p>
+              ) : linkedShrinkage.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-3">No shrinkage records linked to this RTV.</p>
+              ) : (
+                <DenseTable>
+                  <thead>
+                    <tr>
+                      <DenseTh className="w-24">Shrinkage ID</DenseTh>
+                      <DenseTh>Product</DenseTh>
+                      <DenseTh className="w-16 text-right">Qty</DenseTh>
+                      <DenseTh className="w-24 text-right">Value</DenseTh>
+                      <DenseTh className="w-20 text-center">Status</DenseTh>
+                      <DenseTh className="w-20">Debit?</DenseTh>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {linkedShrinkage.map(s => (
+                      <DenseTr key={s.id} tint={s.status === 'resolved' ? 'bg-green-50/30' : 'bg-orange-50/30'}>
+                        <DenseTd mono className="text-gray-500 text-[10px]">{s.shrinkageId}</DenseTd>
+                        <DenseTd className="text-gray-900 text-[11px] truncate max-w-[120px]">{s.productName}</DenseTd>
+                        <DenseTd mono right className="text-red-600 font-bold">{s.qty}</DenseTd>
+                        <DenseTd mono right className="text-gray-900 font-bold">{s.totalValue ? s.totalValue.toLocaleString() : '—'}</DenseTd>
+                        <DenseTd className="text-center">
+                          <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-semibold ${
+                            s.status === 'resolved' ? 'bg-green-100 text-green-700'
+                            : s.status === 'investigating' ? 'bg-amber-100 text-amber-700'
+                            : 'bg-gray-100 text-gray-700'
+                          }`}>{s.status.toUpperCase()}</span>
+                        </DenseTd>
+                        <DenseTd>
+                          {s.debitMerchant
+                            ? <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 text-red-700 font-semibold">DEBIT</span>
+                            : <span className="text-[9px] text-gray-400">—</span>}
+                        </DenseTd>
+                      </DenseTr>
+                    ))}
+                  </tbody>
+                </DenseTable>
+              )}
+              {linkedShrinkage.length > 0 && (
+                <p className="text-[10px] text-gray-400 mt-2">
+                  {linkedShrinkage.length} shrinkage record(s) linked · Total qty: {linkedShrinkage.reduce((s, r) => s + r.qty, 0)} · Total value: UGX {linkedShrinkage.reduce((s, r) => s + (r.totalValue || 0), 0).toLocaleString()}
+                </p>
+              )}
             </div>
           </div>
         )}
