@@ -13,11 +13,11 @@ import DisputesModule from './DisputesModule'
 type Tab = 'charges' | 'statements' | 'batches' | 'records' | 'cod' | 'disputes'
 
 const tabs: { key: Tab; label: string; icon: typeof CreditCard }[] = [
+  { key: 'cod', label: 'COD Reconciliation', icon: Wallet },
   { key: 'charges', label: 'Charge Ledger', icon: ClipboardList },
   { key: 'statements', label: 'Statements', icon: FileText },
   { key: 'batches', label: 'Payment Batches', icon: Layers },
   { key: 'records', label: 'Payment Records', icon: CreditCard },
-  { key: 'cod', label: 'COD Reconciliation', icon: Wallet },
   { key: 'disputes', label: 'Disputes', icon: AlertTriangle },
 ]
 
@@ -25,13 +25,15 @@ const tabs: { key: Tab; label: string; icon: typeof CreditCard }[] = [
  * Payments parent module — composes the 6 finance submodules as tabs.
  *
  * Reflects the financial workflow:
- *   Charges (per-event ledger) → Statements (monthly rollup, approval-gated)
- *     → Batches (grouped payout) → Records (individual payments)
- *   COD Reconciliation runs in parallel (cash coming IN from drivers vs going OUT to merchants)
- *   Disputes run in parallel (merchant challenges → credit memos)
+ *   COD (daily: cash comes IN from drivers)
+ *     → Charges (fees accrue per event)
+ *     → Statements (monthly rollup, approval-gated)
+ *     → Batches (grouped payout to merchants)
+ *     → Records (individual payment records)
+ *     → Disputes (merchant challenges → credit memos)
  */
 export default function PaymentsParentModule() {
-  const [activeTab, setActiveTab] = useState<Tab>('charges')
+  const [activeTab, setActiveTab] = useState<Tab>('cod')
 
   return (
     <div className="space-y-4">

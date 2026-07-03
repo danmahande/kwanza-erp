@@ -11,8 +11,8 @@ import ReconciliationModule from './ReconciliationModule'
 type Tab = 'stock' | 'inbound' | 'tracker' | 'reconciliation'
 
 const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
-  { key: 'stock', label: 'Stock', icon: Package },
   { key: 'inbound', label: 'Inbound', icon: ArrowDownRight },
+  { key: 'stock', label: 'Stock', icon: Package },
   { key: 'tracker', label: 'Item Tracker', icon: ScanBarcode },
   { key: 'reconciliation', label: 'Reconciliation', icon: Scale },
 ]
@@ -22,7 +22,7 @@ const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
  * Reduces sidebar clutter: one "Inventory" entry instead of four.
  */
 export default function InventoryParentModule() {
-  const [activeTab, setActiveTab] = useState<Tab>('stock')
+  const [activeTab, setActiveTab] = useState<Tab>('inbound')
 
   return (
     <div className="space-y-4">
