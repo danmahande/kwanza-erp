@@ -1,21 +1,16 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import {
-  Scale, Banknote, Plus, ClipboardCheck, AlertCircle, User, Calendar, X,
-} from 'lucide-react'
+import { Scale, Banknote, Plus, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
-// ── Types ──
 interface ReconRecord {
   id: string
   type: string
@@ -29,28 +24,31 @@ interface ReconRecord {
   createdAt: string
 }
 
-// ── Helpers ──
 const fmt = (n: number) => { if (n == null || isNaN(n)) return '0'; return n.toLocaleString() }
 
-// ════════════════════════════════════════════
-// ── MAIN COMPONENT ──
-// ════════════════════════════════════════════
 export default function ReconciliationModule() {
   const [data, setData] = useState<ReconRecord[]>([])
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState('physical')
+  const [tab, setTab] = useState<'physical' | 'cash'>('physical')
   const [selectedRecord, setSelectedRecord] = useState<ReconRecord | null>(null)
   const [detailOpen, setDetailOpen] = useState(false)
   const [form, setForm] = useState({
     type: 'physical', referenceId: '', expectedQty: '', actualQty: '', varianceReason: '', reconciledBy: '',
   })
 
-  const fetchData = () => { fetch('/api/reconciliation').then(r => r.json()).then(setData) }
+  const fetchData = () => { fetch('/api/reconciliation').then(r => r.json()).then(d => setData(Array.isArray(d) ? d : [])) }
   useEffect(() => { fetchData() }, [])
 
   const physicalRecords = useMemo(() => data.filter(r => r.type === 'physical'), [data])
   const cashRecords = useMemo(() => data.filter(r => r.type === 'cash'), [data])
   const currentRecords = tab === 'physical' ? physicalRecords : cashRecords
+  const varianceCount = data.filter(r => r.variance !== 0).length
+
+  const kpiCells = [
+    { label: 'PHYSICAL', value: physicalRecords.length },
+    { label: 'CASH', value: cashRecords.length },
+    { label: 'WITH VARIANCE', value: varianceCount, highlight: varianceCount > 0, highlightColor: 'red' as const },
+  ]
 
   const handleSubmit = async () => {
     if (!form.expectedQty || !form.actualQty || !form.reconciledBy) { toast.error('Please fill all required fields'); return }
@@ -65,304 +63,192 @@ export default function ReconciliationModule() {
   }
 
   const handleDelete = async (id: string) => {
-    try {
-      await fetch(`/api/reconciliation?id=${id}`, { method: 'DELETE' })
-      toast.success('Record deleted')
-      setDetailOpen(false)
-      setSelectedRecord(null)
-      fetchData()
-    } catch { toast.error('Failed to delete') }
+    await fetch(`/api/reconciliation?id=${id}`, { method: 'DELETE' })
+    toast.success('Record deleted')
+    setDetailOpen(false); setSelectedRecord(null); fetchData()
   }
-
-  const statValues: Record<string, number> = {
-    physical: physicalRecords.length,
-    cash: cashRecords.length,
-    variance: data.filter(r => r.variance !== 0).length,
-  }
-
-  const headerStats = [
-    { label: 'Physical Records', value: physicalRecords.length, icon: Scale, color: '#FF6B35', bg: 'bg-orange-500/15', border: 'border-orange-500/20', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Cash Records', value: cashRecords.length, icon: Banknote, color: '#1B2A4A', bg: 'bg-slate-600/15', border: 'border-slate-600/20', gradient: 'from-slate-600/10 to-slate-600/5' },
-    { label: 'With Variance', value: statValues.variance, icon: AlertCircle, color: '#EF4444', bg: 'bg-red-500/15', border: 'border-red-500/20', gradient: 'from-red-500/10 to-red-500/5' },
-  ]
-
-  const variancePreview = useMemo(() => {
-    if (!form.expectedQty || !form.actualQty) return null
-    const expected = parseFloat(form.expectedQty)
-    const actual = parseFloat(form.actualQty)
-    if (isNaN(expected) || isNaN(actual)) return null
-    return expected - actual
-  }, [form.expectedQty, form.actualQty])
 
   return (
-    <div className="space-y-4">
-      {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Reconciliation Office"
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      <OpsHeader
+        title="Reconciliation"
         description="Reconcile physical goods and cash balances"
-        icon={Scale}
-        stats={headerStats}
+        kpiCells={kpiCells}
         actionLabel="New Reconciliation"
         onAction={() => {
           setForm({ type: tab, referenceId: '', expectedQty: '', actualQty: '', varianceReason: '', reconciledBy: '' })
           setOpen(true)
         }}
-      >
-        {/* Tab switcher */}
-        <div className="flex items-center bg-gray-100 rounded-xl p-1 gap-1">
-          <button
-            onClick={() => setTab('physical')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all ${tab === 'physical' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <Scale size={14} /> Physical
-          </button>
-          <button
-            onClick={() => setTab('cash')}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all ${tab === 'cash' ? 'bg-white text-[#1B2A4A] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-          >
-            <Banknote size={14} /> Cash
-          </button>
-        </div>
-      </OfficeHeader>
+      />
 
-      {/* ── Card Grid ── */}
+      {/* Tab filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {[
+          { key: 'physical' as const, label: 'Physical Goods', icon: Scale },
+          { key: 'cash' as const, label: 'Cash', icon: Banknote },
+        ].map(chip => {
+          const isActive = tab === chip.key
+          const Icon = chip.icon
+          const count = chip.key === 'physical' ? physicalRecords.length : cashRecords.length
+          return (
+            <button key={chip.key} onClick={() => setTab(chip.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+              <Icon size={12} /> {chip.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Dense table */}
       {currentRecords.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <ClipboardCheck size={40} className="mx-auto mb-3 opacity-40" />
-          <p className="text-sm font-medium">No {tab} records found</p>
-          <p className="text-xs mt-1">Create a new reconciliation to get started</p>
-        </div>
+        <div className="py-12 text-center text-gray-400 text-sm">No {tab} reconciliation records found.</div>
       ) : (
-        <motion.div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
-          {currentRecords.map((record) => {
-            const hasVariance = record.variance !== 0
-            const isPositive = record.variance > 0
-            return (
-              <motion.div
-                key={record.id}
-                variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                className={`group bg-white rounded-2xl border-2 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${hasVariance ? 'border-red-200/60' : 'border-green-200/60'}`}
-                onClick={() => { setSelectedRecord(record); setDetailOpen(true) }}
-              >
-                {/* Top: Reference + Variance Badge */}
-                <div className="flex items-center justify-between mb-3">
-                  <span className="font-mono text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">
-                    {record.referenceId || `#${record.id.slice(-6)}`}
-                  </span>
-                  {hasVariance ? (
-                    <Badge className={`${isPositive ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'} text-xs font-medium`}>
-                      {isPositive ? `+${record.variance}` : String(record.variance)}
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-green-100 text-green-700 text-xs font-medium">Match</Badge>
-                  )}
-                </div>
-
-                {/* Expected vs Actual */}
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Expected</p>
-                    <p className="text-lg font-bold text-gray-800">{record.expectedQty.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-3 py-2.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Actual</p>
-                    <p className="text-lg font-bold text-gray-800">{record.actualQty.toLocaleString()}</p>
-                  </div>
-                </div>
-
-                {/* Variance highlight bar */}
-                {hasVariance && (
-                  <div className={`rounded-lg px-3 py-2 mb-3 ${isPositive ? 'bg-red-50 border border-red-200/60' : 'bg-amber-50 border border-amber-200/60'}`}>
-                    <div className="flex items-center gap-1.5">
-                      <AlertCircle size={12} className={isPositive ? 'text-red-500' : 'text-amber-500'} />
-                      <span className="text-xs font-medium text-gray-600">Variance: {isPositive ? '+' : ''}{record.variance}</span>
-                    </div>
-                    {record.varianceReason && <p className="text-[11px] text-gray-400 mt-0.5 truncate">{record.varianceReason}</p>}
-                  </div>
-                )}
-
-                {!hasVariance && (
-                  <div className="rounded-lg px-3 py-2 mb-3 bg-green-50 border border-green-200/60">
-                    <div className="flex items-center gap-1.5">
-                      <ClipboardCheck size={12} className="text-green-600" />
-                      <span className="text-xs font-medium text-green-700">Fully reconciled</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Bottom */}
-                <div className="flex items-center justify-between text-xs text-gray-400">
-                  <div className="flex items-center gap-1"><User size={10} />{record.reconciledBy}</div>
-                  <div className="flex items-center gap-1"><Calendar size={10} />{new Date(record.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </motion.div>
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh className="w-28">Reference</DenseTh>
+              <DenseTh className="w-20 text-right">Expected</DenseTh>
+              <DenseTh className="w-20 text-right">Actual</DenseTh>
+              <DenseTh className="w-20 text-right">Variance</DenseTh>
+              <DenseTh>Reason</DenseTh>
+              <DenseTh className="w-24">By</DenseTh>
+              <DenseTh className="w-24">Date</DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {currentRecords.map(r => {
+              const hasVariance = r.variance !== 0
+              return (
+                <DenseTr key={r.id} onClick={() => { setSelectedRecord(r); setDetailOpen(true) }}
+                  tint={hasVariance ? (r.variance > 0 ? 'bg-red-50/30' : 'bg-amber-50/30') : 'bg-green-50/20'}>
+                  <DenseTd mono className="text-gray-500 text-[10px]">{r.referenceId || `#${r.id.slice(-6)}`}</DenseTd>
+                  <DenseTd mono right className="text-gray-700">{fmt(r.expectedQty)}</DenseTd>
+                  <DenseTd mono right className="text-gray-700">{fmt(r.actualQty)}</DenseTd>
+                  <DenseTd mono right className={hasVariance ? (r.variance > 0 ? 'text-red-600 font-bold' : 'text-amber-600 font-bold') : 'text-green-600 font-bold'}>
+                    {hasVariance ? `${r.variance > 0 ? '+' : ''}${fmt(r.variance)}` : '✓'}
+                  </DenseTd>
+                  <DenseTd className="text-gray-500 text-[11px] truncate max-w-[150px]">{r.varianceReason || '—'}</DenseTd>
+                  <DenseTd className="text-gray-500 text-[10px]">{r.reconciledBy}</DenseTd>
+                  <DenseTd className="text-gray-500 text-[10px]">{new Date(r.date).toLocaleDateString('en-UG')}</DenseTd>
+                </DenseTr>
+              )
+            })}
+          </tbody>
+        </DenseTable>
       )}
 
-      {/* ── Detail SlideOver ── */}
+      {/* Detail slide-over — single dense card */}
       <DetailSlideOver
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
-        title="Reconciliation Details"
-        subtitle={selectedRecord?.referenceId || selectedRecord?.id.slice(-6)}
+        title={selectedRecord?.referenceId || 'Reconciliation'}
+        subtitle={selectedRecord ? `${selectedRecord.type === 'physical' ? 'Physical Goods' : 'Cash'} Reconciliation` : ''}
         width="lg"
-        footer={selectedRecord ? (
-          <div className="flex items-center gap-2">
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"><X size={14} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this reconciliation?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDelete(selectedRecord.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white rounded-xl">Close</Button>
+        footer={
+          <div className="flex items-center justify-between">
+            {selectedRecord && (
+              <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => handleDelete(selectedRecord.id)}>
+                <Trash2 size={14} className="mr-1.5" /> Delete
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl ml-auto">Close</Button>
           </div>
-        ) : undefined}
+        }
       >
         {selectedRecord && (
-          <div className="space-y-5">
-            {/* Type Badge */}
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className={`text-xs font-medium ${selectedRecord.type === 'physical' ? 'border-orange-300 text-orange-700' : 'border-slate-300 text-slate-700'}`}>
-                {selectedRecord.type === 'physical' ? <Scale size={12} className="mr-1" /> : <Banknote size={12} className="mr-1" />}
-                {selectedRecord.type === 'physical' ? 'Physical Goods' : 'Cash'}
-              </Badge>
-              {selectedRecord.variance !== 0 ? (
-                <Badge className={selectedRecord.variance > 0 ? 'bg-red-100 text-red-700 text-xs' : 'bg-amber-100 text-amber-700 text-xs'}>
-                  Variance: {selectedRecord.variance > 0 ? '+' : ''}{selectedRecord.variance}
-                </Badge>
-              ) : (
-                <Badge className="bg-green-100 text-green-700 text-xs">No Variance</Badge>
-              )}
-            </div>
-
-            {/* Reference */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Reference</p>
-              <p className="text-sm font-mono font-semibold text-gray-800">{selectedRecord.referenceId || '—'}</p>
-            </div>
-
-            {/* Expected vs Actual */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 border border-gray-200/60 rounded-xl p-5 text-center">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">Expected</p>
-                <p className="text-3xl font-bold text-gray-900">{selectedRecord.expectedQty.toLocaleString()}</p>
-              </div>
-              <div className={`rounded-xl p-5 text-center border ${selectedRecord.variance === 0 ? 'bg-gradient-to-br from-green-50 to-green-100/50 border-green-200/60' : 'bg-gradient-to-br from-red-50 to-red-100/50 border-red-200/60'}`}>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">Actual</p>
-                <p className="text-3xl font-bold text-gray-900">{selectedRecord.actualQty.toLocaleString()}</p>
-              </div>
-            </div>
-
-            {/* Variance */}
-            {selectedRecord.variance !== 0 && (
-              <div className={`rounded-xl p-4 border ${selectedRecord.variance > 0 ? 'bg-gradient-to-r from-red-50 to-rose-50 border-red-200/60' : 'bg-gradient-to-r from-amber-50 to-yellow-50 border-amber-200/60'}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <AlertCircle size={16} className={selectedRecord.variance > 0 ? 'text-red-500' : 'text-amber-500'} />
-                  <span className="text-xs font-medium text-gray-600">Variance</span>
+          <div className="space-y-3">
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Reconciliation Details</h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Type</span>
+                  <span className="font-medium text-gray-900">{selectedRecord.type === 'physical' ? 'Physical Goods' : 'Cash'}</span>
                 </div>
-                <p className={`text-2xl font-bold ${selectedRecord.variance > 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                  {selectedRecord.variance > 0 ? '+' : ''}{selectedRecord.variance}
-                </p>
-              </div>
-            )}
-
-            {/* Reason */}
-            {selectedRecord.varianceReason && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Reason</p>
-                <p className="text-sm text-gray-700">{selectedRecord.varianceReason}</p>
-              </div>
-            )}
-
-            {/* Meta */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Reconciled By</p>
-                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><User size={14} />{selectedRecord.reconciledBy}</p>
-              </div>
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Date</p>
-                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><Calendar size={14} />{new Date(selectedRecord.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Reference</span>
+                  <span className="font-mono text-gray-700">{selectedRecord.referenceId || '—'}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Expected</span>
+                  <span className="font-mono font-bold text-gray-900 text-lg">{fmt(selectedRecord.expectedQty)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Actual</span>
+                  <span className={`font-mono font-bold text-lg ${selectedRecord.variance === 0 ? 'text-green-700' : 'text-gray-900'}`}>{fmt(selectedRecord.actualQty)}</span>
+                </div>
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Variance</span>
+                  <span className={`font-mono font-bold text-lg ${selectedRecord.variance === 0 ? 'text-green-700' : selectedRecord.variance > 0 ? 'text-red-600' : 'text-amber-600'}`}>
+                    {selectedRecord.variance === 0 ? '✓ Match' : `${selectedRecord.variance > 0 ? '+' : ''}${fmt(selectedRecord.variance)}`}
+                  </span>
+                </div>
+                {selectedRecord.varianceReason && (
+                  <div className="py-1 border-b border-gray-100">
+                    <span className="text-gray-500">Reason</span>
+                    <p className="text-gray-700 mt-0.5">{selectedRecord.varianceReason}</p>
+                  </div>
+                )}
+                <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                  <span className="text-gray-500">Reconciled By</span>
+                  <span className="text-gray-700">{selectedRecord.reconciledBy}</span>
+                </div>
+                <div className="flex items-center justify-between py-1">
+                  <span className="text-gray-500">Date</span>
+                  <span className="text-gray-700">{new Date(selectedRecord.date).toLocaleString('en-UG', { dateStyle: 'medium', timeStyle: 'short' })}</span>
+                </div>
               </div>
             </div>
           </div>
         )}
       </DetailSlideOver>
 
-      {/* ── Create New SlideOver ── */}
+      {/* Create slide-over */}
       <DetailSlideOver
         open={open}
         onClose={() => setOpen(false)}
-        title={`New Reconciliation — ${tab === 'physical' ? 'Physical Goods' : 'Cash'}`}
-        subtitle="Record a new reconciliation"
-        width="lg"
+        title="New Reconciliation"
+        subtitle={tab === 'physical' ? 'Physical Goods' : 'Cash'}
+        width="md"
         footer={
-          <div className="flex items-center gap-2">
+          <div className="flex gap-3 ml-auto">
             <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Save</Button>
+            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Record</Button>
           </div>
         }
       >
-        <div className="space-y-5">
-          {/* Reference ID */}
+        <div className="space-y-4">
           <div>
-            <Label className="text-xs font-medium text-gray-600">Reference ID</Label>
-            <Input value={form.referenceId} onChange={e => setForm({ ...form, referenceId: e.target.value })} placeholder="Product or payment reference" className="mt-1.5 rounded-xl" />
+            <Label className="text-xs font-medium mb-1 block">Reference ID (optional)</Label>
+            <Input value={form.referenceId} onChange={e => setForm({ ...form, referenceId: e.target.value })} placeholder="e.g. Cycle count batch #12" className="rounded-xl" />
           </div>
-
-          {/* Expected & Actual */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs font-medium text-gray-600">Expected *</Label>
-              <Input type="number" value={form.expectedQty} onChange={e => setForm({ ...form, expectedQty: e.target.value })} placeholder="Expected amount" className="mt-1.5 rounded-xl" />
+              <Label className="text-xs font-medium mb-1 block">Expected Qty <span className="text-red-400">*</span></Label>
+              <Input type="number" value={form.expectedQty} onChange={e => setForm({ ...form, expectedQty: e.target.value })} placeholder="0" className="rounded-xl" />
             </div>
             <div>
-              <Label className="text-xs font-medium text-gray-600">Actual *</Label>
-              <Input type="number" value={form.actualQty} onChange={e => setForm({ ...form, actualQty: e.target.value })} placeholder="Actual amount" className="mt-1.5 rounded-xl" />
+              <Label className="text-xs font-medium mb-1 block">Actual Qty <span className="text-red-400">*</span></Label>
+              <Input type="number" value={form.actualQty} onChange={e => setForm({ ...form, actualQty: e.target.value })} placeholder="0" className="rounded-xl" />
             </div>
           </div>
-
-          {/* Variance Preview */}
-          <AnimatePresence>
-            {variancePreview !== null && (
-              <motion.div
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.97 }}
-                className={`p-4 rounded-xl border ${variancePreview === 0
-                  ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200/60'
-                  : 'bg-gradient-to-r from-red-50 to-rose-50 border-red-200/60'
-                }`}
-              >
-                <div className="flex items-center gap-2">
-                  <ClipboardCheck size={18} className={variancePreview === 0 ? 'text-green-600' : 'text-red-500'} />
-                  <span className="text-sm font-medium text-gray-600">Variance Preview</span>
-                </div>
-                <p className={`text-lg font-bold mt-1 ${variancePreview === 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {variancePreview === 0
-                    ? 'No variance — fully reconciled'
-                    : `${variancePreview > 0 ? '+' : ''}${variancePreview}`
-                  }
-                </p>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* Variance Reason */}
+          {form.expectedQty && form.actualQty && (
+            <p className="text-xs text-gray-500">
+              Variance: <span className={`font-mono font-bold ${parseFloat(form.expectedQty) - parseFloat(form.actualQty) !== 0 ? 'text-red-600' : 'text-green-600'}`}>
+                {parseFloat(form.expectedQty) - parseFloat(form.actualQty)}
+              </span>
+            </p>
+          )}
           <div>
-            <Label className="text-xs font-medium text-gray-600">Variance Reason</Label>
-            <Textarea value={form.varianceReason} onChange={e => setForm({ ...form, varianceReason: e.target.value })} placeholder="Explain the variance if any..." className="mt-1.5 rounded-xl min-h-[80px]" />
+            <Label className="text-xs font-medium mb-1 block">Variance Reason (if any)</Label>
+            <Input value={form.varianceReason} onChange={e => setForm({ ...form, varianceReason: e.target.value })} placeholder="e.g. 2 units damaged" className="rounded-xl" />
           </div>
-
-          {/* Reconciled By */}
           <div>
-            <Label className="text-xs font-medium text-gray-600">Reconciled By *</Label>
-            <Input value={form.reconciledBy} onChange={e => setForm({ ...form, reconciledBy: e.target.value })} placeholder="Your name" className="mt-1.5 rounded-xl" />
+            <Label className="text-xs font-medium mb-1 block">Reconciled By <span className="text-red-400">*</span></Label>
+            <Input value={form.reconciledBy} onChange={e => setForm({ ...form, reconciledBy: e.target.value })} placeholder="Your name" className="rounded-xl" />
           </div>
         </div>
       </DetailSlideOver>
-    </div>
+    </motion.div>
   )
 }

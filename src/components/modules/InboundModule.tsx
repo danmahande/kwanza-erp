@@ -287,7 +287,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
 
   // ── Selection ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
 
   // ── Filters ──
   const [filterVendor, setFilterVendor] = useState<string[]>([])
@@ -538,11 +537,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         <SearchableFilter label="Vendor" options={vendors} selected={filterVendor.length > 1 ? filterVendor : filterVendor[0] || null} onSelect={handleFilterVendorChange} counts={vendorCounts} multi />
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={INBOUND_STATUSES} counts={statusCounts} />
         <DateRangeFilter value={filterDateRange} onChange={setFilterDateRange} />
-        <ViewToggle value={viewMode} onChange={setViewMode} />
-        <Select value={String(pageSize)} onValueChange={v => handlePageSizeChange(Number(v))}>
-          <SelectTrigger className="h-9 w-[100px] rounded-xl border-gray-200 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>)}</SelectContent>
-        </Select>
       </OpsHeader>
 
       {/* ── Active Filters ── */}
@@ -570,7 +564,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
       </AnimatePresence>
 
       {/* ── Results count ── */}
-      {viewMode === 'card' && (
       <div className="flex items-center justify-between text-xs text-gray-500">
         <span>{filteredData.length.toLocaleString()} record{filteredData.length !== 1 ? 's' : ''} found</span>
         <div className="flex items-center gap-2">
@@ -583,95 +576,27 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
           </label>
         </div>
       </div>
-      )}
 
-      {/* ── Card Grid ── */}
+      {/* ── Table ── */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
       ) : paginatedData.length === 0 ? (
         <div className="text-center py-20 text-gray-400"><Package size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm font-medium">No inbound records found</p><p className="text-xs mt-1">Try adjusting your filters or receive new inventory</p></div>
-      ) : viewMode === 'card' ? (
-        <motion.div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
-          {paginatedData.map((record) => {
-            const expiry = getExpiryStatus(record.expiryDate)
-            const isSelected = selectedIds.has(record.id)
-            return (
-              <motion.div key={record.id} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                className={`group relative bg-white rounded-2xl border-2 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${isSelected ? 'border-[#FF6B35] shadow-md' : 'border-gray-100'}`}
-                onClick={() => { setSelectedRecord(record); setDetailOpen(true) }}>
-                {/* Checkbox */}
-                <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
-                  <button onClick={() => toggleSelect(record.id)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]' : 'border-gray-300 bg-transparent'}`}>
-                    {isSelected && <span className="text-white text-[10px]">✓</span>}
-                  </button>
-                </div>
-                {/* Top row: ID + Status */}
-                <div className="flex items-center gap-2 mb-3 pr-8">
-                  <span className="font-mono text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">{record.inboundId}</span>
-                  {statusBadge(record.status)}
-                </div>
-                {/* Product name */}
-                <h3 className="text-base font-semibold text-gray-900 leading-snug mb-1 line-clamp-2 group-hover:text-[#FF6B35] transition-colors">{record.productName}</h3>
-                {/* Merchant */}
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-3">
-                  <Building2 size={12} /><span className="truncate">{record.merchantName}</span>
-                </div>
-                {/* Metrics row */}
-                <div className="grid grid-cols-3 gap-2 mb-3">
-                  <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Qty</p>
-                    <p className="text-sm font-bold text-gray-800">{record.qtyIn.toLocaleString()}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Unit Price</p>
-                    <p className="text-sm font-bold text-gray-800">{record.unitPrice ? `KES ${fmt(record.unitPrice)}` : '—'}</p>
-                  </div>
-                  <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                    <p className="text-[10px] text-gray-400 uppercase tracking-wider">Value</p>
-                    <p className="text-sm font-bold text-gray-800">{record.inboundValue ? `KES ${fmt(record.inboundValue)}` : '—'}</p>
-                  </div>
-                </div>
-                {/* Bottom row: Location + Received */}
-                <div className="flex items-center justify-between text-xs text-gray-400">
-                  <div className="flex items-center gap-1.5">
-                    {record.storageLocation ? (
-                      <span className="bg-[#1B2A4A]/5 text-[#1B2A4A] px-2 py-0.5 rounded-md font-medium flex items-center gap-1"><MapPin size={10} />{record.storageLocation}</span>
-                    ) : <span className="text-gray-300">No location</span>}
-                    {expiry && <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-medium ${expiry.color}`}>{expiry.label}</span>}
-                  </div>
-                  <div className="flex items-center gap-1"><User size={10} />{record.receivedBy}</div>
-                </div>
-
-                {/* Workflow actions */}
-                <div className="mt-3 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                  <StatusStepper module={MODULE} currentStatus={record.status} size="sm" />
-                  <div className="mt-2">
-                    <WorkflowActions
-                      module={MODULE}
-                      currentStatus={record.status}
-                      onTransition={(to) => handleTransition(record, to)}
-                      size="sm"
-                    />
-                  </div>
-                </div>
-              </motion.div>
-            )
-          })}
-        </motion.div>
       ) : (
         <DataTable
           data={paginatedData}
           columns={tableColumns}
           keyExtractor={(r) => r.id}
           onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
+          rowClassName={(r) => selectedIds.has(r.id) ? 'bg-[#FF6B35]/5' : ''}
           pageSize={100}
         />
       )}
 
       {/* ── Pagination ── */}
-      {viewMode === 'card' && sortedData.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-          <div className="text-xs text-gray-500">
+      {sortedData.length > pageSize && (
+        <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
+          <div>
             Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length.toLocaleString()}
           </div>
           <div className="flex items-center gap-1">
