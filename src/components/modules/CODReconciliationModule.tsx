@@ -7,10 +7,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
-  Wallet, AlertTriangle, CheckCircle2, Banknote, Search,
+  Wallet, AlertTriangle, CheckCircle2, Banknote, Search, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -93,11 +93,11 @@ export default function CODReconciliationModule() {
   const totalOutstanding = drivers.reduce((s, d) => s + d.outstanding, 0)
   const totalShortfalls = drivers.reduce((s, d) => s + d.shortfallBankingsAmount, 0)
 
-  const stats = [
-    { label: 'COD Collected', value: formatCurrencyCompact(totalCollected), icon: Banknote, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
-    { label: 'COD Banked', value: formatCurrencyCompact(totalBanked), icon: Wallet, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
-    { label: 'Outstanding', value: formatCurrencyCompact(totalOutstanding), icon: AlertTriangle, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Shortfalls', value: formatCurrencyCompact(totalShortfalls), icon: AlertTriangle, color: '#EF4444', bg: 'bg-red-500/20', border: 'border-red-400/30', gradient: 'from-red-500/10 to-red-500/5' },
+  const kpiCells = [
+    { label: 'COLLECTED', value: formatCurrencyCompact(totalCollected) },
+    { label: 'BANKED', value: formatCurrencyCompact(totalBanked) },
+    { label: 'OUTSTANDING', value: formatCurrencyCompact(totalOutstanding), highlight: totalOutstanding > 0, highlightColor: 'orange' as const },
+    { label: 'SHORTFALLS', value: formatCurrencyCompact(totalShortfalls), highlight: totalShortfalls > 0, highlightColor: 'red' as const },
   ]
 
   const handleCreateBanking = async () => {
@@ -158,96 +158,57 @@ export default function CODReconciliationModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      <OpsHeader
         title="COD Reconciliation"
-        description="Track driver COD collections vs bankings. Verify deposits and flag shortfalls."
-        icon={Wallet}
-        stats={stats}
+        description="Driver COD collections vs bankings — verify deposits, flag shortfalls"
+        kpiCells={kpiCells}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by driver name or ID..."
         actionLabel="Record Banking"
         onAction={openCreate}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by driver name or ID..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
+      {/* Dense table */}
       {filteredDrivers.length === 0 ? (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-            <Wallet size={32} className="text-gray-300" />
-          </div>
-          <p className="text-gray-500 font-medium">No driver COD data yet</p>
-          <p className="text-sm text-gray-400 mt-1">COD reconciliation appears once drivers start delivering COD orders</p>
-        </motion.div>
+        <div className="py-12 text-center text-gray-400 text-sm">No driver COD data yet.</div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Driver</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Phone</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                    COD Collected <InfoTip term="codCollected" size={11} />
-                  </th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                    COD Banked <InfoTip term="codBanked" size={11} />
-                  </th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Outstanding</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">
-                    Shortfalls <InfoTip term="shortfall" size={11} />
-                  </th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredDrivers.map((d, i) => (
-                  <motion.tr
-                    key={d.driverId}
-                    initial={{ opacity: 0, y: 5 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.2, delay: i * 0.03 }}
-                    className="border-b border-gray-50 hover:bg-gray-50"
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-medium text-gray-900">{d.driverName}</p>
-                      <p className="text-xs text-gray-400 font-mono">{d.driverId}</p>
-                    </td>
-                    <td className="px-4 py-3 text-gray-600">{d.phone || '—'}</td>
-                    <td className="px-4 py-3 text-right font-medium text-green-700">{formatCurrency(d.codCollected)}</td>
-                    <td className="px-4 py-3 text-right font-medium text-blue-700">{formatCurrency(d.codBanked)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={d.outstanding > 0 ? 'font-bold text-orange-700' : 'text-gray-500'}>
-                        {formatCurrency(d.outstanding)}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {d.shortfallBankingsAmount > 0 ? (
-                        <Badge className="bg-red-100 text-red-700 hover:bg-red-100 border-0 text-[10px]">
-                          {formatCurrencyCompact(d.shortfallBankingsAmount)} ({d.shortfallBankingsCount})
-                        </Badge>
-                      ) : (
-                        <span className="text-gray-300">—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={() => openBankingsForDriver(d)}>
-                        View Bankings
-                      </Button>
-                    </td>
-                  </motion.tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <DenseTable>
+          <thead>
+            <tr>
+              <DenseTh>Driver</DenseTh>
+              <DenseTh className="w-28">Phone</DenseTh>
+              <DenseTh className="w-28 text-right">Collected <InfoTip term="codCollected" size={11} /></DenseTh>
+              <DenseTh className="w-28 text-right">Banked <InfoTip term="codBanked" size={11} /></DenseTh>
+              <DenseTh className="w-28 text-right">Outstanding</DenseTh>
+              <DenseTh className="w-28 text-right">Shortfalls</DenseTh>
+              <DenseTh className="w-24 text-center">Actions</DenseTh>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredDrivers.map(d => (
+              <DenseTr key={d.driverId} tint={d.outstanding > 0 ? 'bg-orange-50/30' : d.shortfallBankingsAmount > 0 ? 'bg-red-50/30' : ''}>
+                <DenseTd>
+                  <p className="text-gray-900 font-medium">{d.driverName}</p>
+                  <p className="text-[10px] text-gray-400 font-mono">{d.driverId}</p>
+                </DenseTd>
+                <DenseTd className="text-gray-600 text-[10px]">{d.phone || '—'}</DenseTd>
+                <DenseTd mono right className="text-green-700">{formatCurrencyCompact(d.codCollected)}</DenseTd>
+                <DenseTd mono right className="text-blue-700">{formatCurrencyCompact(d.codBanked)}</DenseTd>
+                <DenseTd mono right className={d.outstanding > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>{formatCurrencyCompact(d.outstanding)}</DenseTd>
+                <DenseTd mono right className={d.shortfallBankingsAmount > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}>
+                  {d.shortfallBankingsAmount > 0 ? `${formatCurrencyCompact(d.shortfallBankingsAmount)} (${d.shortfallBankingsCount})` : '—'}
+                </DenseTd>
+                <DenseTd className="text-center">
+                  <button onClick={() => openBankingsForDriver(d)} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-medium">
+                    View Bankings
+                  </button>
+                </DenseTd>
+              </DenseTr>
+            ))}
+          </tbody>
+        </DenseTable>
       )}
 
       <DetailSlideOver

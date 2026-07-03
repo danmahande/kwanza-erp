@@ -12,10 +12,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import {
-  CreditCard, Wallet, CheckCircle2, Clock, Search, Layers, Banknote,
+  CreditCard, Wallet, CheckCircle2, Clock, Search, Layers, Banknote, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -90,11 +90,11 @@ export default function PaymentBatchesModule() {
     .filter(b => b.status !== 'disbursed')
     .reduce((s, b) => s + b.totalAmount, 0)
 
-  const stats = [
-    { label: 'Unpaid Statements', value: unpaidStatements.length, icon: Clock, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Total Batches', value: batches.length, icon: Layers, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
-    { label: 'Disbursed', value: formatCurrencyCompact(totalDisbursed), icon: CheckCircle2, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
-    { label: 'Pending Disbursement', value: formatCurrencyCompact(totalPending), icon: Wallet, color: '#EF4444', bg: 'bg-red-500/20', border: 'border-red-400/30', gradient: 'from-red-500/10 to-red-500/5' },
+  const kpiCells = [
+    { label: 'UNPAID STATEMENTS', value: unpaidStatements.length, highlight: unpaidStatements.length > 0, highlightColor: 'orange' as const },
+    { label: 'BATCHES', value: batches.length },
+    { label: 'DISBURSED', value: formatCurrencyCompact(totalDisbursed) },
+    { label: 'PENDING', value: formatCurrencyCompact(totalPending), highlight: totalPending > 0, highlightColor: 'orange' as const },
   ]
 
   const toggleSelect = (id: string) => {
@@ -169,134 +169,101 @@ export default function PaymentBatchesModule() {
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+      <OpsHeader
         title="Payment Batches"
-        description="Group merchant statements into batch payouts to the bank"
-        icon={CreditCard}
-        stats={stats}
+        description="Group unpaid statements into batch payouts"
+        kpiCells={kpiCells}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search by merchant, statement, or batch..."
         actionLabel={selectedIds.size > 0 ? `Create Batch (${selectedIds.size})` : 'Create Batch'}
         onAction={() => selectedIds.size > 0 ? setCreateOpen(true) : toast.error('Select statements first')}
-      >
-        <div className="relative flex-1 w-full sm:w-auto">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Search by merchant, statement, or batch..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-10 rounded-xl border-gray-200 bg-white"
-          />
-        </div>
-      </OfficeHeader>
+      />
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-          <div>
-            <h3 className="font-semibold text-gray-900 text-sm">Unpaid Statements</h3>
-            <p className="text-xs text-gray-500">Select statements to include in a new payment batch</p>
-          </div>
+      {/* Unpaid Statements — DenseTable */}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Unpaid Statements</span>
           {filteredUnpaid.length > 0 && (
-            <Button variant="ghost" size="sm" className="text-xs" onClick={toggleAll}>
+            <button onClick={toggleAll} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-medium">
               {selectedIds.size === filteredUnpaid.length ? 'Deselect All' : 'Select All'}
-            </Button>
+            </button>
           )}
         </div>
         {filteredUnpaid.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-8">No unpaid statements. All merchants are settled.</p>
+          <div className="py-8 text-center text-gray-400 text-sm">No unpaid statements. All merchants are settled.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="px-4 py-2 w-10"></th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Statement</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Merchant</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Period</th>
-                  <th className="text-right px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Net Payable</th>
+          <DenseTable>
+            <thead>
+              <tr>
+                <DenseTh className="w-8"></DenseTh>
+                <DenseTh className="w-28">Statement</DenseTh>
+                <DenseTh>Merchant</DenseTh>
+                <DenseTh className="w-20">Period</DenseTh>
+                <DenseTh className="w-28 text-right">Net Payable</DenseTh>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredUnpaid.map(s => (
+                <DenseTr key={s.id} onClick={() => toggleSelect(s.id)} selected={selectedIds.has(s.id)}>
+                  <DenseTd><input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelect(s.id)} className="rounded" /></DenseTd>
+                  <DenseTd mono className="text-gray-500">{s.statementId}</DenseTd>
+                  <DenseTd className="text-gray-900 font-medium">{s.merchantName}</DenseTd>
+                  <DenseTd mono className="text-gray-500">{s.period}</DenseTd>
+                  <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(s.netPayable)}</DenseTd>
+                </DenseTr>
+              ))}
+            </tbody>
+            {selectedIds.size > 0 && (
+              <tfoot className="bg-orange-50 border-t-2 border-orange-200">
+                <tr style={{ height: '32px' }}>
+                  <td colSpan={4} className="px-3 text-right text-[10px] font-semibold text-orange-700 uppercase">Selected Total:</td>
+                  <td className="px-3 text-right font-mono font-bold text-orange-700">{formatCurrency(selectedTotal)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {filteredUnpaid.map(s => (
-                  <tr
-                    key={s.id}
-                    className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer ${selectedIds.has(s.id) ? 'bg-orange-50' : ''}`}
-                    onClick={() => toggleSelect(s.id)}
-                  >
-                    <td className="px-4 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.has(s.id)}
-                        onChange={() => toggleSelect(s.id)}
-                        className="h-4 w-4 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
-                      />
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-gray-600">{s.statementId}</td>
-                    <td className="px-4 py-3 font-medium text-gray-900">{s.merchantName}</td>
-                    <td className="px-4 py-3 text-gray-600">{s.period}</td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(s.netPayable)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {selectedIds.size > 0 && (
-                <tfoot className="bg-orange-50 border-t-2 border-orange-200">
-                  <tr>
-                    <td colSpan={4} className="px-4 py-3 text-right font-semibold text-orange-700">Selected Total:</td>
-                    <td className="px-4 py-3 text-right font-bold text-orange-700 text-base">{formatCurrency(selectedTotal)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </div>
+              </tfoot>
+            )}
+          </DenseTable>
         )}
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="p-4 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900 text-sm">Payment Batches</h3>
-          <p className="text-xs text-gray-500">Click a batch to view details or mark as disbursed</p>
-        </div>
+      {/* Payment Batches — DenseTable */}
+      <div className="space-y-1">
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Payment Batches</span>
         {filteredBatches.length === 0 ? (
-          <p className="text-sm text-gray-500 text-center py-8">No payment batches yet. Create one from unpaid statements above.</p>
+          <div className="py-8 text-center text-gray-400 text-sm">No payment batches yet. Create one from unpaid statements above.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
-                <tr>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Batch ID</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Method</th>
-                  <th className="text-right px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Merchants</th>
-                  <th className="text-right px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Total</th>
-                  <th className="text-center px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Status</th>
-                  <th className="text-left px-4 py-2 font-semibold text-gray-600 text-xs uppercase tracking-wider">Created</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredBatches.map(b => (
-                  <tr
-                    key={b.id}
-                    className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                    onClick={() => setViewBatch(b)}
-                  >
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700">{b.batchId}</td>
-                    <td className="px-4 py-3 text-gray-600">{b.paymentMethod}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{b.merchantCount}</td>
-                    <td className="px-4 py-3 text-right font-bold text-gray-900">{formatCurrency(b.totalAmount)}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge className={
-                        b.status === 'disbursed' ? 'bg-green-100 text-green-700 hover:bg-green-100 border-0 text-[10px]'
-                        : b.status === 'submitted' ? 'bg-blue-100 text-blue-700 hover:bg-blue-100 border-0 text-[10px]'
-                        : b.status === 'failed' ? 'bg-red-100 text-red-700 hover:bg-red-100 border-0 text-[10px]'
-                        : 'bg-gray-100 text-gray-700 hover:bg-gray-100 border-0 text-[10px]'
-                      }>
-                        {b.status.toUpperCase()}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-gray-500">{new Date(b.createdAt).toLocaleDateString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DenseTable>
+            <thead>
+              <tr>
+                <DenseTh className="w-32">Batch ID</DenseTh>
+                <DenseTh className="w-28">Method</DenseTh>
+                <DenseTh className="w-16 text-right">Merchants</DenseTh>
+                <DenseTh className="w-28 text-right">Total</DenseTh>
+                <DenseTh className="w-24 text-center">Status</DenseTh>
+                <DenseTh className="w-28">Created</DenseTh>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredBatches.map(b => (
+                <DenseTr key={b.id} onClick={() => setViewBatch(b)} tint={b.status === 'disbursed' ? 'bg-green-50/30' : ''}>
+                  <DenseTd mono className="text-gray-500">{b.batchId}</DenseTd>
+                  <DenseTd className="text-gray-600">{b.paymentMethod}</DenseTd>
+                  <DenseTd mono right className="text-gray-700">{b.merchantCount}</DenseTd>
+                  <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(b.totalAmount)}</DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                      b.status === 'disbursed' ? 'bg-green-100 text-green-700'
+                      : b.status === 'submitted' ? 'bg-blue-100 text-blue-700'
+                      : b.status === 'failed' ? 'bg-red-100 text-red-700'
+                      : 'bg-gray-100 text-gray-700'
+                    }`}>{b.status.toUpperCase()}</span>
+                  </DenseTd>
+                  <DenseTd className="text-gray-500 text-[10px]">{new Date(b.createdAt).toLocaleDateString('en-UG')}</DenseTd>
+                </DenseTr>
+              ))}
+            </tbody>
+          </DenseTable>
         )}
       </div>
 
