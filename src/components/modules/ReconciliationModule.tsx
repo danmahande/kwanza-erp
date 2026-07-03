@@ -10,6 +10,7 @@ import { Scale, Banknote, Plus, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import { InfoTip } from '@/components/ui/info-tip'
 
 interface ReconRecord {
   id: string
@@ -84,8 +85,8 @@ export default function ReconciliationModule() {
       {/* Tab filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
         {[
-          { key: 'physical' as const, label: 'Physical Goods', icon: Scale },
-          { key: 'cash' as const, label: 'Cash', icon: Banknote },
+          { key: 'physical' as const, label: 'Physical Goods', icon: Scale, term: 'physicalReconciliation' },
+          { key: 'cash' as const, label: 'Cash', icon: Banknote, term: 'cashReconciliation' },
         ].map(chip => {
           const isActive = tab === chip.key
           const Icon = chip.icon
@@ -94,6 +95,7 @@ export default function ReconciliationModule() {
             <button key={chip.key} onClick={() => setTab(chip.key)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
               <Icon size={12} /> {chip.label}
+              <InfoTip term={chip.term} size={11} className={isActive ? 'text-white/70' : 'text-gray-400'} />
               <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
             </button>
           )

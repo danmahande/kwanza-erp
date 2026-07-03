@@ -127,6 +127,18 @@ export const glossary: Record<string, GlossaryTerm> = {
     long: 'Pending Payment = Expected Payment − Actual Payment. It is the open balance the merchant is waiting to receive. A healthy 3PL keeps Pending Payment low — ideally, merchants are paid on a predictable cycle (weekly or monthly) so they never have to chase us.',
     example: 'If Expected = UGX 4,200,000 and Actual = UGX 4,000,000, then Pending = UGX 200,000. This UGX 200,000 will be settled in the next Payment Batch.',
   },
+  physicalReconciliation: {
+    term: 'Physical Reconciliation',
+    short: 'Matching stock physically on the shelves with what the system records, then fixing any gaps found.',
+    long: 'Physical reconciliation compares actual counted stock on the shelves against what the WMS says should be there. When there is a difference (variance), you investigate the cause — damage, theft, misplacement, or data-entry error — and adjust the system to match reality. This is typically done via cycle counts or full warehouse audits.',
+    example: 'System says 100 units of Dettol Soap. You count 97 on the shelf. Variance = -3. You record the reconciliation with reason "3 units damaged in storage" and the system adjusts stock to 97.',
+  },
+  cashReconciliation: {
+    term: 'Cash Reconciliation',
+    short: 'Matching cash drivers collect on COD orders to expected amounts, then remitting the balance to the merchant.',
+    long: 'Cash reconciliation verifies that the cash drivers collected from COD deliveries matches what was expected. If a driver collected UGX 50,000 for a UGX 50,000 order, it reconciles. If they collected UGX 47,000, there is a UGX 3,000 shortfall that must be investigated before the merchant is paid. This is the financial mirror of physical reconciliation.',
+    example: 'Driver delivered 5 COD orders worth UGX 250,000 total. They banked UGX 250,000 — fully reconciled. Another driver delivered 3 orders worth UGX 150,000 but banked UGX 145,000 — UGX 5,000 shortfall flagged for investigation.',
+  },
 }
 
 /**
