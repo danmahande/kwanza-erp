@@ -325,7 +325,7 @@ export default function InventoryModule() {
     setLoading(true)
     fetch(`/api/products?search=${search}`)
       .then(r => r.json())
-      .then(d => { if (!cancelled) { setData(d); setLoading(false) } })
+      .then(d => { if (!cancelled) { setData(Array.isArray(d) ? d : []); setLoading(false) } })
       .catch(() => { if (!cancelled) { setLoading(false); toast.error('Failed to load products') } })
     return () => { cancelled = true }
   }, [search, refreshKey])
