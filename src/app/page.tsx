@@ -428,15 +428,14 @@ function AppContent() {
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-4 lg:p-6">
-            {/* Forward-moving flow breadcrumb — shows the operational pipeline */}
-            {['inventory', 'outbound', 'returns', 'payments'].includes(activeModule) && (
+            {/* Forward-moving flow breadcrumb — shows the physical goods pipeline */}
+            {['inventory', 'outbound', 'returns'].includes(activeModule) && (
               <div className="mb-4 flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-100 overflow-x-auto">
-                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold px-2 shrink-0">Flow:</span>
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold px-2 shrink-0">Goods Flow:</span>
                 {[
                   { key: 'inventory', label: 'Inventory', desc: 'Receive & store stock' },
                   { key: 'outbound', label: 'Outbound', desc: 'Pick, pack & dispatch' },
                   { key: 'returns', label: 'Returns', desc: 'RMA, RTV & shrinkage' },
-                  { key: 'payments', label: 'Payments', desc: 'Statements & payouts' },
                 ].map((step, i, arr) => {
                   const isActive = activeModule === step.key
                   const stepIndex = arr.findIndex(s => s.key === activeModule)
@@ -469,6 +468,8 @@ function AppContent() {
                     </div>
                   )
                 })}
+                <span className="text-[10px] text-gray-300 px-2 shrink-0">·</span>
+                <span className="text-[10px] text-gray-400 shrink-0">Payments settles separately</span>
               </div>
             )}
             <AnimatePresence mode="wait">
