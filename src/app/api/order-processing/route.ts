@@ -281,6 +281,83 @@ export async function POST(req: NextRequest) {
       details: `Created order ${orderNumber} for customer ${body.customerName} (${formatCurrency(body.totalAmount || 0)})`,
     })
 
+    // F: If body.items is provided, create line items + spawn outbound for each product
+    if (Array.isArray(body.items) && body.items.length > 0) {
+      for (const item of body.items) {
+        if (!item.productId || !item.qty) continue
+
+        // Look up product
+        const lineProduct = await db.product.findUnique({
+          where: { productId: item.productId },
+          select: { productLabel: true, brand: true, variant: true, unitSellingPrice: true, merchantId: true, currentStock: true },
+        })
+        if (!lineProduct) continue
+
+        const lineQty = parseInt(String(item.qty)) || 1
+        const linePrice = item.unitSellingPrice || lineProduct.unitSellingPrice
+        const lineTotal = lineQty * linePrice
+
+        // Create line item record
+        await db.orderLineItem.create({
+          data: {
+            orderId: orderId,
+            orderNumber,
+            productId: item.productId,
+            productName: lineProduct.productLabel,
+            brand: lineProduct.brand || null,
+            variant: lineProduct.variant || null,
+            qty: lineQty,
+            unitSellingPrice: linePrice,
+            lineTotal,
+          },
+        })
+
+        // Create outbound record for this line item (only for non-self-delivery)
+        if (deliveryType !== 'self-delivery') {
+          const outboundCount = await db.outboundRecord.count()
+          const lineOutboundId = `OUT-${String(outboundCount + 1).padStart(3, '0')}`
+          const lineTracking = `${trackingPrefix}-${orderNumber}-${String(body.items.indexOf(item) + 1).padStart(2, '0')}`
+
+          // Check stock
+          if (lineProduct.currentStock < lineQty) {
+            return NextResponse.json({
+              error: 'Insufficient stock',
+              details: `${lineProduct.productLabel}: only ${lineProduct.currentStock} units available, but order requires ${lineQty}`,
+            }, { status: 409 })
+          }
+
+          await db.outboundRecord.create({
+            data: {
+              outboundId: lineOutboundId,
+              orderNumber,
+              trackingNumber: lineTracking,
+              userId: body.createdBy || null,
+              vendorId: merchant?.merchantId || body.merchantId || null,
+              businessName: merchant?.businessName || lineProduct.merchantId || null,
+              customerName: body.customerName || '',
+              customerContact: body.customerContact || '',
+              customerEmail: body.customerEmail || null,
+              customerAddress: body.customerAddress || null,
+              productName: lineProduct.productLabel,
+              productId: item.productId,
+              brand: lineProduct.brand || null,
+              variant: lineProduct.variant || null,
+              qty: lineQty,
+              unitSellingPrice: linePrice,
+              saleAmount: lineTotal,
+              status: deliveryType === 'self-delivery' ? 'self_delivery' : 'pending',
+            },
+          })
+
+          // Decrement stock
+          await db.product.update({
+            where: { productId: item.productId },
+            data: { currentStock: { decrement: lineQty } },
+          }).catch(() => {})
+        }
+      }
+    }
+
     return NextResponse.json(orderProcessing, { status: 201 })
   } catch (error) {
     console.error('Error creating order processing record:', error)

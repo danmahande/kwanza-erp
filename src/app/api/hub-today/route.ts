@@ -209,6 +209,53 @@ export async function GET(req: NextRequest) {
       merchantOnHold: followUpMerchantMap.get(f.merchantId)?.isOnHold || false,
     }))
 
+    // H: Late banking alerts — drivers with unbanked COD cash older than 24 hours
+    const lateBankingDrivers = await Promise.all(activeDrivers.map(async (d) => {
+      const collectedAgg = await db.outboundRecord.aggregate({
+        where: { assignedDriver: d.driverId, status: 'delivered' },
+        _sum: { codCollected: true },
+      })
+      const bankedAgg = await db.driverBanking.aggregate({
+        where: { driverId: d.driverId },
+        _sum: { amount: true },
+      })
+      const collected = collectedAgg._sum.codCollected ?? 0
+      const banked = bankedAgg._sum.amount ?? 0
+      const unbanked = collected - banked
+
+      // Check last banking date
+      const lastBanking = await db.driverBanking.findFirst({
+        where: { driverId: d.driverId },
+        orderBy: { bankedAt: 'desc' },
+        select: { bankedAt: true },
+      })
+
+      let daysSinceBanking = 0
+      if (lastBanking?.bankedAt) {
+        daysSinceBanking = Math.floor((now.getTime() - new Date(lastBanking.bankedAt).getTime()) / (1000 * 60 * 60 * 24))
+      } else if (collected > 0) {
+        // Has collected cash but never banked — count from first delivery
+        const firstDelivery = await db.outboundRecord.findFirst({
+          where: { assignedDriver: d.driverId, status: 'delivered' },
+          orderBy: { deliveredAt: 'asc' },
+          select: { deliveredAt: true },
+        })
+        if (firstDelivery?.deliveredAt) {
+          daysSinceBanking = Math.floor((now.getTime() - new Date(firstDelivery.deliveredAt).getTime()) / (1000 * 60 * 60 * 24))
+        }
+      }
+
+      return {
+        driverId: d.driverId,
+        driverName: d.name,
+        phone: d.phone,
+        unbankedAmount: Math.max(0, unbanked),
+        daysSinceBanking,
+        isLate: unbanked > 0 && daysSinceBanking >= 1,
+      }
+    }))
+    const lateBankings = lateBankingDrivers.filter(d => d.isLate)
+
     // ── DAY-CLOSE READINESS ──
     // Count parcels that are "unaccounted for" — not delivered, not returned, not staged
     const unaccountedParcels = await db.outboundRecord.count({
@@ -309,6 +356,10 @@ export async function GET(req: NextRequest) {
       followUps: {
         count: followUpsEnriched.length,
         items: followUpsEnriched,
+      },
+      lateBankings: {
+        count: lateBankings.length,
+        items: lateBankings,
       },
       dayClose: {
         canClose: canCloseDay,

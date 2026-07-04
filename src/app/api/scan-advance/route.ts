@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { getAllowedTransitions, getNextMainStep, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
+import { notifyOrderDispatched, notifyOrderDelivered, notifyOrderFailed } from '@/lib/notifications'
 
 /**
  * Scan Advance API
@@ -147,6 +148,18 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy: str
         data: { status: mapOutboundToOrderStatus(next.status) },
       })
     } catch (e) { console.error('Order cascade failed (non-blocking):', e) }
+  }
+
+  // A: Send customer SMS notification
+  const custName = String(record.customerName || '')
+  const custContact = String(record.customerContact || '')
+  const orderNum = String(record.orderNumber || record.outboundId || '')
+  if (next.status === 'dispatched') {
+    await notifyOrderDispatched(custName, custContact, orderNum, _performer)
+  } else if (next.status === 'delivered') {
+    await notifyOrderDelivered(custName, custContact, orderNum)
+  } else if (next.status === 'failed' || next.status === 'returned') {
+    await notifyOrderFailed(custName, custContact, orderNum)
   }
 
   await logAudit({

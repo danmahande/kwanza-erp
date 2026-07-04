@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { isLegalTransition, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
+import { notifyOrderDispatched, notifyOrderDelivered, notifyOrderFailed } from '@/lib/notifications'
 
 /**
  * Generic Workflow Transition API
@@ -100,6 +101,19 @@ export async function POST(req: NextRequest) {
           }
         }
       }
+      // E: When delivery fails/returns, goods come back to warehouse — restore stock
+      if (toStatus === 'failed' || toStatus === 'returned') {
+        if (record.productId && record.qty) {
+          try {
+            await db.product.update({
+              where: { productId: String(record.productId) },
+              data: { currentStock: { increment: Number(record.qty) } },
+            })
+          } catch (stockErr) {
+            console.error('Stock restore on failed/returned (non-blocking):', stockErr)
+          }
+        }
+      }
     }
     if (module === 'after_sales') {
       if (toStatus === 'approved') {
@@ -149,6 +163,20 @@ export async function POST(req: NextRequest) {
       entityId: record.orderNumber || record.outboundId || record.afterSalesId || record.rtvId || record.shrinkageId || record.inboundId || record.bankingId || record.id,
       details: `${currentStatus} → ${toStatus}${reason ? ` (reason: ${reason})` : ''}`,
     })
+
+    // A: Send customer SMS notifications on dispatch/deliver/fail
+    if (module === 'outbound') {
+      const custName = String(record.customerName || '')
+      const custContact = String(record.customerContact || '')
+      const orderNum = String(record.orderNumber || record.outboundId || '')
+      if (toStatus === 'dispatched') {
+        await notifyOrderDispatched(custName, custContact, orderNum, performedBy || _user.name)
+      } else if (toStatus === 'delivered') {
+        await notifyOrderDelivered(custName, custContact, orderNum)
+      } else if (toStatus === 'failed' || toStatus === 'returned') {
+        await notifyOrderFailed(custName, custContact, orderNum, reason)
+      }
+    }
 
     // Side-effect: cascade status to linked records
 

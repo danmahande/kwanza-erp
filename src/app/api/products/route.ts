@@ -44,8 +44,39 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as import('@/lib/auth-api').AuthUser
     const body = await req.json()
     const { id, ...data } = body
+
+    // G: Record price history if selling price or cost changed
+    if (data.unitSellingPrice !== undefined || data.unitCost !== undefined) {
+      const existing = await db.product.findUnique({
+        where: { id },
+        select: { productId: true, productLabel: true, unitSellingPrice: true, unitCost: true },
+      })
+      if (existing) {
+        const newPrice = data.unitSellingPrice !== undefined ? parseFloat(String(data.unitSellingPrice)) : existing.unitSellingPrice
+        const newCost = data.unitCost !== undefined ? parseFloat(String(data.unitCost)) : existing.unitCost
+        if (newPrice !== existing.unitSellingPrice || newCost !== existing.unitCost) {
+          try {
+            await db.productPriceHistory.create({
+              data: {
+                productId: existing.productId,
+                productName: existing.productLabel,
+                oldPrice: existing.unitSellingPrice,
+                newPrice,
+                oldCost: existing.unitCost,
+                newCost,
+                changedBy: _user.name,
+              },
+            })
+          } catch (histErr) {
+            console.error('Price history recording failed (non-blocking):', histErr)
+          }
+        }
+      }
+    }
+
     const product = await db.product.update({ where: { id }, data })
     return NextResponse.json(product)
   } catch {

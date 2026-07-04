@@ -767,3 +767,56 @@ model AuditLog {
   details         String?
   createdAt       DateTime  @default(now())
 }
+
+/// Notification queue — SMS/email messages to be sent to customers and merchants.
+model Notification {
+  id              String    @id @default(cuid())
+  type            String
+  recipient       String
+  recipientName   String?
+  subject         String
+  message         String
+  metadata        String?
+  status          String    @default("pending")
+  sentAt          DateTime?
+  errorMessage    String?
+  createdAt       DateTime  @default(now())
+
+  @@index([status])
+  @@index([type])
+}
+
+/// Product price history — tracks every price change for audit trail.
+model ProductPriceHistory {
+  id              String    @id @default(cuid())
+  productId       String
+  productName     String
+  oldPrice        Float
+  newPrice        Float
+  oldCost         Float?
+  newCost         Float?
+  changedBy       String
+  changedAt       DateTime  @default(now())
+
+  @@index([productId])
+  @@index([changedAt])
+}
+
+/// Order line items — supports multi-product orders.
+model OrderLineItem {
+  id              String    @id @default(cuid())
+  orderId         String
+  orderNumber     String
+  productId       String
+  productName     String
+  brand           String?
+  variant         String?
+  qty             Int
+  unitSellingPrice Float
+  lineTotal       Float
+  createdAt       DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([orderNumber])
+  @@index([productId])
+}
