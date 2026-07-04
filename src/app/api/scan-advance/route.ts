@@ -117,6 +117,19 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy: str
     data: updateData,
   })
 
+  // Update merchant cumulative sales value when delivered
+  if (next.status === 'delivered' && record.vendorId) {
+    try {
+      const saleAmount = Number(record.saleAmount) || 0
+      if (saleAmount > 0) {
+        await db.merchant.update({
+          where: { merchantId: String(record.vendorId) },
+          data: { totalSalesValue: { increment: saleAmount } },
+        })
+      }
+    } catch (e) { console.error('Merchant sales update failed (non-blocking):', e) }
+  }
+
   // Cascade to linked OrderProcessing if exists
   if (record.orderNumber) {
     try {

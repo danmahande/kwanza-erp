@@ -145,7 +145,45 @@ export async function POST(req: NextRequest) {
     })
 
     // Side-effect: cascade status to linked records
-    // Order Processing ↔ OutboundRecord
+
+    // Outbound → Merchant cumulative sales value (when delivered)
+    if (module === 'outbound' && toStatus === 'delivered' && record.vendorId) {
+      try {
+        const saleAmount = (record as Record<string, unknown>).saleAmount as number || 0
+        if (saleAmount > 0) {
+          await db.merchant.update({
+            where: { merchantId: record.vendorId as string },
+            data: { totalSalesValue: { increment: saleAmount } },
+          })
+        }
+      } catch (merchantErr) {
+        console.error('Merchant sales value update failed (non-blocking):', merchantErr)
+      }
+    }
+
+    // Outbound → Order Processing status sync (reverse cascade)
+    // scan-advance already does this, but manual workflow transitions don't
+    if (module === 'outbound' && record.orderNumber) {
+      try {
+        const orderStatusMap: Record<string, string> = {
+          pending: 'new_order', picking: 'processing', picked: 'processing',
+          packing: 'processing', packed: 'processing',
+          dispatched: 'shipped', delivered: 'delivered',
+          failed: 'returned', returned: 'returned', cancelled: 'cancelled',
+        }
+        const mappedStatus = orderStatusMap[toStatus]
+        if (mappedStatus) {
+          await db.orderProcessing.updateMany({
+            where: { orderNumber: record.orderNumber },
+            data: { status: mappedStatus },
+          })
+        }
+      } catch (orderErr) {
+        console.error('Order status sync failed (non-blocking):', orderErr)
+      }
+    }
+
+    // Order Processing ↔ OutboundRecord (existing forward cascade)
     if (module === 'order_processing' && record.orderNumber) {
       try {
         await db.outboundRecord.updateMany({

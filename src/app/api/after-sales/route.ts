@@ -215,6 +215,25 @@ export async function PUT(req: NextRequest) {
             data: { status: newStatus },
           })
 
+          // For RESTOCK: increment Product.currentStock (item goes back on shelf)
+          // For RTV/DISPOSE/LIQUIDATE: stock was already decremented at outbound time, don't re-add
+          if (d.disposition === 'RESTOCK') {
+            const item = await db.inventoryItem.findUnique({
+              where: { itemId: d.itemId },
+              select: { productId: true, productName: true, merchantId: true, merchantName: true },
+            })
+            if (item) {
+              try {
+                await db.product.update({
+                  where: { productId: item.productId },
+                  data: { currentStock: { increment: 1 } },
+                })
+              } catch (productErr) {
+                console.error('Product restock increment failed (non-blocking):', productErr)
+              }
+            }
+          }
+
           // If RTV, auto-create an RTVRecord (linking RMA → RTV → vendor approval)
           if (d.disposition === 'RTV') {
             const item = await db.inventoryItem.findUnique({

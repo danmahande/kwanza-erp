@@ -279,6 +279,24 @@ export async function generateMerchantStatement(params: {
     },
   })
 
+  // Mark all approved charges for this merchant + period as 'invoiced'
+  // and link them to this statement — connects the charge ledger to statements
+  try {
+    await db.charge.updateMany({
+      where: {
+        merchantId,
+        period,
+        status: 'approved',
+      },
+      data: {
+        status: 'invoiced',
+        statementId: statement.statementId,
+      },
+    })
+  } catch (chargeErr) {
+    console.error('Charge ledger invoicing failed (non-blocking):', chargeErr)
+  }
+
   return {
     statementId: statement.statementId,
     netPayable,

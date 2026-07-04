@@ -86,6 +86,18 @@ export async function POST(req: NextRequest) {
       },
     })
 
+    // Update merchant cumulative inbound value
+    if (body.merchantId && inboundValue) {
+      try {
+        await db.merchant.update({
+          where: { merchantId: body.merchantId },
+          data: { totalInboundValue: { increment: inboundValue } },
+        })
+      } catch (merchantErr) {
+        console.error('Merchant inbound value update failed (non-blocking):', merchantErr)
+      }
+    }
+
     // Workflow 1: create a StorageLiability row so storage fees start accruing
     // from tomorrow. Non-blocking — if it fails, the inbound still succeeded.
     try {
