@@ -91,9 +91,19 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // Update product stock — the units are gone
+    // Update product stock — the units are gone (check sufficient first)
     if (body.productId && body.qty) {
       try {
+        const product = await db.product.findUnique({
+          where: { productId: body.productId },
+          select: { currentStock: true, productLabel: true },
+        })
+        if (product && product.currentStock < body.qty) {
+          return NextResponse.json({
+            error: 'Insufficient stock for shrinkage',
+            details: `${product.productLabel}: only ${product.currentStock} units on shelf, but shrinkage records ${body.qty} units`,
+          }, { status: 409 })
+        }
         await db.product.update({
           where: { productId: body.productId },
           data: { currentStock: { decrement: body.qty } },

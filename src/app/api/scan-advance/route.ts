@@ -100,9 +100,18 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy: str
 
   if (!next) {
     const stage = getStage(module, currentStatus)
+    // P9: Better error messages for terminal/exception states
+    const terminalMessages: Record<string, string> = {
+      cancelled: 'This order has been cancelled and cannot be advanced.',
+      delivered: 'This order has already been delivered — no further action needed.',
+      returned: 'This order has been returned. Process it in the Returns tab.',
+      failed: 'This order has failed delivery. Reschedule or cancel it.',
+      disposed: 'This item has been disposed and cannot be advanced.',
+      self_delivery: 'This is a self-delivery order — the merchant fulfils it directly. No warehouse action needed.',
+    }
     return NextResponse.json({
       success: false,
-      message: `Parcel ${String(record.orderNumber || record.outboundId)} is at terminal state: ${stage?.label || currentStatus}.`,
+      message: terminalMessages[currentStatus] || `Parcel ${String(record.orderNumber || record.outboundId)} is at terminal state: ${stage?.label || currentStatus}.`,
       module, currentStatus, recordId: record.id,
     })
   }

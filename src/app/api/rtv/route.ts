@@ -35,12 +35,23 @@ export async function POST(req: NextRequest) {
       data: { ...body, rtvId },
     })
 
-    // Decrement product stock — goods are leaving the warehouse
+    // Decrement product stock — goods are leaving the warehouse (check sufficient first)
     if (body.productId && body.qty) {
       try {
+        const rtvQty = parseInt(body.qty)
+        const product = await db.product.findUnique({
+          where: { productId: body.productId },
+          select: { currentStock: true, productLabel: true },
+        })
+        if (product && product.currentStock < rtvQty) {
+          return NextResponse.json({
+            error: 'Insufficient stock for RTV',
+            details: `${product.productLabel}: only ${product.currentStock} units on shelf, but RTV returns ${rtvQty} units`,
+          }, { status: 409 })
+        }
         await db.product.update({
           where: { productId: body.productId },
-          data: { currentStock: { decrement: parseInt(body.qty) } },
+          data: { currentStock: { decrement: rtvQty } },
         })
       } catch (productErr) {
         console.error('Product stock decrement failed (non-blocking):', productErr)

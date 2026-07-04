@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
     const allUnassigned = await db.outboundRecord.findMany({
       orderBy: { createdAt: 'desc' },
     })
-    const unassigned = allUnassigned.filter(r => r.runsheetId === null && r.status === 'pending' && !r.cancellationReason)
+    const unassigned = allUnassigned.filter(r => r.runsheetId === null && r.status === 'packed' && !r.cancellationReason)
 
     return NextResponse.json({ runsheets, unassigned })
   } catch (error) {
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST /api/runsheet — create runsheet from pending orders
+// POST /api/runsheet — create runsheet from packed orders
 export async function POST(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
@@ -107,12 +107,56 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Rider and at least one order are required' }, { status: 400 })
     }
 
+    // P5: Validate driver exists and is active
+    const driverRecord = await db.driver.findUnique({
+      where: { driverId: driver },
+      select: { driverId: true, name: true, status: true },
+    })
+    if (!driverRecord) {
+      return NextResponse.json({ error: `Driver ${driver} not found` }, { status: 400 })
+    }
+    if (driverRecord.status !== 'active') {
+      return NextResponse.json({ error: `Driver ${driverRecord.name} is ${driverRecord.status}, cannot assign runsheet` }, { status: 400 })
+    }
+
+    // P4+P6: Fetch all selected orders and validate they're ready for dispatch
+    const orders = await db.outboundRecord.findMany({
+      where: { id: { in: outboundIds } },
+      select: { id: true, outboundId: true, orderNumber: true, status: true, runsheetId: true },
+    })
+
+    // Check for orders not found
+    if (orders.length !== outboundIds.length) {
+      const found = new Set(orders.map(o => o.id))
+      const missing = outboundIds.filter((id: string) => !found.has(id))
+      return NextResponse.json({ error: `Orders not found: ${missing.join(', ')}` }, { status: 400 })
+    }
+
+    // P4: Check for orders already assigned to a runsheet
+    const alreadyAssigned = orders.filter(o => o.runsheetId !== null)
+    if (alreadyAssigned.length > 0) {
+      return NextResponse.json({
+        error: `${alreadyAssigned.length} order(s) already assigned to a runsheet`,
+        details: alreadyAssigned.map(o => `${o.outboundId} → ${o.runsheetId}`),
+      }, { status: 400 })
+    }
+
+    // P6: Check that all orders are in 'packed' status (ready for dispatch)
+    const notPacked = orders.filter(o => o.status !== 'packed')
+    if (notPacked.length > 0) {
+      return NextResponse.json({
+        error: `${notPacked.length} order(s) are not packed yet — must be 'packed' before assigning to a runsheet`,
+        details: notPacked.map(o => `${o.outboundId} (status: ${o.status})`),
+      }, { status: 400 })
+    }
+
     // Generate runsheet ID
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '')
     const count = await db.outboundRecord.count({ where: { runsheetId: { startsWith: `RS-${today}` } } })
     const runsheetId = `RS-${today}-${String(count + 1).padStart(3, '0')}`
 
-    // Assign orders to runsheet with sequence
+    // P2: Assign orders to runsheet — status stays 'packed' (don't skip to dispatched)
+    // The rider dispatches by scanning, which moves packed → dispatched properly
     for (let i = 0; i < outboundIds.length; i++) {
       await db.outboundRecord.update({
         where: { id: outboundIds[i] },
@@ -121,14 +165,13 @@ export async function POST(req: NextRequest) {
           stopSequence: i + 1,
           assignedDriver: driver,
           vehicleNumber: vehicleNumber || null,
-          status: 'dispatched',
-          dispatchedAt: new Date(),
+          // Keep status as 'packed' — rider scans to dispatch, not runsheet creation
           deliveryNotes: notes ? `Trip notes: ${notes}` : null,
         },
       })
     }
 
-    return NextResponse.json({ runsheetId, message: `Runsheet ${runsheetId} created with ${outboundIds.length} stops` }, { status: 201 })
+    return NextResponse.json({ runsheetId, message: `Runsheet ${runsheetId} created with ${outboundIds.length} stops for ${driverRecord.name}` }, { status: 201 })
   } catch (error) {
     console.error('Runsheet create error:', error)
     return NextResponse.json({ error: 'Failed to create runsheet' }, { status: 500 })

@@ -49,8 +49,18 @@ export async function POST(req: NextRequest) {
     const count = await db.outboundRecord.count()
     const outboundId = `OUT-${String(count + 1).padStart(3, '0')}`
     
-    // Update product stock
+    // Update product stock — check sufficient stock first
     if (body.productId && body.qty) {
+      const product = await db.product.findUnique({
+        where: { productId: body.productId },
+        select: { currentStock: true, productLabel: true },
+      })
+      if (product && product.currentStock < body.qty) {
+        return NextResponse.json({
+          error: 'Insufficient stock',
+          details: `${product.productLabel}: only ${product.currentStock} units available, but outbound requires ${body.qty}`,
+        }, { status: 409 })
+      }
       await db.product.update({
         where: { productId: body.productId },
         data: { currentStock: { decrement: body.qty } },

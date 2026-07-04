@@ -56,6 +56,14 @@ export async function generateMerchantStatement(params: {
     orderBy: { validFrom: 'desc' },
   })
 
+  // Check if a statement already exists for this merchant + period
+  const existingStatement = await db.merchantStatement.findFirst({
+    where: { merchantId, period },
+  })
+  if (existingStatement) {
+    throw new Error(`Statement ${existingStatement.statementId} already exists for merchant ${merchantId} period ${period}. Delete it first or choose a different period.`)
+  }
+
   // Fetch previous statement for opening balance
   const previousStatement = await db.merchantStatement.findFirst({
     where: { merchantId, period: { not: period } },

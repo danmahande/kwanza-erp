@@ -60,15 +60,25 @@ export async function POST(req: NextRequest) {
     const orderNumber = `DS-${String(count + 1).padStart(3, '0')}`
 
     // Create or update customer based on the order
-    let customer = await db.customer.findFirst({
-      where: {
-        OR: [
-          { email: body.customerEmail },
-          { contact: body.customerContact },
-          { name: body.customerName },
-        ],
-      },
-    })
+    // P7: Match by phone first (most unique), then email, then name
+    // This prevents two different "John"s from being merged into one record
+    let customer = null
+    if (body.customerContact) {
+      customer = await db.customer.findUnique({
+        where: { contact: body.customerContact },
+      })
+    }
+    if (!customer && body.customerEmail) {
+      customer = await db.customer.findFirst({
+        where: { email: body.customerEmail },
+      })
+    }
+    // Only match by name if no phone or email provided
+    if (!customer && !body.customerContact && !body.customerEmail && body.customerName) {
+      customer = await db.customer.findFirst({
+        where: { name: body.customerName },
+      })
+    }
 
     if (!customer) {
       // Generate customer ID
@@ -207,7 +217,10 @@ export async function POST(req: NextRequest) {
           qty,
           unitSellingPrice,
           saleAmount,
-          status: 'pending', // starts pending; warehouse will move it forward
+          // P8: Self-delivery orders get 'self_delivery' status — they don't need
+          // warehouse picking/packing, so they shouldn't appear in the warehouse queue.
+          // The merchant fulfils them directly. Warehouse can still track them.
+          status: deliveryType === 'self-delivery' ? 'self_delivery' : 'pending',
         },
       })
 
@@ -227,6 +240,20 @@ export async function POST(req: NextRequest) {
       // (skip for self-delivery since we don't hold the stock)
       if (body.productId && deliveryType !== 'self-delivery') {
         try {
+          // P3: Check sufficient stock before decrementing
+          const product = await db.product.findUnique({
+            where: { productId: body.productId },
+            select: { currentStock: true, productLabel: true },
+          })
+          if (product && product.currentStock < qty) {
+            return NextResponse.json({
+              error: 'Insufficient stock',
+              details: `${product.productLabel}: only ${product.currentStock} units available, but order requires ${qty}`,
+              productId: body.productId,
+              available: product.currentStock,
+              requested: qty,
+            }, { status: 409 })
+          }
           await db.product.update({
             where: { productId: body.productId },
             data: { currentStock: { decrement: qty } },
