@@ -55,8 +55,9 @@ export async function POST(req: NextRequest) {
 
     const payment = await db.merchantPayment.create({ data: paymentData })
 
-    // Update merchant cumulative figures (only for positive payments, not credit memos)
-    if (payment.amount > 0 && payment.merchantId) {
+    // Update merchant cumulative figures (only for standalone payments, not batch-linked
+    // — batch creation already updates merchant inside its own transaction)
+    if (payment.amount > 0 && payment.merchantId && !payment.batchId) {
       await db.merchant.update({
         where: { merchantId: payment.merchantId },
         data: {

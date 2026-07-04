@@ -141,7 +141,7 @@ export async function PUT(req: NextRequest) {
     // totalShrinkageValue cumulative figure so it shows up on their next statement.
     // ===========================================================================
     if (data.status === 'resolved' && !data.resolvedBy) {
-      data.resolvedBy = 'current_user' // TODO: replace with real session
+      data.resolvedBy = _user.name
       data.resolvedAt = new Date()
     }
 

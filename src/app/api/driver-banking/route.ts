@@ -89,12 +89,13 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as import('@/lib/auth-api').AuthUser
     const body = await req.json()
     const { id, ...data } = body
 
     // If verifying, stamp verifier + time
     if (data.status === 'verified' && !data.verifiedBy) {
-      data.verifiedBy = 'current_user' // TODO: replace with real session
+      data.verifiedBy = _user.name
       data.verifiedAt = new Date()
     }
 
@@ -105,6 +106,18 @@ export async function PUT(req: NextRequest) {
         updatedAt: new Date(),
       },
     })
+
+    // If marked as shortfall, update driver's damages cumulative
+    if (banking.status === 'shortfall' && banking.shortfallAmount > 0 && banking.driverId) {
+      try {
+        await db.driver.update({
+          where: { driverId: banking.driverId },
+          data: { damages: { increment: banking.shortfallAmount } },
+        })
+      } catch (driverErr) {
+        console.error('Driver damages update failed (non-blocking):', driverErr)
+      }
+    }
 
     // Re-reconcile runsheet if linked
     if (banking.runsheetId) {

@@ -87,6 +87,18 @@ export async function POST(req: NextRequest) {
         updateData.cancelledAt = new Date()
         updateData.cancelledBy = performedBy || _user.name
         if (reason) updateData.cancellationReason = reason
+
+        // Restore product stock — the units come back to the shelf
+        if (record.productId && record.qty) {
+          try {
+            await db.product.update({
+              where: { productId: String(record.productId) },
+              data: { currentStock: { increment: Number(record.qty) } },
+            })
+          } catch (stockErr) {
+            console.error('Stock restore on cancel failed (non-blocking):', stockErr)
+          }
+        }
       }
     }
     if (module === 'after_sales') {
@@ -108,17 +120,11 @@ export async function POST(req: NextRequest) {
       if (toStatus === 'resolved') {
         updateData.resolvedBy = performedBy || _user.name
         updateData.resolvedAt = new Date()
-        // If debitMerchant is true and totalValue exists, increment merchant's shrinkage total
-        if (record.debitMerchant && record.merchantId && record.totalValue) {
-          try {
-            await db.merchant.update({
-              where: { merchantId: record.merchantId },
-              data: { totalShrinkageValue: { increment: record.totalValue } },
-            })
-          } catch (merchantErr) {
-            console.error('Merchant shrinkage debit failed (non-blocking):', merchantErr)
-          }
-        }
+        // NOTE: merchant shrinkage debit is handled by the shrinkage API PUT
+        // (src/app/api/shrinkage/route.ts) — do NOT duplicate it here or the
+        // merchant gets double-debited. The shrinkage API checks debitMerchant
+        // and increments totalShrinkageValue. This workflow transition only
+        // stamps the resolver + timestamp.
       }
     }
     if (module === 'driver_banking') {

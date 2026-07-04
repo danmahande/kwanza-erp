@@ -295,7 +295,54 @@ export async function DELETE(req: NextRequest) {
     const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
+
+    // Find the order first so we can cascade
+    const order = await db.orderProcessing.findUnique({ where: { id: id! } })
+    if (!order) return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+
+    // Restore product stock + delete linked outbound record
+    if (order.orderNumber) {
+      const outbound = await db.outboundRecord.findFirst({
+        where: { orderNumber: order.orderNumber },
+        select: { id: true, productId: true, qty: true },
+      })
+      if (outbound) {
+        // Restore stock
+        if (outbound.productId && outbound.qty) {
+          try {
+            await db.product.update({
+              where: { productId: outbound.productId },
+              data: { currentStock: { increment: outbound.qty } },
+            })
+          } catch (e) { console.error('Stock restore failed (non-blocking):', e) }
+        }
+        // Delete the outbound record
+        await db.outboundRecord.delete({ where: { id: outbound.id } }).catch(() => {})
+      }
+    }
+
+    // Decrement customer order count
+    if (order.customerId) {
+      try {
+        await db.customer.update({
+          where: { customerId: order.customerId },
+          data: {
+            totalOrders: { decrement: 1 },
+            totalOrderValue: { decrement: order.totalAmount || 0 },
+          },
+        })
+      } catch (e) { console.error('Customer update failed (non-blocking):', e) }
+    }
+
     await db.orderProcessing.delete({ where: { id: id! } })
+
+    await logAudit({
+      action: 'DELETE',
+      module: 'order_processing',
+      entityId: order.orderNumber,
+      details: `Deleted order ${order.orderNumber} — stock restored, outbound deleted, customer counts decremented`,
+    })
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting order processing record:', error)

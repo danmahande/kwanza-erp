@@ -151,7 +151,7 @@ export async function PUT(req: NextRequest) {
     // body.dispositions should be an array of { itemId, disposition }
     // where disposition ∈ { RESTOCK, RTV, DISPOSE, LIQUIDATE }.
     if (data.returnStatus === 'approved' && !data.approvedBy) {
-      data.approvedBy = 'current_user' // TODO: replace with real session
+      data.approvedBy = _user.name
       data.approvedAt = new Date()
     }
 
@@ -184,6 +184,32 @@ export async function PUT(req: NextRequest) {
         updatedAt: new Date(),
       },
     })
+
+    // Update merchant.totalReturnValue when a return is approved
+    if (data.returnStatus === 'approved' && afterSalesRecord.originalOrderId) {
+      try {
+        const outbound = await db.outboundRecord.findFirst({
+          where: {
+            OR: [
+              { orderNumber: afterSalesRecord.originalOrderId },
+              { outboundId: afterSalesRecord.originalOrderId },
+            ],
+          },
+          select: { vendorId: true, saleAmount: true },
+        })
+        if (outbound?.vendorId) {
+          const returnValue = afterSalesRecord.refundAmount || outbound.saleAmount || 0
+          if (returnValue > 0) {
+            await db.merchant.update({
+              where: { merchantId: outbound.vendorId },
+              data: { totalReturnValue: { increment: returnValue } },
+            })
+          }
+        }
+      } catch (merchantErr) {
+        console.error('Merchant return value update failed (non-blocking):', merchantErr)
+      }
+    }
 
     // Apply per-item dispositions when the RMA is approved
     // body.dispositions = [{ itemId, disposition }]
