@@ -20,6 +20,24 @@ import { requireAuth } from '@/lib/auth-api'
  * workflow view that replaces the 12-module sidebar for daily warehouse work.
  */
 
+// Compute the average minutes since each item's stage-entry timestamp.
+// Used to surface "this station is bottlenecked" without making the supervisor
+// read every row. Returns null if no items or no usable timestamps.
+function computeAvgDwellMinutes(
+  items: Array<{ createdAt?: string | Date | null; dispatchedAt?: string | Date | null; deliveredAt?: string | Date | null }>,
+  field: 'createdAt' | 'dispatchedAt' | 'deliveredAt',
+  now: Date,
+): number | null {
+  const times = items
+    .map(it => it[field])
+    .filter((t): t is string | Date => t != null)
+    .map(t => new Date(t).getTime())
+    .filter(t => !Number.isNaN(t))
+  if (times.length === 0) return null
+  const sumMinutes = times.reduce((sum, t) => sum + Math.max(0, Math.floor((now.getTime() - t) / 60000)), 0)
+  return Math.round(sumMinutes / times.length)
+}
+
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
@@ -73,7 +91,7 @@ export async function GET(req: NextRequest) {
       select: {
         id: true, outboundId: true, orderNumber: true, customerName: true,
         productName: true, qty: true, runsheetId: true, assignedDriver: true,
-        saleAmount: true, codCollected: true,
+        saleAmount: true, codCollected: true, createdAt: true,
       },
       orderBy: { runsheetId: 'asc' },
       take: 100,
@@ -282,6 +300,19 @@ export async function GET(req: NextRequest) {
       _sum: { saleAmount: true },
     })
 
+    // ── Compute avg dwell time per station ──
+    // Each station uses the timestamp most relevant to that stage:
+    //   intake/sort/stage/dispatch/returns → createdAt (when the record was made)
+    //   inTransit  → dispatchedAt (when the rider left)
+    //   delivered  → deliveredAt (when it was delivered)
+    const intakeDwell    = computeAvgDwellMinutes(intakeInbounds,    'createdAt',    now)
+    const sortDwell      = computeAvgDwellMinutes(sortRecords,       'createdAt',    now)
+    const stageDwell     = computeAvgDwellMinutes(stageRecords,      'createdAt',    now)
+    const dispatchDwell  = computeAvgDwellMinutes(dispatchRecords,   'createdAt',    now)
+    const inTransitDwell = computeAvgDwellMinutes(inTransitRecords,  'dispatchedAt', now)
+    const deliveredDwell = computeAvgDwellMinutes(deliveredRecords,  'deliveredAt',  now)
+    const returnsDwell   = computeAvgDwellMinutes(returnRecords,     'createdAt',    now)
+
     return NextResponse.json({
       date: now.toISOString(),
       stations: {
@@ -292,6 +323,7 @@ export async function GET(req: NextRequest) {
           description: 'Parcels that arrived today, need put-away',
           action: 'Start Intake',
           targetModule: 'inventory',
+          avgDwellMinutes: intakeDwell,
         },
         sort: {
           count: sortRecords.length,
@@ -300,6 +332,7 @@ export async function GET(req: NextRequest) {
           description: 'Parcels being picked or packed',
           action: 'Start Sorting',
           targetModule: 'outbound',
+          avgDwellMinutes: sortDwell,
         },
         stage: {
           count: stageRecords.length,
@@ -308,6 +341,7 @@ export async function GET(req: NextRequest) {
           description: 'Packed, awaiting rider assignment',
           action: 'Assign Riders',
           targetModule: 'outbound',
+          avgDwellMinutes: stageDwell,
         },
         dispatch: {
           count: dispatchRecords.length,
@@ -316,6 +350,7 @@ export async function GET(req: NextRequest) {
           description: 'Assigned to rider, ready to leave',
           action: 'Dispatch Parcels',
           targetModule: 'outbound',
+          avgDwellMinutes: dispatchDwell,
         },
         inTransit: {
           count: inTransitRecords.length,
@@ -324,6 +359,7 @@ export async function GET(req: NextRequest) {
           description: 'Out for delivery now',
           action: 'Track Deliveries',
           targetModule: 'outbound',
+          avgDwellMinutes: inTransitDwell,
         },
         delivered: {
           count: deliveredRecords.length,
@@ -332,6 +368,7 @@ export async function GET(req: NextRequest) {
           description: 'Successfully delivered today',
           action: 'View Proof of Delivery',
           targetModule: 'outbound',
+          avgDwellMinutes: deliveredDwell,
         },
         returns: {
           count: returnRecords.length,
@@ -340,6 +377,7 @@ export async function GET(req: NextRequest) {
           description: 'Customer returns received today',
           action: 'Process Returns',
           targetModule: 'returns',
+          avgDwellMinutes: returnsDwell,
         },
       },
       exceptions: {

@@ -66,6 +66,11 @@ function statusToStage(status: string): { stageKey: string; stageLabel: string }
     case 'packed':
       return { stageKey: 'stage', stageLabel: 'Staging' }
     case 'dispatched':
+      // 'dispatched' (assigned rider, hasn't left yet) vs 'in transit' —
+      // the hub-today API treats dispatched+dispatchedAt>=today as inTransit,
+      // and dispatched with no dispatchedAt or future as Dispatch. We mirror
+      // that here: if it has a dispatchedAt, it's in transit.
+      // The caller will refine this using dispatchedAt.
       return { stageKey: 'dispatch', stageLabel: 'Dispatch' }
     case 'delivered':
       return { stageKey: 'delivered', stageLabel: 'Delivered' }
@@ -76,6 +81,53 @@ function statusToStage(status: string): { stageKey: string; stageLabel: string }
     default:
       return { stageKey: 'sort', stageLabel: status }
   }
+}
+
+// Thresholds (in minutes) for "this order has been sitting too long in its
+// current stage" — drives the stale orange dot in the UI.
+const STALE_THRESHOLDS: Record<string, number> = {
+  sort: 120,      // 2h — picking/packing should be fast
+  stage: 240,     // 4h — staging can wait a bit for rider assignment
+  dispatch: 120,  // 2h — assigned rider, should be on the road
+  inTransit: 360, // 6h — deliveries can take time, but flag if very long
+  // delivered + returns: never stale
+}
+
+// Compute minutes since this order entered its current stage.
+// We approximate stage-entry time using the best timestamp we have:
+//   sort/stage   → createdAt  (no packed timestamp tracked)
+//   dispatched   → dispatchedAt
+//   delivered    → deliveredAt
+// Returns null if we can't determine the entry time.
+function computeStageEntryMinutes(
+  status: string,
+  stageKey: string,
+  createdAt: Date,
+  dispatchedAt: Date | null,
+  deliveredAt: Date | null,
+  now: Date,
+): { entryMinutes: number | null; isStale: boolean } {
+  let entryTime: Date | null = null
+  switch (stageKey) {
+    case 'sort':
+    case 'stage':
+      entryTime = createdAt
+      break
+    case 'dispatch':
+    case 'inTransit':
+      entryTime = dispatchedAt
+      break
+    case 'delivered':
+      entryTime = deliveredAt
+      break
+    default:
+      return { entryMinutes: null, isStale: false }
+  }
+  if (!entryTime) return { entryMinutes: null, isStale: false }
+  const entryMinutes = Math.floor((now.getTime() - new Date(entryTime).getTime()) / 60000)
+  const threshold = STALE_THRESHOLDS[stageKey]
+  const isStale = threshold != null && entryMinutes > threshold && stageKey !== 'delivered'
+  return { entryMinutes, isStale }
 }
 
 export async function GET(req: NextRequest) {
@@ -171,15 +223,25 @@ export async function GET(req: NextRequest) {
       .map(p => {
         const productRecords = recordsByProduct.get(p.productId) || []
         const orders = productRecords.map(r => {
-          const stage = statusToStage(r.status)
+          // Refine: 'dispatched' status with a dispatchedAt today = inTransit;
+          // without = still in Dispatch (assigned, hasn't left)
+          let stageKey = statusToStage(r.status).stageKey
+          let stageLabel = statusToStage(r.status).stageLabel
+          if (r.status === 'dispatched' && r.dispatchedAt && new Date(r.dispatchedAt) >= todayStart) {
+            stageKey = 'inTransit'
+            stageLabel = 'In Transit'
+          }
+          const { entryMinutes, isStale } = computeStageEntryMinutes(
+            r.status, stageKey, r.createdAt, r.dispatchedAt, r.deliveredAt, now,
+          )
           return {
             id: String(r.orderNumber || r.outboundId),
             customerName: r.customerName,
             customerAddress: r.customerAddress || null,
             qty: r.qty,
             status: r.status,
-            stage: stage.stageLabel,
-            stageKey: stage.stageKey,
+            stage: stageLabel,
+            stageKey,
             codCollected: r.codCollected ?? null,
             saleAmount: r.saleAmount ?? null,
             assignedDriver: r.assignedDriver || null,
@@ -187,6 +249,8 @@ export async function GET(req: NextRequest) {
             createdAt: r.createdAt,
             dispatchedAt: r.dispatchedAt || null,
             deliveredAt: r.deliveredAt || null,
+            entryMinutes,
+            isStale,
           }
         })
         return {

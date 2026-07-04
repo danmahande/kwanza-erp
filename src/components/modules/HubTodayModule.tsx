@@ -34,6 +34,8 @@ interface SearchOrder {
   createdAt: string
   dispatchedAt: string | null
   deliveredAt: string | null
+  entryMinutes: number | null
+  isStale: boolean
 }
 
 interface SearchProduct {
@@ -100,6 +102,7 @@ interface Station {
   description: string
   action: string
   targetModule: string
+  avgDwellMinutes?: number | null
 }
 
 interface HubData {
@@ -195,6 +198,35 @@ const STATION_MODULE: Record<string, string> = {
   inTransit: 'outbound',
   delivered: 'outbound',
   returns: 'returns',
+}
+
+// Format minutes as a compact "1h 14m" / "47m" / "—"
+function formatDwell(minutes: number | null | undefined): string {
+  if (minutes == null) return '—'
+  if (minutes < 1) return '<1m'
+  if (minutes < 60) return `${minutes}m`
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+// Stage colors used in dropdown distribution chart + funnel
+const STAGE_BAR_COLOR: Record<string, string> = {
+  sort:      'bg-orange-400',
+  stage:     'bg-purple-400',
+  dispatch:  'bg-yellow-400',
+  inTransit: 'bg-cyan-400',
+  delivered: 'bg-green-500',
+  returns:   'bg-red-400',
+}
+
+// Same thresholds as backend STALE_THRESHOLDS — keep in sync.
+// Used to highlight a station tab when its avg dwell exceeds the threshold.
+const STALE_THRESHOLD_MINUTES: Record<string, number> = {
+  sort: 120,
+  stage: 240,
+  dispatch: 120,
+  inTransit: 360,
 }
 
 // ── Status pill: colored dot + 2-letter code ──
@@ -894,6 +926,54 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             )}
             {!isSearching && searchResults && searchResults.results.length > 0 && (
               <div className="py-1">
+                {/* Stage distribution chart — answers "where are all my matching orders right now?" at a glance */}
+                {(() => {
+                  const allOrders = searchResults.results.flatMap(p => p.orders)
+                  const stageCounts: Record<string, number> = {}
+                  for (const o of allOrders) {
+                    stageCounts[o.stageKey] = (stageCounts[o.stageKey] || 0) + 1
+                  }
+                  const stages: { key: string; label: string }[] = [
+                    { key: 'sort', label: 'Sort' },
+                    { key: 'stage', label: 'Stage' },
+                    { key: 'dispatch', label: 'Dispatch' },
+                    { key: 'inTransit', label: 'Transit' },
+                    { key: 'delivered', label: 'Delivered' },
+                    { key: 'returns', label: 'Returns' },
+                  ]
+                  const total = allOrders.length || 1
+                  const presentStages = stages.filter(s => (stageCounts[s.key] || 0) > 0)
+                  if (presentStages.length === 0) return null
+                  return (
+                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/40">
+                      <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">
+                        Where these {allOrders.length} order{allOrders.length !== 1 ? 's' : ''} are
+                      </div>
+                      <div className="flex items-center h-3 rounded-full overflow-hidden bg-gray-100">
+                        {presentStages.map(s => {
+                          const count = stageCounts[s.key]
+                          const pct = (count / total) * 100
+                          return (
+                            <div
+                              key={s.key}
+                              className={`${STAGE_BAR_COLOR[s.key] || 'bg-gray-300'} h-full transition-all`}
+                              style={{ width: `${pct}%` }}
+                              title={`${s.label}: ${count}`}
+                            />
+                          )
+                        })}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                        {presentStages.map(s => (
+                          <span key={s.key} className="inline-flex items-center gap-1 text-[10px] text-gray-600">
+                            <span className={`w-2 h-2 rounded-full ${STAGE_BAR_COLOR[s.key] || 'bg-gray-300'}`} />
+                            {s.label} <strong className="font-mono">{stageCounts[s.key]}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
                 <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold border-b border-gray-100 sticky top-0 bg-white">
                   {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''} · {searchResults.totalOrders} active order{searchResults.totalOrders !== 1 ? 's' : ''}
                 </div>
@@ -915,7 +995,15 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                         <span className="font-mono text-xs font-bold text-[#1B2A4A] w-24 shrink-0">{order.id}</span>
                         <span className="text-xs text-gray-700 flex-1 truncate">{order.customerName}</span>
                         <span className="text-[10px] text-gray-400 shrink-0">{order.qty} units</span>
-                        <span className="text-[10px] text-gray-500 shrink-0 w-24 text-right">{order.stage}</span>
+                        <span className="text-[10px] text-gray-500 shrink-0 w-24 text-right flex items-center justify-end gap-1">
+                          {order.isStale && (
+                            <span
+                              title={`Stuck here for ${formatDwell(order.entryMinutes)} — over threshold`}
+                              className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"
+                            />
+                          )}
+                          {order.stage}
+                        </span>
                         <ChevronRight size={12} className="text-gray-300 shrink-0" />
                       </button>
                     ))}
@@ -1016,10 +1104,33 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
 
             {/* Current stage callout */}
             <div className={`rounded-lg px-4 py-3 border ${STAGE_CALLOUT_TINT[selectedOrder.stageKey] || 'bg-gray-50 border-gray-200'}`}>
-              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Currently at</p>
-              <p className="text-base font-bold text-gray-900 mt-0.5">{selectedOrder.stage}</p>
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Currently at</p>
+                  <p className="text-base font-bold text-gray-900 mt-0.5 flex items-center gap-2">
+                    {selectedOrder.stage}
+                    {selectedOrder.isStale && (
+                      <span
+                        title={`Stuck here for ${formatDwell(selectedOrder.entryMinutes)} — past threshold`}
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
+                        Stale
+                      </span>
+                    )}
+                  </p>
+                </div>
+                {selectedOrder.entryMinutes != null && (
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-wider text-gray-400">In stage</p>
+                    <p className={`text-sm font-mono font-bold ${selectedOrder.isStale ? 'text-orange-700' : 'text-gray-700'}`}>
+                      {formatDwell(selectedOrder.entryMinutes)}
+                    </p>
+                  </div>
+                )}
+              </div>
               {selectedOrder.assignedDriver && (
-                <p className="text-[11px] text-gray-600 mt-1">Driver: {selectedOrder.assignedDriver}</p>
+                <p className="text-[11px] text-gray-600 mt-2">Driver: {selectedOrder.assignedDriver}</p>
               )}
               {selectedOrder.runsheetId && (
                 <p className="text-[11px] text-gray-500">Runsheet: {selectedOrder.runsheetId}</p>
@@ -1112,7 +1223,59 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         deliveredCount={data.stations.delivered.count}
       />
 
-      {/* ── Station Tabs (with plain-English labels + attention dots) ── */}
+      {/* ── Daily Flow Funnel — how today's parcels have moved through stages ── */}
+      {(() => {
+        const stations = [
+          { key: 'intake',    label: 'Intake',    count: data.stations.intake.count,    color: 'bg-blue-500' },
+          { key: 'sort',      label: 'Sort',      count: data.stations.sort.count,      color: 'bg-orange-500' },
+          { key: 'stage',     label: 'Stage',     count: data.stations.stage.count,     color: 'bg-purple-500' },
+          { key: 'dispatch',  label: 'Dispatch',  count: data.stations.dispatch.count,  color: 'bg-yellow-500' },
+          { key: 'inTransit', label: 'Transit',   count: data.stations.inTransit.count, color: 'bg-cyan-500' },
+          { key: 'delivered', label: 'Delivered', count: data.stations.delivered.count, color: 'bg-green-600' },
+        ]
+        const totalAll = stations.reduce((s, x) => s + x.count, 0)
+        if (totalAll === 0) return null
+        const maxCount = Math.max(...stations.map(s => s.count), 1)
+        return (
+          <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                Today's flow · {totalAll} parcel{totalAll !== 1 ? 's' : ''} in motion
+              </span>
+              <span className="text-[10px] text-gray-400 font-mono">
+                {data.stations.delivered.count} of {totalAll} delivered
+              </span>
+            </div>
+            <div className="flex items-stretch gap-1">
+              {stations.map((s, i) => {
+                const prevCount = i > 0 ? stations[i - 1].count : 0
+                const dropoff = i > 0 && prevCount > 0 ? prevCount - s.count : 0
+                const widthPct = (s.count / maxCount) * 100
+                return (
+                  <div key={s.key} className="flex-1 min-w-0 flex flex-col">
+                    <div className="h-2 rounded-full overflow-hidden bg-gray-100">
+                      <div
+                        className={`h-full ${s.color} transition-all`}
+                        style={{ width: `${Math.max(widthPct, s.count > 0 ? 8 : 0)}%` }}
+                        title={`${s.label}: ${s.count}`}
+                      />
+                    </div>
+                    <div className="mt-1 text-center">
+                      <p className="text-[9px] text-gray-400 uppercase tracking-wider truncate">{s.label}</p>
+                      <p className="text-xs font-mono font-bold text-gray-900">{s.count}</p>
+                      {dropoff > 0 && (
+                        <p className="text-[9px] text-gray-400 font-mono">−{dropoff}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Station Tabs (with plain-English labels + attention dots + avg dwell) ── */}
       <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
         {STATIONS.map(s => {
           const station = data.stations[s.key]
@@ -1120,6 +1283,9 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           const isActive = activeStation === s.key
           const needsAttention = count > 0 && ['intake', 'sort', 'stage', 'dispatch', 'returns'].includes(s.key)
           const Icon = s.icon
+          const dwell = station?.avgDwellMinutes ?? null
+          const threshold = STALE_THRESHOLD_MINUTES[s.key]
+          const isStaleStation = dwell != null && threshold != null && dwell > threshold && count > 0
           return (
             <button
               key={s.key}
@@ -1129,6 +1295,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                   ? 'border-[#FF6B35] text-[#FF6B35]'
                   : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
               }`}
+              title={dwell != null ? `Average time in this stage: ${formatDwell(dwell)}` : undefined}
             >
               <Icon size={12} className={isActive ? 'text-[#FF6B35]' : 'text-gray-400'} />
               <span>{s.shortLabel}</span>
@@ -1137,14 +1304,31 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
               }`}>
                 {count}
               </span>
+              {count > 0 && dwell != null && (
+                <span className={`text-[9px] font-mono px-1 rounded ${isStaleStation ? 'text-orange-700 bg-orange-100' : 'text-gray-400'}`}>
+                  {isStaleStation ? '⚠ ' : ''}{formatDwell(dwell)}
+                </span>
+              )}
             </button>
           )
         })}
       </div>
 
-      {/* Active station description (plain English) */}
-      <p className="text-[11px] text-gray-500">
-        {STATIONS.find(s => s.key === activeStation)?.description}
+      {/* Active station description (plain English) + avg dwell */}
+      <p className="text-[11px] text-gray-500 flex items-center gap-2 flex-wrap">
+        <span>{STATIONS.find(s => s.key === activeStation)?.description}</span>
+        {(() => {
+          const st = data.stations[activeStation]
+          const dwell = st?.avgDwellMinutes
+          if (!st || st.count === 0 || dwell == null) return null
+          const threshold = STALE_THRESHOLD_MINUTES[activeStation]
+          const isStale = threshold != null && dwell > threshold
+          return (
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isStale ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}`}>
+              avg dwell: {formatDwell(dwell)}{isStale ? ' ⚠ slow' : ''}
+            </span>
+          )
+        })()}
       </p>
 
       {/* ── Main: Station Table + Right Rail ── */}
