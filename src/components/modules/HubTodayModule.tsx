@@ -36,6 +36,7 @@ interface SearchOrder {
   deliveredAt: string | null
   entryMinutes: number | null
   isStale: boolean
+  matchedQuery: boolean
 }
 
 interface SearchProduct {
@@ -47,6 +48,9 @@ interface SearchProduct {
   category: string
   unit: string
   currentStock: number
+  score?: number
+  totalActiveOrders: number
+  moreOrdersCount: number
   orders: SearchOrder[]
 }
 
@@ -877,7 +881,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <div className="flex items-center gap-3 mb-2">
             <Search size={20} className="text-blue-300" />
             <label className="text-white font-semibold text-sm">
-              Search for a product to see where its orders are
+              Search for any order — by product, customer, merchant, or order ID
             </label>
           </div>
           <div className="flex items-center gap-2">
@@ -886,7 +890,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
               value={searchQuery}
               onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true) }}
               onFocus={() => setSearchOpen(true)}
-              placeholder="Type a product name (e.g. oil, bread, sugar...)"
+              placeholder="Type a product, customer, merchant, or order ID (e.g. bread, akinyi, DS-014)..."
               ref={searchInputRef}
               className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none rounded-lg px-3 py-2.5 border border-white/20"
             />
@@ -907,7 +911,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             )}
           </div>
           <p className="text-blue-200/50 text-[11px] mt-2">
-            Type any product name — the system shows only products being processed right now, with their order numbers and current stage.
+            Type anything you remember about an order — a product name, the customer's name, the merchant, or the order ID. The system shows only active orders, with their current stage.
           </p>
         </div>
 
@@ -921,7 +925,12 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             )}
             {!isSearching && searchResults && searchResults.results.length === 0 && (
               <div className="px-4 py-4 text-xs text-gray-500">
-                No active orders for <span className="font-mono font-semibold">{searchQuery}</span> today.
+                <p>
+                  No active orders match <span className="font-mono font-semibold">{searchQuery}</span> today.
+                </p>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Searched: product name, brand, merchant, customer name, and order ID (DS-xxx / OUTxxx).
+                </p>
               </div>
             )}
             {!isSearching && searchResults && searchResults.results.length > 0 && (
@@ -990,7 +999,12 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                       <button
                         key={order.id}
                         onClick={() => handleSelectOrder(order)}
-                        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-blue-50/60 text-left"
+                        className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors ${
+                          order.matchedQuery
+                            ? 'bg-blue-50/80 hover:bg-blue-100/80'
+                            : 'hover:bg-gray-50'
+                        }`}
+                        title={order.matchedQuery ? 'Matches your search' : undefined}
                       >
                         <span className="font-mono text-xs font-bold text-[#1B2A4A] w-24 shrink-0">{order.id}</span>
                         <span className="text-xs text-gray-700 flex-1 truncate">{order.customerName}</span>
@@ -1007,6 +1021,11 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                         <ChevronRight size={12} className="text-gray-300 shrink-0" />
                       </button>
                     ))}
+                    {product.moreOrdersCount > 0 && (
+                      <div className="px-3 py-1.5 text-[10px] text-gray-400 italic border-t border-gray-50">
+                        +{product.moreOrdersCount} more active order{product.moreOrdersCount !== 1 ? 's' : ''} not shown
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1080,9 +1099,9 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         {!selectedOrder ? (
           <div className="px-4 py-8 text-center">
             <Search size={28} className="text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 font-medium">Search for a product above</p>
+            <p className="text-sm text-gray-500 font-medium">Search for an order above</p>
             <p className="text-[11px] text-gray-400 mt-1 max-w-md mx-auto">
-              Type a product name like "oil" or "bread" — click an order number to see its current stage here.
+              Type a product name, customer, merchant, or order ID (like "bread", "akinyi", or "DS-014") — click an order to see its current stage here.
             </p>
           </div>
         ) : (
@@ -1390,7 +1409,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             <div className="space-y-2">
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
               <p className="text-xs text-blue-800">
-                <strong>The search bar at the top</strong> lets you find any order by typing a product name like "oil" or "bread". The dropdown shows only products being processed right now, with their DS/ORD numbers and current stage. Click an order number to see exactly where it is in the workflow.
+                <strong>The search bar at the top</strong> finds any order by what you remember about it — a product name like "bread", a customer like "akinyi", a merchant like "farmers", or an order ID like "DS-014". The dropdown shows only active orders, with their stage inline. Orders that match your search are highlighted in light blue; other orders from the same product show as context.
               </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
