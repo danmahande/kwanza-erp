@@ -235,3 +235,54 @@ export async function PATCH(req: NextRequest) {
     )
   }
 }
+
+// DELETE — delete a statement (only if not paid) and reverse merchant pendingPayment
+export async function DELETE(req: NextRequest) {
+  try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
+    const id = req.nextUrl.searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 })
+
+    const stmt = await db.merchantStatement.findUnique({ where: { id } })
+    if (!stmt) return NextResponse.json({ error: 'Statement not found' }, { status: 404 })
+
+    if (stmt.isPaid) {
+      return NextResponse.json({ error: 'Cannot delete a paid statement. Reverse the payment batch first.' }, { status: 400 })
+    }
+
+    // Reverse merchant pendingPayment + expectedPayment
+    try {
+      await db.merchant.update({
+        where: { merchantId: stmt.merchantId },
+        data: {
+          expectedPayment: { decrement: stmt.netPayable },
+          pendingPayment: { decrement: stmt.netPayable },
+        },
+      })
+    } catch (merchantErr) {
+      console.error('Merchant reversal failed (non-blocking):', merchantErr)
+    }
+
+    // Un-invoice any charges linked to this statement
+    await db.charge.updateMany({
+      where: { statementId: stmt.statementId, status: 'invoiced' },
+      data: { status: 'approved', statementId: null },
+    }).catch(() => {})
+
+    await db.merchantStatement.delete({ where: { id } })
+
+    await logAudit({
+      action: 'DELETE',
+      module: 'statements',
+      entityId: stmt.statementId,
+      details: `Deleted statement ${stmt.statementId} — merchant pending reversed, charges re-opened`,
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting statement:', error)
+    return NextResponse.json({ error: 'Failed to delete statement' }, { status: 500 })
+  }
+}

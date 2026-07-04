@@ -179,6 +179,14 @@ export async function POST(req: NextRequest) {
     const unitSellingPrice = product?.unitSellingPrice || body.unitSellingPrice || 0
     const saleAmount = qty * unitSellingPrice
 
+    // F4: Validate product belongs to the selected merchant
+    if (product && body.merchantId && product.merchantId !== body.merchantId) {
+      return NextResponse.json({
+        error: 'Product-merchant mismatch',
+        details: `Product "${product.productLabel}" belongs to merchant ${product.merchantId}, but the order is for merchant ${body.merchantId}`,
+      }, { status: 400 })
+    }
+
     const orderProcessing = await db.orderProcessing.create({
       data: {
         orderId,

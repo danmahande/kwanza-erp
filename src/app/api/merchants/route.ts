@@ -165,6 +165,41 @@ export async function DELETE(req: NextRequest) {
     const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
+
+    // F2: Check for existing records before deleting
+    const merchant = await db.merchant.findUnique({ where: { id: id! }, select: { merchantId: true, businessName: true } })
+    if (!merchant) return NextResponse.json({ error: 'Merchant not found' }, { status: 404 })
+
+    const checks = await Promise.all([
+      db.product.count({ where: { merchantId: merchant.merchantId } }),
+      db.inboundRecord.count({ where: { merchantId: merchant.merchantId } }),
+      db.outboundRecord.count({ where: { vendorId: merchant.merchantId } }),
+      db.merchantPayment.count({ where: { merchantId: merchant.merchantId } }),
+      db.merchantStatement.count({ where: { merchantId: merchant.merchantId } }),
+      db.rTVRecord.count({ where: { merchantId: merchant.merchantId } }),
+      db.shrinkageRecord.count({ where: { merchantId: merchant.merchantId } }),
+      db.charge.count({ where: { merchantId: merchant.merchantId } }),
+    ])
+    const [products, inbounds, outbounds, payments, statements, rtvs, shrinkage, charges] = checks
+    const totalDeps = products + inbounds + outbounds + payments + statements + rtvs + shrinkage + charges
+
+    if (totalDeps > 0) {
+      const details: string[] = []
+      if (products) details.push(`${products} products`)
+      if (inbounds) details.push(`${inbounds} inbound records`)
+      if (outbounds) details.push(`${outbounds} outbound records`)
+      if (payments) details.push(`${payments} payments`)
+      if (statements) details.push(`${statements} statements`)
+      if (rtvs) details.push(`${rtvs} RTV records`)
+      if (shrinkage) details.push(`${shrinkage} shrinkage records`)
+      if (charges) details.push(`${charges} charges`)
+      return NextResponse.json({
+        error: `Cannot delete merchant "${merchant.businessName}" — ${totalDeps} dependent records exist`,
+        details,
+        suggestion: 'Deactivate the merchant instead (toggle status to inactive) or delete all dependent records first.',
+      }, { status: 409 })
+    }
+
     await db.merchant.delete({ where: { id: id! } })
     return NextResponse.json({ success: true })
   } catch {

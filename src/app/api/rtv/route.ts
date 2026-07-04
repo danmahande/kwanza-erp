@@ -31,6 +31,21 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const count = await db.rTVRecord.count()
     const rtvId = `RTV-${String(count + 1).padStart(3, '0')}`
+
+    // F6: Validate product belongs to the selected merchant
+    if (body.productId && body.merchantId) {
+      const product = await db.product.findUnique({
+        where: { productId: body.productId },
+        select: { merchantId: true, productLabel: true },
+      })
+      if (product && product.merchantId !== body.merchantId) {
+        return NextResponse.json({
+          error: 'Product-merchant mismatch',
+          details: `Product "${product.productLabel}" belongs to merchant ${product.merchantId}, but this RTV is for merchant ${body.merchantId}`,
+        }, { status: 400 })
+      }
+    }
+
     const record = await db.rTVRecord.create({
       data: { ...body, rtvId },
     })

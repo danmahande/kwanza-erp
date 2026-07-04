@@ -67,6 +67,14 @@ export async function POST(req: NextRequest) {
         },
       })
 
+      // F7: Reject if the original order doesn't exist
+      if (!outboundRecord) {
+        return NextResponse.json({
+          error: 'Original order not found',
+          details: `No outbound record found for order "${body.originalOrderId}". Verify the order number is correct.`,
+        }, { status: 400 })
+      }
+
       if (outboundRecord) {
         await db.outboundRecord.update({
           where: { id: outboundRecord.id },

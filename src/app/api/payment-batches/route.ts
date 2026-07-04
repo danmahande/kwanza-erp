@@ -203,18 +203,29 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'Cannot delete a disbursed batch' }, { status: 400 })
     }
 
-    // Unlink any payments before deleting the batch
-    await db.merchantPayment.updateMany({
-      where: { batchId: batch.batchId },
-      data: { batchId: null, status: 'pending' },
-    })
-
-    // Re-open any statements that were marked paid by this batch
+    // Fetch all payments in this batch BEFORE unlinking (we need the amounts + merchant IDs)
     const payments = await db.merchantPayment.findMany({
       where: { batchId: batch.batchId },
-      select: { statementId: true },
+      select: { id: true, merchantId: true, amount: true, statementId: true },
     })
+
+    // F1: Reverse merchant cumulative figures for each payment
     for (const p of payments) {
+      if (p.merchantId && p.amount > 0) {
+        try {
+          await db.merchant.update({
+            where: { merchantId: p.merchantId },
+            data: {
+              actualPayment: { decrement: p.amount },
+              pendingPayment: { increment: p.amount },
+            },
+          })
+        } catch (merchantErr) {
+          console.error(`Merchant reversal failed for ${p.merchantId} (non-blocking):`, merchantErr)
+        }
+      }
+
+      // Re-open any statements that were marked paid by this batch
       if (p.statementId) {
         await db.merchantStatement.updateMany({
           where: { statementId: p.statementId },
@@ -223,8 +234,13 @@ export async function DELETE(req: NextRequest) {
       }
     }
 
+    // Delete the payments themselves (they were created by the batch, not standalone)
+    await db.merchantPayment.deleteMany({
+      where: { batchId: batch.batchId },
+    })
+
     await db.paymentBatch.delete({ where: { id } })
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, reversed: payments.length })
   } catch (error) {
     console.error('Error deleting payment batch:', error)
     return NextResponse.json({ error: 'Failed to delete payment batch' }, { status: 500 })

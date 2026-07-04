@@ -69,6 +69,20 @@ export async function POST(req: NextRequest) {
     const unitPrice = body.unitPrice ? parseFloat(body.unitPrice) : null
     const inboundValue = unitPrice && body.qtyIn ? unitPrice * parseInt(body.qtyIn) : null
 
+    // F5: Validate product belongs to the selected merchant
+    if (body.productId && body.merchantId) {
+      const product = await db.product.findUnique({
+        where: { productId: body.productId },
+        select: { merchantId: true, productLabel: true },
+      })
+      if (product && product.merchantId !== body.merchantId) {
+        return NextResponse.json({
+          error: 'Product-merchant mismatch',
+          details: `Product "${product.productLabel}" belongs to merchant ${product.merchantId}, but this inbound is for merchant ${body.merchantId}`,
+        }, { status: 400 })
+      }
+    }
+
     // Update product stock
     if (body.productId) {
       await db.product.update({

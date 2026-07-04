@@ -57,8 +57,42 @@ export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as import('@/lib/auth-api').AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
+
+    // F3: Check for existing records before deleting
+    const product = await db.product.findUnique({ where: { id: id! }, select: { productId: true, productLabel: true, currentStock: true } })
+    if (!product) return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+
+    if (product.currentStock > 0) {
+      return NextResponse.json({
+        error: `Cannot delete "${product.productLabel}" — ${product.currentStock} units are currently in stock`,
+        suggestion: 'Set the product to inactive instead, or reduce stock to zero first.',
+      }, { status: 409 })
+    }
+
+    const [inbounds, outbounds, rtvs, shrinkage] = await Promise.all([
+      db.inboundRecord.count({ where: { productId: product.productId } }),
+      db.outboundRecord.count({ where: { productId: product.productId } }),
+      db.rTVRecord.count({ where: { productId: product.productId } }),
+      db.shrinkageRecord.count({ where: { productId: product.productId } }),
+    ])
+    const totalDeps = inbounds + outbounds + rtvs + shrinkage
+
+    if (totalDeps > 0) {
+      const details: string[] = []
+      if (inbounds) details.push(`${inbounds} inbound records`)
+      if (outbounds) details.push(`${outbounds} outbound records`)
+      if (rtvs) details.push(`${rtvs} RTV records`)
+      if (shrinkage) details.push(`${shrinkage} shrinkage records`)
+      return NextResponse.json({
+        error: `Cannot delete "${product.productLabel}" — ${totalDeps} dependent records exist`,
+        details,
+        suggestion: 'Set the product to inactive instead.',
+      }, { status: 409 })
+    }
+
     await db.product.delete({ where: { id: id! } })
     return NextResponse.json({ success: true })
   } catch {

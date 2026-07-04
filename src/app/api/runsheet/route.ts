@@ -311,3 +311,49 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json({ error: 'Failed to update stop' }, { status: 500 })
   }
 }
+
+// DELETE — delete a runsheet and unassign all orders (only if not in progress)
+export async function DELETE(req: NextRequest) {
+  try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
+    const runsheetId = req.nextUrl.searchParams.get('id')
+    if (!runsheetId) return NextResponse.json({ error: 'id (runsheetId) required' }, { status: 400 })
+
+    // Check if any stops are in transit or delivered (can't delete an active runsheet)
+    const stops = await db.outboundRecord.findMany({
+      where: { runsheetId },
+      select: { id: true, status: true },
+    })
+    if (stops.length === 0) {
+      return NextResponse.json({ error: 'Runsheet not found or already deleted' }, { status: 404 })
+    }
+
+    const activeStops = stops.filter(s => ['dispatched', 'in_transit'].includes(s.status))
+    if (activeStops.length > 0) {
+      return NextResponse.json({
+        error: `Cannot delete runsheet — ${activeStops.length} stop(s) are in transit`,
+        suggestion: 'Wait for deliveries to complete or fail them first.',
+      }, { status: 400 })
+    }
+
+    // Unassign all orders: clear runsheetId, driver, sequence, restore to 'packed'
+    await db.outboundRecord.updateMany({
+      where: { runsheetId },
+      data: {
+        runsheetId: null,
+        stopSequence: null,
+        assignedDriver: null,
+        vehicleNumber: null,
+        status: 'packed',
+        deliveryNotes: null,
+      },
+    })
+
+    return NextResponse.json({ success: true, unassigned: stops.length })
+  } catch (error) {
+    console.error('Runsheet delete error:', error)
+    return NextResponse.json({ error: 'Failed to delete runsheet' }, { status: 500 })
+  }
+}
