@@ -9,7 +9,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Search, ScanLine, ChevronRight, ChevronDown, Lock, RefreshCw,
+  Search, ChevronRight, ChevronDown, Lock, RefreshCw,
   AlertTriangle, CheckCircle2, X, HelpCircle, ArrowRight, Package,
   Boxes, Truck, ClipboardList, RotateCcw,
 } from 'lucide-react'
@@ -18,6 +18,42 @@ import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 // ── Types ──
+
+interface SearchOrder {
+  id: string
+  customerName: string
+  customerAddress: string | null
+  qty: number
+  status: string
+  stage: string
+  stageKey: string
+  codCollected: number | null
+  saleAmount: number | null
+  assignedDriver: string | null
+  runsheetId: string | null
+  createdAt: string
+  dispatchedAt: string | null
+  deliveredAt: string | null
+}
+
+interface SearchProduct {
+  productId: string
+  productName: string
+  brand: string | null
+  variant: string | null
+  merchantName: string
+  category: string
+  unit: string
+  currentStock: number
+  orders: SearchOrder[]
+}
+
+interface SearchResponse {
+  query: string
+  results: SearchProduct[]
+  totalOrders: number
+}
+
 interface StationItem {
   id?: string
   inboundId?: string
@@ -126,6 +162,41 @@ const STATIONS: { key: StationKey; label: string; shortLabel: string; descriptio
   { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received — needs inspection and disposition',   icon: RotateCcw,     pillClass: 'text-red-600' },
 ]
 
+// ── Workflow progress stages (for the Order Status visualizer) ──
+// Only the outbound flow is shown — Intake and Returns are separate flows.
+const STAGES_FLOW: { key: StationKey; shortLabel: string; color: string }[] = [
+  { key: 'sort',      shortLabel: 'Sort',     color: 'bg-orange-400' },
+  { key: 'stage',     shortLabel: 'Stage',    color: 'bg-purple-400' },
+  { key: 'dispatch',  shortLabel: 'Dispatch', color: 'bg-yellow-400' },
+  { key: 'inTransit', shortLabel: 'Transit',  color: 'bg-cyan-400' },
+  { key: 'delivered', shortLabel: 'Delivered',color: 'bg-green-500' },
+]
+
+const STAGE_ORDER: Record<string, number> = {
+  sort: 0, stage: 1, dispatch: 2, inTransit: 3, delivered: 4,
+}
+
+const STAGE_CALLOUT_TINT: Record<string, string> = {
+  sort:      'bg-orange-50 border-orange-200',
+  stage:     'bg-purple-50 border-purple-200',
+  dispatch:  'bg-yellow-50 border-yellow-200',
+  inTransit: 'bg-cyan-50 border-cyan-200',
+  delivered: 'bg-green-50 border-green-200',
+  returns:   'bg-red-50 border-red-200',
+}
+
+// Maps a station key to the sidebar module the worker should jump to
+// to actually do work on that station's parcels.
+const STATION_MODULE: Record<string, string> = {
+  intake: 'inventory',
+  sort: 'outbound',
+  stage: 'outbound',
+  dispatch: 'outbound',
+  inTransit: 'outbound',
+  delivered: 'outbound',
+  returns: 'returns',
+}
+
 // ── Status pill: colored dot + 2-letter code ──
 function StatusPill({ status, station }: { status: string; station: StationKey }) {
   const map: Record<string, { dot: string; code: string; label: string }> = {
@@ -171,16 +242,17 @@ function rowTint(status: string): string {
 }
 
 // ── KPI Ribbon ── (replaces the 4-card totals strip — single dense bar, no icons, no gradients)
-function KpiRibbon({ totals, exceptionsCount, ridersCount, codPending }: {
+function KpiRibbon({ totals, exceptionsCount, ridersCount, codPending, deliveredCount }: {
   totals: HubData['totals']
   exceptionsCount: number
   ridersCount: number
   codPending: number
+  deliveredCount: number
 }) {
   const cells = [
     { label: 'INBOUND', value: String(totals.inboundToday) },
     { label: 'OUTBOUND', value: String(totals.outboundToday) },
-    { label: 'DELIVERED', value: String(totals.outboundToday > 0 ? '—' : '0') },
+    { label: 'DELIVERED', value: String(deliveredCount) },
     { label: 'EXCEPTIONS', value: String(exceptionsCount), highlight: exceptionsCount > 0 },
     { label: 'COD', value: formatCurrencyCompact(totals.codCollectedToday) },
     { label: 'SALES', value: formatCurrencyCompact(totals.salesToday) },
@@ -590,6 +662,17 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   const [loading, setLoading] = useState(true)
   const [activeStation, setActiveStation] = useState<StationKey>('sort')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  // ── Product search state ──
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<SearchResponse | null>(null)
+  const [isSearching, setIsSearching] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<SearchOrder | null>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
   const [dayCloseOpen, setDayCloseOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [dayCloseData, setDayCloseData] = useState<{
@@ -622,75 +705,64 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
     return () => clearInterval(interval)
   }, [fetchData])
 
-  const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success' | 'error'>('idle')
-  const [recentScans, setRecentScans] = useState<Array<{ time: string; value: string; result: string; success: boolean }>>([])
-  const scanInputRef = useRef<HTMLInputElement>(null)
-
-  const playBeep = (success: boolean) => {
-    try {
-      const ctx = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)()
-      const osc = ctx.createOscillator()
-      const gain = ctx.createGain()
-      osc.connect(gain)
-      gain.connect(ctx.destination)
-      osc.frequency.value = success ? 880 : 220
-      gain.gain.value = 0.3
-      osc.start()
-      osc.stop(ctx.currentTime + 0.15)
-      setTimeout(() => ctx.close(), 300)
-    } catch { /* audio not available */ }
-  }
-
-  const handleScan = async (e: React.FormEvent) => {
-    e.preventDefault()
-    const value = (scanInputRef.current?.value || '').trim()
-    if (!value) return
-    scanInputRef.current!.value = ''
-    setScanStatus('scanning')
-    try {
-      const res = await fetch('/api/scan-advance', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scanValue: value, performedBy: 'admin' }),
-      })
-      const result = await res.json()
-      if (res.ok && result.success) {
-        toast.success(result.message)
-        setScanStatus('success')
-        playBeep(true)
-        setRecentScans(prev => [{ time: new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), value, result: result.message, success: true }, ...prev].slice(0, 5))
-        // Auto-switch to the station the parcel just left (so the user sees it move)
-        if (result.module === 'outbound') {
-          const map: Record<string, StationKey> = {
-            picking: 'sort', picked: 'sort', packing: 'sort', packed: 'stage',
-            dispatched: 'dispatch', delivered: 'delivered',
-          }
-          const targetStation = map[result.toStatus]
-          if (targetStation) setActiveStation(targetStation)
-        } else if (result.module === 'inbound') {
-          if (result.toStatus === 'put_away') setActiveStation('intake')
-          if (result.toStatus === 'stored') setActiveStation('intake')
-        } else if (result.module === 'after_sales') {
-          setActiveStation('returns')
-        }
-        fetchData()
-      } else if (res.ok && !result.success) {
-        // Terminal state — info, not error
-        toast.info(result.message)
-        setScanStatus('idle')
-      } else {
-        // Not found — give a helpful message with examples
-        playBeep(false)
-        setRecentScans(prev => [{ time: new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' }), value, result: 'Not found', success: false }, ...prev].slice(0, 5))
-        toast.error(`"${value}" was not found. Make sure you're scanning an order number (like DS-001), a tracking number, or an inbound ID (like IN000001).`, { duration: 6000 })
-        setScanStatus('error')
-      }
-    } catch {
-      toast.error('Scan failed — network error')
-      setScanStatus('error')
+  // ── Debounced product search ──
+  useEffect(() => {
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    const q = searchQuery.trim()
+    if (!q) {
+      setSearchResults(null)
+      setIsSearching(false)
+      return
     }
-    // Reset status indicator after 2s (longer for warehouse visibility)
-    setTimeout(() => setScanStatus('idle'), 2000)
+    setIsSearching(true)
+    searchDebounceRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/ops-search?q=${encodeURIComponent(q)}`)
+        const d = await res.json()
+        setSearchResults(d)
+      } catch {
+        toast.error('Search failed — network error')
+      } finally {
+        setIsSearching(false)
+      }
+    }, 250)
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
+    }
+  }, [searchQuery])
+
+  // Close dropdown on outside click / Escape
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setSearchOpen(false)
+      }
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSearchOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [])
+
+  // Focus search input on mount only — NOT on every re-render
+  useEffect(() => {
+    searchInputRef.current?.focus()
+  }, [])
+
+  const handleSelectOrder = (order: SearchOrder) => {
+    setSelectedOrder(order)
+    setSearchOpen(false)
+    // Jump the station tabs below to where this parcel is sitting, so the worker
+    // sees it in context in the dense table too.
+    if (['sort', 'stage', 'dispatch', 'inTransit', 'delivered', 'returns'].includes(order.stageKey)) {
+      setActiveStation(order.stageKey as StationKey)
+      setExpandedId(order.id)
+    }
   }
 
   const handleDayCloseCheck = async () => {
@@ -767,64 +839,93 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       {/* LAYER 1: THE WORK LAYER — what a worker sees and uses          */}
       {/* ════════════════════════════════════════════════════════════ */}
 
-      {/* ── HERO: Scan bar (big, obvious, can't miss it) ── */}
-      <form
-        onSubmit={handleScan}
-        className={`rounded-xl px-4 py-4 transition-colors ${
-          scanStatus === 'success' ? 'bg-green-700' :
-          scanStatus === 'error' ? 'bg-red-700' :
-          'bg-[#1B2A4A]'
-        }`}
-      >
-        <div className="flex items-center gap-3 mb-2">
-          <ScanLine size={20} className={scanStatus === 'idle' ? 'text-blue-300' : 'text-white'} />
-          <label className="text-white font-semibold text-sm">
-            {scanStatus === 'success' ? '✓ Done! Scan the next parcel:' :
-             scanStatus === 'error' ? '✗ Not found — scan an order number (DS-001), tracking number, or inbound ID:' :
-             'Scan a parcel to advance it in the workflow'}
-          </label>
+      {/* ── HERO: Product search bar (big, obvious, can't miss it) ── */}
+      <div className="relative" ref={dropdownRef}>
+        <div className="rounded-xl px-4 py-4 bg-[#1B2A4A]">
+          <div className="flex items-center gap-3 mb-2">
+            <Search size={20} className="text-blue-300" />
+            <label className="text-white font-semibold text-sm">
+              Search for a product to see where its orders are
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true) }}
+              onFocus={() => setSearchOpen(true)}
+              placeholder="Type a product name (e.g. oil, bread, sugar...)"
+              ref={searchInputRef}
+              className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none rounded-lg px-3 py-2.5 border border-white/20"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('')
+                  setSearchResults(null)
+                  setSelectedOrder(null)
+                  setSearchOpen(false)
+                  searchInputRef.current?.focus()
+                }}
+                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <p className="text-blue-200/50 text-[11px] mt-2">
+            Type any product name — the system shows only products being processed right now, with their order numbers and current stage.
+          </p>
         </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            defaultValue=""
-            placeholder="Scan or type an order number (e.g. DS-001)..."
-            ref={scanInputRef}
-            className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none font-mono rounded-lg px-3 py-2.5 border border-white/20"
-          />
-          <button
-            type="submit"
-            className="bg-[#FF6B35] hover:bg-[#E55A25] text-white font-semibold text-sm px-6 py-2.5 rounded-lg whitespace-nowrap"
-          >
-            {scanStatus === 'scanning' ? '...' : 'Enter ↵'}
-          </button>
-        </div>
-        <p className="text-blue-200/50 text-[11px] mt-2">
-          The system finds the parcel and advances it to the next stage (e.g. from pending to picking, or from packed to dispatched). Works with order numbers (DS-001), tracking numbers, or inbound IDs (IN000001).
-        </p>
-      </form>
 
-      {/* ── Recent scans (shows the last 5 scans with timestamp + result) ── */}
-      {recentScans.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Recent scans</span>
-            <button onClick={() => setRecentScans([])} className="text-[10px] text-gray-400 hover:text-gray-600">Clear</button>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {recentScans.map((scan, i) => (
-              <div key={i} className="px-3 py-1.5 flex items-center gap-2 text-[11px]">
-                <span className="font-mono text-gray-400 tabular-nums w-16">{scan.time}</span>
-                <span className={`font-mono font-semibold ${scan.success ? 'text-green-700' : 'text-red-600'}`}>{scan.value}</span>
-                <span className={`flex-1 truncate ${scan.success ? 'text-gray-600' : 'text-red-500'}`}>{scan.result}</span>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center ${scan.success ? 'bg-green-100' : 'bg-red-100'}`}>
-                  {scan.success ? <CheckCircle2 size={10} className="text-green-600" /> : <X size={10} className="text-red-600" />}
-                </span>
+        {/* Dropdown results */}
+        {searchOpen && searchQuery.trim() && (
+          <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-xl max-h-[480px] overflow-y-auto">
+            {isSearching && (
+              <div className="px-4 py-3 text-xs text-gray-400 flex items-center gap-2">
+                <RefreshCw size={12} className="animate-spin" /> Searching...
               </div>
-            ))}
+            )}
+            {!isSearching && searchResults && searchResults.results.length === 0 && (
+              <div className="px-4 py-4 text-xs text-gray-500">
+                No active orders for <span className="font-mono font-semibold">{searchQuery}</span> today.
+              </div>
+            )}
+            {!isSearching && searchResults && searchResults.results.length > 0 && (
+              <div className="py-1">
+                <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold border-b border-gray-100 sticky top-0 bg-white">
+                  {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''} · {searchResults.totalOrders} active order{searchResults.totalOrders !== 1 ? 's' : ''}
+                </div>
+                {searchResults.results.map(product => (
+                  <div key={product.productId} className="border-b border-gray-50 last:border-0">
+                    <div className="px-3 py-1.5 bg-gray-50/60 flex items-center gap-2">
+                      <Package size={12} className="text-gray-400 shrink-0" />
+                      <span className="text-xs font-semibold text-gray-800 truncate">{product.productName}</span>
+                      {product.brand && <span className="text-[10px] text-gray-400">· {product.brand}</span>}
+                      <span className="text-[10px] text-gray-400 ml-auto">{product.merchantName}</span>
+                      <span className="text-[10px] text-gray-400 shrink-0">· {product.currentStock} {product.unit} in stock</span>
+                    </div>
+                    {product.orders.map(order => (
+                      <button
+                        key={order.id}
+                        onClick={() => handleSelectOrder(order)}
+                        className="w-full px-3 py-2 flex items-center gap-2 hover:bg-blue-50/60 text-left"
+                      >
+                        <span className="font-mono text-xs font-bold text-[#1B2A4A] w-24 shrink-0">{order.id}</span>
+                        <span className="text-xs text-gray-700 flex-1 truncate">{order.customerName}</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{order.qty} units</span>
+                        <span className="text-[10px] text-gray-500 shrink-0 w-24 text-right">{order.stage}</span>
+                        <ChevronRight size={12} className="text-gray-300 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Today's progress bar ── */}
       {data.totals.outboundToday > 0 && (
@@ -872,64 +973,126 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         </div>
       )}
 
-      {/* ── "What needs doing now" — always shows all 6 actions, greyed when count=0 ── */}
+      {/* ── Order Status — shows the stage of the order selected from search ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-gray-700">What needs doing now</h2>
+        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-gray-700">
+            {selectedOrder ? `Order Status · ${selectedOrder.id}` : 'Order Status'}
+          </h2>
+          {selectedOrder && (
+            <button
+              onClick={() => onNavigate?.(STATION_MODULE[selectedOrder.stageKey] || 'outbound')}
+              className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider"
+            >
+              Open in {STATIONS.find(s => s.key === selectedOrder.stageKey)?.shortLabel || 'Outbound'} →
+            </button>
+          )}
         </div>
-        <div className="divide-y divide-gray-50">
-          {(() => {
-            // Always show all 6 items — greyed out when count is 0
-            const allItems = [
-              { icon: Package,        label: 'Put away new stock',           sublabel: 'Parcels that just arrived at the warehouse',     count: data.stations.intake.count,    module: 'inventory', color: 'text-blue-600' },
-              { icon: Boxes,          label: 'Sort and pack parcels',         sublabel: 'Parcels being prepared for dispatch',            count: data.stations.sort.count,      module: 'outbound',  color: 'text-orange-600' },
-              { icon: ClipboardList,  label: 'Assign riders to parcels',      sublabel: 'Packed and waiting for a driver',               count: data.stations.stage.count,     module: 'outbound',  color: 'text-purple-600' },
-              { icon: Truck,          label: 'Send parcels out with riders',  sublabel: 'Assigned to a rider, ready to leave',            count: data.stations.dispatch.count,  module: 'outbound',  color: 'text-yellow-700' },
-              { icon: AlertTriangle,  label: 'Fix problems',                  sublabel: 'Failed deliveries and missing stock',            count: data.exceptions.count,          module: 'returns',   color: 'text-red-600' },
-              { icon: CheckCircle2,   label: 'Verify driver cash deposits',   sublabel: 'Drivers have banked COD cash — verify it',       count: data.pendingBankings.count,     module: 'payments',  color: 'text-orange-600' },
-            ]
 
-            const activeCount = allItems.filter(i => i.count > 0).length
-
-            return (
-              <>
-                {activeCount === 0 && (
-                  <div className="px-4 py-2 bg-green-50 border-b border-green-100 flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-green-600" />
-                    <p className="text-xs text-green-700 font-medium">All caught up right now — but here's what you'd do when work comes in:</p>
-                  </div>
+        {!selectedOrder ? (
+          <div className="px-4 py-8 text-center">
+            <Search size={28} className="text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-500 font-medium">Search for a product above</p>
+            <p className="text-[11px] text-gray-400 mt-1 max-w-md mx-auto">
+              Type a product name like "oil" or "bread" — click an order number to see its current stage here.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            {/* Order header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-lg font-bold text-gray-900">{selectedOrder.id}</p>
+                <p className="text-xs text-gray-600 mt-0.5 truncate">{selectedOrder.customerName}</p>
+                {selectedOrder.customerAddress && (
+                  <p className="text-[11px] text-gray-400 truncate">{selectedOrder.customerAddress}</p>
                 )}
-                {allItems.map((item, i) => {
-                  const Icon = item.icon
-                  const isActive = item.count > 0
-                  return (
-                    <button
-                      key={i}
-                      onClick={() => onNavigate?.(item.module)}
-                      className={`w-full px-4 py-3 flex items-center gap-3 transition-colors text-left ${
-                        isActive ? 'hover:bg-gray-50' : 'opacity-50 hover:opacity-75'
-                      }`}
-                    >
-                      <Icon size={20} className={isActive ? item.color : 'text-gray-300'} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-sm font-medium ${isActive ? 'text-gray-900' : 'text-gray-400'}`}>{item.label}</p>
-                        <p className="text-[11px] text-gray-400">{item.sublabel}</p>
-                      </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-mono font-bold ${
-                        isActive ? 'bg-gray-100 text-gray-700' : 'bg-gray-50 text-gray-300'
-                      }`}>
-                        {item.count}
-                      </span>
-                      <span className={`text-[10px] uppercase tracking-wider ${isActive ? 'text-gray-400' : 'text-gray-300'}`}>
-                        {isActive ? 'Go →' : '—'}
-                      </span>
-                    </button>
-                  )
-                })}
-              </>
-            )
-          })()}
-        </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">Qty</p>
+                <p className="font-mono font-bold text-gray-900">{selectedOrder.qty}</p>
+              </div>
+            </div>
+
+            {/* Current stage callout */}
+            <div className={`rounded-lg px-4 py-3 border ${STAGE_CALLOUT_TINT[selectedOrder.stageKey] || 'bg-gray-50 border-gray-200'}`}>
+              <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Currently at</p>
+              <p className="text-base font-bold text-gray-900 mt-0.5">{selectedOrder.stage}</p>
+              {selectedOrder.assignedDriver && (
+                <p className="text-[11px] text-gray-600 mt-1">Driver: {selectedOrder.assignedDriver}</p>
+              )}
+              {selectedOrder.runsheetId && (
+                <p className="text-[11px] text-gray-500">Runsheet: {selectedOrder.runsheetId}</p>
+              )}
+              {selectedOrder.dispatchedAt && (
+                <p className="text-[11px] text-gray-500">
+                  Dispatched: {new Date(selectedOrder.dispatchedAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+              {selectedOrder.deliveredAt && (
+                <p className="text-[11px] text-green-700 font-medium">
+                  Delivered: {new Date(selectedOrder.deliveredAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+
+            {/* Stage progress bar — shows where this order is in the outbound flow */}
+            {selectedOrder.stageKey !== 'returns' && (
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Workflow progress</p>
+                <div className="flex items-center gap-1">
+                  {STAGES_FLOW.map((stage, i) => {
+                    const currentIdx = STAGE_ORDER[selectedOrder.stageKey] ?? -1
+                    const isPast = currentIdx > i
+                    const isCurrent = selectedOrder.stageKey === stage.key
+                    return (
+                      <div
+                        key={stage.key}
+                        className={`flex-1 h-2 rounded-full transition-colors ${
+                          isCurrent ? stage.color :
+                          isPast ? stage.color.replace('400', '500').replace('500', '600') :
+                          'bg-gray-100'
+                        }`}
+                        title={stage.shortLabel}
+                      />
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-1 mt-1">
+                  {STAGES_FLOW.map(stage => (
+                    <div key={stage.key} className="flex-1 text-center">
+                      <p className={`text-[9px] ${selectedOrder.stageKey === stage.key ? 'font-bold text-gray-900' : 'text-gray-400'}`}>
+                        {stage.shortLabel}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Money + timing */}
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">COD</p>
+                <p className="text-xs font-mono font-bold text-gray-900">
+                  {selectedOrder.codCollected != null ? formatCurrencyCompact(selectedOrder.codCollected) : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">Sale</p>
+                <p className="text-xs font-mono font-bold text-gray-900">
+                  {selectedOrder.saleAmount != null ? formatCurrencyCompact(selectedOrder.saleAmount) : '—'}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-gray-400">Created</p>
+                <p className="text-xs font-mono text-gray-700">
+                  {new Date(selectedOrder.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ════════════════════════════════════════════════════════════ */}
@@ -946,6 +1109,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         exceptionsCount={data.exceptions.count}
         ridersCount={data.riders.length}
         codPending={codPendingAmount}
+        deliveredCount={data.stations.delivered.count}
       />
 
       {/* ── Station Tabs (with plain-English labels + attention dots) ── */}
@@ -1039,20 +1203,20 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             ))}
           </div>
 
-          <div className="space-y-2">
+            <div className="space-y-2">
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
               <p className="text-xs text-blue-800">
-                <strong>The scan bar at the top</strong> lets you advance a parcel without leaving this screen. Scan a parcel's barcode and the system advances it to the next stage (e.g. from pending to picking, or from packed to dispatched).
+                <strong>The search bar at the top</strong> lets you find any order by typing a product name like "oil" or "bread". The dropdown shows only products being processed right now, with their DS/ORD numbers and current stage. Click an order number to see exactly where it is in the workflow.
               </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
               <p className="text-xs text-orange-800">
-                <strong>"What needs doing now"</strong> shows the 1-6 things that need attention. Click any item to go straight to the module where the work happens.
+                <strong>The "Order Status" panel</strong> shows the stage of whichever order you picked from the search. Use the "Open in →" link to jump to the module where the actual work happens (sorting, dispatching, etc.).
               </p>
             </div>
             <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
               <p className="text-xs text-gray-600">
-                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash — but you can't take actions from here. To act, use the "What needs doing now" buttons or the sidebar.
+                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash — but you can't take actions from here. To act, use the "Order Status" panel or the sidebar.
               </p>
             </div>
           </div>
