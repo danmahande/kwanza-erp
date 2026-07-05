@@ -233,7 +233,9 @@ const STALE_THRESHOLD_MINUTES: Record<string, number> = {
   inTransit: 360,
 }
 
-// ── Status pill: colored dot + 2-letter code ──
+// ── Status pill: colored dot + plain English label ──
+// The 2-letter code is kept as a tiny subtitle for power users who've
+// memorized it, but the primary label is now the full word.
 function StatusPill({ status, station }: { status: string; station: StationKey }) {
   const map: Record<string, { dot: string; code: string; label: string }> = {
     // outbound statuses
@@ -260,9 +262,10 @@ function StatusPill({ status, station }: { status: string; station: StationKey }
   }
   const s = map[status] || { dot: 'bg-gray-400', code: '??', label: status }
   return (
-    <span className="inline-flex items-center gap-1.5 font-mono text-[11px] font-semibold text-gray-700" title={s.label}>
-      <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-      {s.code}
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-700" title={`${s.label} (${s.code})`}>
+      <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
+      <span>{s.label}</span>
+      <span className="text-[9px] text-gray-400 font-mono">{s.code}</span>
     </span>
   )
 }
@@ -404,7 +407,7 @@ function StationTable({
               ) : null}
               <th className="text-right px-3 py-1.5 font-semibold w-16">Qty</th>
               <th className="text-right px-3 py-1.5 font-semibold w-28">Amount</th>
-              <th className="text-left px-3 py-1.5 font-semibold w-20">Status</th>
+              <th className="text-left px-3 py-1.5 font-semibold w-32">Status</th>
               <th className="w-8"></th>
             </tr>
           </thead>
@@ -639,6 +642,274 @@ function CodPanel({ bankings, onNavigate }: { bankings: { count: number; items: 
         </tbody>
       </table>
     </div>
+  )
+}
+
+// ── Today Headline ──
+// Plain-English summary of the day, generated from live data.
+// This is the FIRST thing the supervisor reads when they land on the desk.
+// It answers "what's happening today?" in 1-3 sentences.
+function TodayHeadline({ data }: { data: HubData }) {
+  const parts: string[] = []
+
+  // Parcels in motion
+  const inMotion =
+    data.stations.intake.count +
+    data.stations.sort.count +
+    data.stations.stage.count +
+    data.stations.dispatch.count +
+    data.stations.inTransit.count
+  if (inMotion > 0) {
+    const bits: string[] = []
+    if (data.stations.intake.count > 0) bits.push(`${data.stations.intake.count} in intake`)
+    if (data.stations.sort.count > 0) bits.push(`${data.stations.sort.count} in sort & pack`)
+    if (data.stations.stage.count > 0) bits.push(`${data.stations.stage.count} in staging`)
+    if (data.stations.dispatch.count > 0) bits.push(`${data.stations.dispatch.count} ready to dispatch`)
+    if (data.stations.inTransit.count > 0) bits.push(`${data.stations.inTransit.count} in transit`)
+    parts.push(`${inMotion} parcel${inMotion !== 1 ? 's' : ''} in motion — ${bits.join(', ')}`)
+  } else {
+    parts.push('No parcels in motion right now')
+  }
+
+  // Deliveries
+  if (data.stations.delivered.count > 0) {
+    parts.push(`${data.stations.delivered.count} delivered today`)
+  } else if (inMotion > 0) {
+    parts.push('nothing delivered yet today')
+  }
+
+  // Returns
+  if (data.stations.returns.count > 0) {
+    parts.push(`${data.stations.returns.count} return${data.stations.returns.count !== 1 ? 's' : ''} to process`)
+  }
+
+  // Exceptions
+  if (data.exceptions.count > 0) {
+    parts.push(`${data.exceptions.count} exception${data.exceptions.count !== 1 ? 's' : ''} need attention`)
+  }
+
+  // Riders
+  if (data.riders.length > 0) {
+    const totalDispatched = data.riders.reduce((s, r) => s + (r.dispatchedToday ?? 0), 0)
+    const totalDelivered = data.riders.reduce((s, r) => s + (r.deliveredToday ?? 0), 0)
+    if (totalDispatched === 0 && totalDelivered === 0) {
+      parts.push(`${data.riders.length} rider${data.riders.length !== 1 ? 's' : ''} on shift but nothing dispatched yet`)
+    } else if (totalDelivered > 0) {
+      // already covered by deliveries line above; skip
+    } else if (totalDispatched > 0) {
+      parts.push(`${data.riders.length} rider${data.riders.length !== 1 ? 's' : ''} on shift`)
+    }
+  }
+
+  // Pending COD
+  if (data.pendingBankings.count > 0) {
+    parts.push(`${data.pendingBankings.count} pending COD banking${data.pendingBankings.count !== 1 ? 's' : ''} to verify`)
+  }
+
+  // Compose — join with periods, max 3 sentences
+  let text: string
+  if (parts.length === 0) {
+    text = 'Nothing happening yet today.'
+  } else if (parts.length === 1) {
+    text = parts[0] + '.'
+  } else {
+    // First sentence = motion + deliveries (the most important)
+    // Remaining sentences = exceptions / returns / riders / pending COD
+    const first = parts[0] + (parts[1] ? `, ${parts[1]}` : '') + '.'
+    const rest = parts.slice(2)
+    text = first + (rest.length > 0 ? ' ' + rest.join('. ') + '.' : '')
+  }
+
+  // Determine overall tone
+  const hasProblems = data.exceptions.count > 0 || data.pendingBankings.count > 0
+  const isQuiet = inMotion === 0 && data.stations.delivered.count === 0 && data.exceptions.count === 0
+
+  return (
+    <div className={`rounded-lg px-4 py-3 border ${
+      hasProblems ? 'bg-red-50 border-red-200' :
+      isQuiet ? 'bg-gray-50 border-gray-200' :
+      'bg-blue-50 border-blue-200'
+    }`}>
+      <div className="flex items-start gap-2">
+        {hasProblems ? (
+          <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+        ) : isQuiet ? (
+          <CheckCircle2 size={14} className="text-gray-500 mt-0.5 shrink-0" />
+        ) : (
+          <CheckCircle2 size={14} className="text-blue-600 mt-0.5 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
+            Today · {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'long', month: 'short', day: 'numeric' })}
+          </p>
+          <p className={`text-sm font-medium ${
+            hasProblems ? 'text-red-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
+          }`}>
+            {text}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Status Strip ──
+// Consolidated health indicator for the right rail. Replaces the separate
+// "No exceptions" + "All verified" + (future) "No follow-ups" green panels.
+// When everything's clear: one green line.
+// When something's wrong: red/orange list of what's wrong, with inline detail.
+function StatusStrip({
+  exceptions,
+  bankings,
+  onNavigate,
+}: {
+  exceptions: HubData['exceptions']
+  bankings: { count: number; items: StationItem[]; totalAmount: number }
+  onNavigate?: (m: string) => void
+}) {
+  const hasExceptions = exceptions.count > 0
+  const hasPendingCOD = bankings.count > 0
+  const allClear = !hasExceptions && !hasPendingCOD
+
+  if (allClear) {
+    return (
+      <div className="bg-white rounded-lg border border-green-200 px-3 py-2.5 flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+        <span className="text-[11px] text-green-700 font-medium">
+          All clear — no exceptions, no pending COD, all bankings verified.
+        </span>
+      </div>
+    )
+  }
+
+  // Has issues — show a consolidated red-bordered card with detail sections
+  return (
+    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center gap-2">
+        <AlertTriangle size={12} className="text-red-600" />
+        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider">
+          {exceptions.count + bankings.count} issue{(exceptions.count + bankings.count) !== 1 ? 's' : ''} need attention
+        </span>
+      </div>
+
+      {/* Exceptions detail */}
+      {hasExceptions && (
+        <div className="border-b border-red-50">
+          <div className="px-3 py-1.5 bg-red-50/30 flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-red-700 uppercase tracking-wider">
+              {exceptions.count} Exception{exceptions.count !== 1 ? 's' : ''}
+            </span>
+            <button onClick={() => onNavigate?.('returns')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View →</button>
+          </div>
+          <table className="w-full text-[11px]">
+            <tbody>
+              {exceptions.failedDeliveries.slice(0, 3).map((item, i) => (
+                <tr key={`f-${i}`} className="border-t border-red-50/50 bg-red-50/20" style={{ height: '26px' }}>
+                  <td className="px-3 py-1 font-mono text-gray-700">{item.orderNumber || item.outboundId}</td>
+                  <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.customerName}</td>
+                  <td className="px-3 py-1 text-right">
+                    <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-semibold">FAILED</span>
+                  </td>
+                </tr>
+              ))}
+              {exceptions.pendingShrinkage.slice(0, 2).map((item, i) => (
+                <tr key={`s-${i}`} className="border-t border-orange-50/50 bg-orange-50/20" style={{ height: '26px' }}>
+                  <td className="px-3 py-1 font-mono text-gray-700">{item.shrinkageId}</td>
+                  <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.productName} ×{item.qty}</td>
+                  <td className="px-3 py-1 text-right">
+                    <span className="inline-block px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-semibold">SHRINK</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Pending COD detail */}
+      {hasPendingCOD && (
+        <div>
+          <div className="px-3 py-1.5 bg-orange-50/30 flex items-center justify-between">
+            <span className="text-[10px] font-semibold text-orange-700 uppercase tracking-wider">
+              {bankings.count} Pending COD · {formatCurrencyCompact(bankings.totalAmount)}
+            </span>
+            <button onClick={() => onNavigate?.('payments')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
+          </div>
+          <table className="w-full text-[11px]">
+            <tbody>
+              {bankings.items.slice(0, 5).map((b, i) => (
+                <tr key={i} className="border-t border-orange-50/50 bg-orange-50/10" style={{ height: '26px' }}>
+                  <td className="px-3 py-1 font-mono text-gray-600">{b.bankingId || '—'}</td>
+                  <td className="px-2 py-1 text-gray-700 truncate max-w-[80px]">{b.driverName || '—'}</td>
+                  <td className="px-3 py-1 text-right font-mono tabular-nums font-bold text-orange-700">
+                    {formatCurrencyCompact(Number(b.amount || 0))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Active station summary ──
+// Replaces the static "Orders being prepared — picking from shelves..."
+// tutorial text with a real status summary of what's in THIS station right now.
+function ActiveStationSummary({ station, stationKey }: { station: Station; stationKey: StationKey }) {
+  if (station.count === 0) {
+    return (
+      <p className="text-[11px] text-gray-400 italic">
+        Nothing in this station right now.
+      </p>
+    )
+  }
+
+  const dwell = station.avgDwellMinutes
+  const threshold = STALE_THRESHOLD_MINUTES[stationKey]
+  const isStale = dwell != null && threshold != null && dwell > threshold
+
+  // Build a plain-English summary based on the station
+  const parts: string[] = []
+  parts.push(`${station.count} parcel${station.count !== 1 ? 's' : ''}`)
+
+  if (stationKey === 'sort') {
+    parts.push('being picked and packed')
+  } else if (stationKey === 'stage') {
+    parts.push('packed, waiting for a rider to be assigned')
+  } else if (stationKey === 'dispatch') {
+    parts.push('assigned to a rider, ready to leave')
+  } else if (stationKey === 'inTransit') {
+    parts.push('out for delivery')
+  } else if (stationKey === 'delivered') {
+    parts.push('delivered today')
+  } else if (stationKey === 'intake') {
+    parts.push('that arrived today, need to be put away on shelves')
+  } else if (stationKey === 'returns') {
+    parts.push('returned by customers, need inspection')
+  }
+
+  // Dwell time
+  let dwellText = ''
+  if (dwell != null) {
+    if (isStale) {
+      dwellText = ` — avg ${formatDwell(dwell)} in stage, over the ${formatDwell(threshold)} threshold`
+    } else {
+      dwellText = ` — avg ${formatDwell(dwell)} in stage`
+    }
+  }
+
+  return (
+    <p className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
+      <span>{parts.join(' ')}{dwellText}.</span>
+      {isStale && (
+        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold">
+          <AlertTriangle size={10} />
+          Bottleneck
+        </span>
+      )}
+    </p>
   )
 }
 
@@ -1234,6 +1505,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview (view only)</span>
         <div className="flex-1 h-px bg-gray-100"></div>
       </div>
+      <TodayHeadline data={data} />
       <KpiRibbon
         totals={data.totals}
         exceptionsCount={data.exceptions.count}
@@ -1333,22 +1605,8 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         })}
       </div>
 
-      {/* Active station description (plain English) + avg dwell */}
-      <p className="text-[11px] text-gray-500 flex items-center gap-2 flex-wrap">
-        <span>{STATIONS.find(s => s.key === activeStation)?.description}</span>
-        {(() => {
-          const st = data.stations[activeStation]
-          const dwell = st?.avgDwellMinutes
-          if (!st || st.count === 0 || dwell == null) return null
-          const threshold = STALE_THRESHOLD_MINUTES[activeStation]
-          const isStale = threshold != null && dwell > threshold
-          return (
-            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${isStale ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500'}`}>
-              avg dwell: {formatDwell(dwell)}{isStale ? ' ⚠ slow' : ''}
-            </span>
-          )
-        })()}
-      </p>
+      {/* Active station summary — plain-English status of what's in this station right now */}
+      <ActiveStationSummary station={data.stations[activeStation]} stationKey={activeStation} />
 
       {/* ── Main: Station Table + Right Rail ── */}
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
@@ -1362,12 +1620,15 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           />
         </div>
 
-        {/* Right: rail with Riders + COD + Exceptions + Follow-ups */}
+        {/* Right: rail with consolidated Status Strip + Follow-ups + Riders */}
         <div className="space-y-3">
-          <ExceptionsPanel exceptions={data.exceptions} onNavigate={onNavigate} />
+          <StatusStrip
+            exceptions={data.exceptions}
+            bankings={data.pendingBankings}
+            onNavigate={onNavigate}
+          />
           <FollowUpsPanel followUps={data.followUps} onNavigate={onNavigate} />
           <RidersPanel riders={data.riders} />
-          <CodPanel bankings={data.pendingBankings} onNavigate={onNavigate} />
         </div>
       </div>
 
