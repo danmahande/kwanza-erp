@@ -74,6 +74,265 @@ const tooltipStyle = {
   fontSize: '12px', padding: '8px 12px',
 }
 
+// ── Period Headline ──
+// Plain-English summary of the selected period, generated from live data.
+// This is the FIRST thing the supervisor reads when they land on the dashboard.
+// It answers "what happened this period?" in 1-3 sentences.
+function PeriodHeadline({ data, period }: { data: DashboardData; period: string }) {
+  const parts: string[] = []
+
+  // Revenue + trend
+  if (data.stats.totalRevenue > 0) {
+    const revChange = data.comparison.revenueChange
+    let revPhrase = `${formatCurrency(data.stats.totalRevenue)} in revenue`
+    if (revChange !== 0) {
+      revPhrase += ` — ${revChange > 0 ? 'up' : 'down'} ${Math.abs(revChange)}% vs last month`
+    }
+    parts.push(revPhrase)
+  } else if (data.orders.total === 0) {
+    parts.push('No revenue or orders this period yet')
+  }
+
+  // Orders + delivery
+  if (data.orders.total > 0) {
+    const deliveredPct = data.orders.total > 0 ? Math.round((data.orders.delivered / data.orders.total) * 100) : 0
+    parts.push(`${data.orders.total} orders, ${data.orders.delivered} delivered (${deliveredPct}%)`)
+  }
+
+  // On-time rate (with target context)
+  if (data.onTimeRate > 0 && data.orders.delivered > 0) {
+    const target = 90
+    if (data.onTimeRate < target) {
+      parts.push(`on-time delivery at ${data.onTimeRate}% — below your ${target}% target`)
+    } else {
+      parts.push(`on-time delivery at ${data.onTimeRate}% — meeting target`)
+    }
+  }
+
+  // Stock issues
+  if (data.inventory.critical > 0) {
+    parts.push(`${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock`)
+  } else if (data.inventory.low > 0) {
+    parts.push(`${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`)
+  }
+
+  // Pending COD
+  if (data.cod.pendingBankings > 0) {
+    parts.push(`${formatCurrencyCompact(data.cod.pendingBankings)} in COD cash pending verification`)
+  }
+
+  // Exceptions
+  if (data.exceptionCount > 0) {
+    parts.push(`${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded`)
+  }
+
+  // Compose
+  let text: string
+  if (parts.length === 0) {
+    text = 'Nothing recorded for this period yet.'
+  } else if (parts.length === 1) {
+    text = parts[0] + '.'
+  } else {
+    // First sentence = revenue + orders (the most important)
+    // Remaining sentences = on-time, stock, COD, exceptions
+    const first = parts[0] + (parts[1] ? `, ${parts[1]}` : '') + '.'
+    const rest = parts.slice(2)
+    text = first + (rest.length > 0 ? ' ' + rest.join('. ') + '.' : '')
+  }
+
+  // Determine tone
+  const hasProblems = data.exceptionCount > 0 || data.cod.pendingBankings > 0 || data.inventory.critical > 0 || (data.onTimeRate > 0 && data.onTimeRate < 80)
+  const isQuiet = data.orders.total === 0 && data.stats.totalRevenue === 0
+
+  return (
+    <div className={`rounded-lg px-4 py-3 border ${
+      hasProblems ? 'bg-red-50 border-red-200' :
+      isQuiet ? 'bg-gray-50 border-gray-200' :
+      'bg-blue-50 border-blue-200'
+    }`}>
+      <div className="flex items-start gap-2">
+        {hasProblems ? (
+          <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
+        ) : isQuiet ? (
+          <CheckCircle2 size={14} className="text-gray-500 mt-0.5 shrink-0" />
+        ) : (
+          <TrendingUp size={14} className="text-blue-600 mt-0.5 shrink-0" />
+        )}
+        <div className="flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
+            {period} · {new Date().toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })}
+          </p>
+          <p className={`text-sm font-medium ${
+            hasProblems ? 'text-red-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
+          }`}>
+            {text}
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Today's Story panel ──
+// Always-visible replacement for the conditional "Needs Attention" panel.
+// When everything's good: green strip with a positive summary.
+// When there are issues: orange/red list with navigation links.
+// This is the dashboard's voice — it always tells you what's worth knowing.
+function TodaysStory({
+  data,
+  onNavigate,
+}: {
+  data: DashboardData
+  onNavigate?: (module: string) => void
+}) {
+  // Collect story items — each is a sentence with a severity and a destination
+  type StoryItem = { severity: 'critical' | 'warning' | 'good'; message: string; module?: string }
+  const items: StoryItem[] = []
+
+  // Critical stock
+  if (data.inventory.critical > 0) {
+    items.push({
+      severity: 'critical',
+      message: `${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock — reorder now`,
+      module: 'products',
+    })
+  }
+  // Low stock
+  if (data.inventory.low > 0) {
+    items.push({
+      severity: 'warning',
+      message: `${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`,
+      module: 'products',
+    })
+  }
+  // Pending COD
+  if (data.cod.pendingBankings > 0) {
+    items.push({
+      severity: 'warning',
+      message: `${formatCurrency(data.cod.pendingBankings)} in COD cash waiting to be verified`,
+      module: 'payments',
+    })
+  }
+  // On-time below target
+  if (data.onTimeRate > 0 && data.onTimeRate < 80 && data.orders.delivered > 0) {
+    items.push({
+      severity: 'warning',
+      message: `On-time delivery is ${data.onTimeRate}% — below the 80% acceptable threshold`,
+      module: 'outbound',
+    })
+  }
+  // First-attempt below threshold
+  if (data.firstAttemptRate > 0 && data.firstAttemptRate < 60 && data.orders.delivered > 0) {
+    items.push({
+      severity: 'warning',
+      message: `First-attempt success rate is ${data.firstAttemptRate}% — many deliveries need a second attempt`,
+      module: 'outbound',
+    })
+  }
+  // Exceptions
+  if (data.exceptionCount > 0) {
+    items.push({
+      severity: 'critical',
+      message: `${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded — failed deliveries, returns, or shrinkage`,
+      module: 'returns',
+    })
+  }
+  // Shrinkage
+  if (data.shrinkage.totalQty > 0) {
+    items.push({
+      severity: 'warning',
+      message: `${data.shrinkage.totalQty} units lost to shrinkage this period`,
+      module: 'returns',
+    })
+  }
+  // Drivers with pending bankings
+  const driversWithPendingBankings = data.driverPerformance.filter(d => d.bankingStatus === 'pending').length
+  if (driversWithPendingBankings > 0) {
+    items.push({
+      severity: 'warning',
+      message: `${driversWithPendingBankings} driver${driversWithPendingBankings !== 1 ? 's' : ''} haven't banked their COD cash yet`,
+      module: 'drivers',
+    })
+  }
+
+  // POSITIVE items (only show if no critical/warning issues compete for attention)
+  if (items.filter(i => i.severity !== 'good').length === 0) {
+    if (data.orders.delivered > 0 && data.onTimeRate >= 90) {
+      items.push({ severity: 'good', message: `On-time delivery is ${data.onTimeRate}% — exceeding target` })
+    }
+    if (data.cod.bankingRate >= 95 && data.cod.collectedTotal > 0) {
+      items.push({ severity: 'good', message: `COD banking rate is ${data.cod.bankingRate}% — cash is being verified promptly` })
+    }
+    if (data.comparison.revenueChange > 0) {
+      items.push({ severity: 'good', message: `Revenue is up ${data.comparison.revenueChange}% vs last month` })
+    }
+    if (data.inventory.critical === 0 && data.inventory.low === 0 && data.inventory.healthy > 0) {
+      items.push({ severity: 'good', message: 'All stock levels are healthy' })
+    }
+  }
+
+  // If literally nothing to say
+  if (items.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center gap-2">
+        <CheckCircle2 size={14} className="text-gray-400 shrink-0" />
+        <span className="text-[11px] text-gray-500 font-medium">
+          Not enough data yet to tell a story for this period.
+        </span>
+      </div>
+    )
+  }
+
+  const hasCritical = items.some(i => i.severity === 'critical')
+  const hasWarning = items.some(i => i.severity === 'warning')
+  const allGood = items.every(i => i.severity === 'good')
+
+  // Tone + header
+  const borderColor = allGood ? 'border-green-200' : hasCritical ? 'border-red-200' : 'border-orange-200'
+  const bgColor = allGood ? 'bg-green-50' : hasCritical ? 'bg-red-50' : 'bg-orange-50'
+  const headerTextColor = allGood ? 'text-green-700' : hasCritical ? 'text-red-700' : 'text-orange-700'
+  const iconColor = allGood ? 'text-green-600' : hasCritical ? 'text-red-600' : 'text-orange-600'
+  const headerText = allGood
+    ? "What's going well"
+    : hasCritical
+      ? `${items.filter(i => i.severity === 'critical').length + items.filter(i => i.severity === 'warning').length} things need your attention`
+      : `${items.length} things to keep an eye on`
+
+  return (
+    <div className={`bg-white rounded-lg border ${borderColor} overflow-hidden`}>
+      <div className={`px-4 py-2 border-b ${borderColor} ${bgColor} flex items-center gap-2`}>
+        {allGood ? <CheckCircle2 size={14} className={iconColor} /> : <AlertTriangle size={14} className={iconColor} />}
+        <span className={`text-xs font-semibold uppercase tracking-wider ${headerTextColor}`}>{headerText}</span>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {items.map((item, i) => (
+          <button
+            key={i}
+            onClick={() => item.module && onNavigate?.(item.module)}
+            className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
+              item.module ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'
+            }`}
+          >
+            <div className={`w-2 h-2 rounded-full shrink-0 ${
+              item.severity === 'critical' ? 'bg-red-500' :
+              item.severity === 'warning' ? 'bg-orange-500' :
+              'bg-green-500'
+            }`} />
+            <p className={`flex-1 text-xs font-medium ${
+              item.severity === 'critical' ? 'text-red-900' :
+              item.severity === 'warning' ? 'text-orange-900' :
+              'text-green-900'
+            }`}>
+              {item.message}
+            </p>
+            {item.module && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.module} →</span>}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardModule({ onNavigate }: DashboardModuleProps = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [period, setPeriod] = useState('This Month')
@@ -203,15 +462,6 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
           <p className="text-[11px] text-gray-500">Real-time overview · Auto-refresh 30s</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Live indicator */}
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-50 border border-green-100">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
-            </span>
-            <span className="text-xs font-medium text-green-700">Live</span>
-          </div>
-
           {/* Period selector (#13) */}
           <div className="relative">
             <button
@@ -260,45 +510,14 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
+      {/* Period Headline — plain-English summary, the first thing the supervisor reads */}
+      <PeriodHeadline data={data} period={period} />
+
       {/* KPI Ribbon */}
       <KpiRibbon cells={kpiCells} />
 
-      {/* What Needs Attention (#4) */}
-      {data.attentionItems.length > 0 && (
-        <div className="bg-white rounded-lg border border-orange-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-orange-100 bg-orange-50 flex items-center gap-2">
-            <AlertTriangle size={14} className="text-orange-600" />
-            <span className="text-xs font-semibold text-orange-700 uppercase tracking-wider">Needs Attention</span>
-            <span className="text-[10px] text-orange-600 ml-auto">{data.attentionItems.length} issues</span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {data.attentionItems.map((item, i) => (
-              <button
-                key={i}
-                onClick={() => onNavigate?.(item.module)}
-                className={`w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50 transition-colors text-left ${
-                  item.severity === 'critical' ? 'bg-red-50/30' : 'bg-orange-50/20'
-                }`}
-              >
-                <div className={`w-2 h-2 rounded-full shrink-0 ${item.severity === 'critical' ? 'bg-red-500' : 'bg-orange-500'}`} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-900">{item.message}</p>
-                  <div className="flex items-center gap-1 mt-0.5">
-                    {item.items.slice(0, 3).map((it, j) => (
-                      <span key={j} className="text-[10px] text-gray-400 font-mono">
-                        {String(it.label || '')}
-                        {j < Math.min(item.items.length, 3) - 1 ? ',' : ''}
-                      </span>
-                    ))}
-                    {item.items.length > 3 && <span className="text-[10px] text-gray-400">+{item.items.length - 3} more</span>}
-                  </div>
-                </div>
-                <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.module} →</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Today's Story — always-visible replacement for the conditional Needs Attention panel */}
+      <TodaysStory data={data} onNavigate={onNavigate} />
 
       {/* Row 1: Revenue Trend + Order Status Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
