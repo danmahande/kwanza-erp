@@ -4,17 +4,16 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  AreaChart, Area,
 } from 'recharts'
 import {
   AlertTriangle, CheckCircle2,
   TrendingUp, ChevronDown, Download,
   Activity, Clock, Flame, Zap,
 } from 'lucide-react'
-import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
-import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import { InfoTip } from '@/components/ui/info-tip'
 
 interface DashboardData {
   stats: {
@@ -108,6 +107,268 @@ const STATUS_LABELS: Record<string, string> = {
 const tooltipStyle = {
   borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
   fontSize: '12px', padding: '8px 12px',
+}
+
+// ── Module Status Board ──
+// The centerpiece of the emergency-first dashboard. One dense table where
+// each row is a module summary: status dot, key metrics, action needed.
+// No card containers — just a table with row separators. Clickable rows
+// navigate to the relevant module.
+function ModuleStatusBoard({
+  data,
+  onNavigate,
+}: {
+  data: DashboardData
+  onNavigate?: (module: string) => void
+}) {
+  const p = data.pulse
+
+  // Build module rows — each computes its own status from live data
+  type ModuleRow = {
+    key: string
+    name: string
+    module: string
+    status: 'critical' | 'warning' | 'good' | 'quiet'
+    statusLabel: string
+    metrics: string
+    action: string
+  }
+  const rows: ModuleRow[] = []
+
+  // Inventory
+  if (data.inventory.critical > 0) {
+    rows.push({
+      key: 'inventory', name: 'Inventory', module: 'inventory',
+      status: 'critical', statusLabel: `${data.inventory.critical} out of stock`,
+      metrics: `${data.inventory.healthy} healthy · ${data.inventory.low} low · ${data.inventory.critical} critical`,
+      action: `Reorder ${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''}`,
+    })
+  } else if (data.inventory.low > 0) {
+    rows.push({
+      key: 'inventory', name: 'Inventory', module: 'inventory',
+      status: 'warning', statusLabel: `${data.inventory.low} running low`,
+      metrics: `${data.inventory.healthy} healthy · ${data.inventory.low} low · 0 critical`,
+      action: `Review ${data.inventory.low} low-stock product${data.inventory.low !== 1 ? 's' : ''}`,
+    })
+  } else {
+    rows.push({
+      key: 'inventory', name: 'Inventory', module: 'inventory',
+      status: 'good', statusLabel: 'All healthy',
+      metrics: `${data.inventory.healthy} products in stock`,
+      action: '—',
+    })
+  }
+
+  // Outbound
+  const inMotion = p?.stakes.customersWaitingCount ?? 0
+  const overdue = p?.stakes.overdueParcelsCount ?? 0
+  if (overdue > 0) {
+    rows.push({
+      key: 'outbound', name: 'Outbound', module: 'outbound',
+      status: 'critical', statusLabel: `${overdue} overdue`,
+      metrics: `${inMotion} in motion · ${overdue} overdue · ${data.orders.delivered} delivered today`,
+      action: `Investigate ${overdue} overdue parcel${overdue !== 1 ? 's' : ''}`,
+    })
+  } else if (inMotion > 0) {
+    rows.push({
+      key: 'outbound', name: 'Outbound', module: 'outbound',
+      status: 'good', statusLabel: `${inMotion} in motion`,
+      metrics: `${inMotion} in motion · ${data.orders.delivered} delivered today`,
+      action: '—',
+    })
+  } else {
+    rows.push({
+      key: 'outbound', name: 'Outbound', module: 'outbound',
+      status: 'quiet', statusLabel: 'No active orders',
+      metrics: `${data.orders.delivered} delivered today`,
+      action: '—',
+    })
+  }
+
+  // Payments / COD
+  if (data.cod.pendingBankings > 0) {
+    rows.push({
+      key: 'payments', name: 'Payments', module: 'payments',
+      status: 'warning', statusLabel: `${formatCurrencyCompact(data.cod.pendingBankings)} pending`,
+      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected · ${data.cod.bankingRate}% banked`,
+      action: `Verify pending COD bankings`,
+    })
+  } else if (data.cod.collectedTotal > 0) {
+    rows.push({
+      key: 'payments', name: 'Payments', module: 'payments',
+      status: 'good', statusLabel: 'All banked',
+      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected · 100% banked`,
+      action: '—',
+    })
+  } else {
+    rows.push({
+      key: 'payments', name: 'Payments', module: 'payments',
+      status: 'quiet', statusLabel: 'No COD activity',
+      metrics: 'No COD collected this period',
+      action: '—',
+    })
+  }
+
+  // Returns / Exceptions
+  if (data.exceptionCount > 0) {
+    rows.push({
+      key: 'returns', name: 'Returns', module: 'returns',
+      status: 'critical', statusLabel: `${data.exceptionCount} exceptions`,
+      metrics: `${data.exceptionCount} exceptions · ${data.shrinkage.totalQty} units shrinkage`,
+      action: `Process ${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''}`,
+    })
+  } else if (data.shrinkage.totalQty > 0) {
+    rows.push({
+      key: 'returns', name: 'Returns', module: 'returns',
+      status: 'warning', statusLabel: `${data.shrinkage.totalQty} units shrinkage`,
+      metrics: `${data.shrinkage.totalQty} units shrinkage`,
+      action: 'Review shrinkage records',
+    })
+  } else {
+    rows.push({
+      key: 'returns', name: 'Returns', module: 'returns',
+      status: 'good', statusLabel: 'All clear',
+      metrics: 'No exceptions or shrinkage',
+      action: '—',
+    })
+  }
+
+  // Drivers
+  const driversPending = data.driverPerformance.filter(d => d.bankingStatus === 'pending').length
+  const driversFailed = data.driverPerformance.filter(d => d.failed > 0).length
+  if (driversPending > 0 || driversFailed > 0) {
+    const bits: string[] = []
+    if (driversPending > 0) bits.push(`${driversPending} haven't banked`)
+    if (driversFailed > 0) bits.push(`${driversFailed} had failures`)
+    rows.push({
+      key: 'drivers', name: 'Drivers', module: 'drivers',
+      status: 'warning', statusLabel: bits[0],
+      metrics: `${data.driverPerformance.length} active · ${bits.join(' · ')}`,
+      action: driversPending > 0 ? `Follow up with ${driversPending} driver${driversPending !== 1 ? 's' : ''}` : 'Review failed deliveries',
+    })
+  } else if (data.driverPerformance.length > 0) {
+    rows.push({
+      key: 'drivers', name: 'Drivers', module: 'drivers',
+      status: 'good', statusLabel: 'All banked',
+      metrics: `${data.driverPerformance.length} active · all cash banked`,
+      action: '—',
+    })
+  } else {
+    rows.push({
+      key: 'drivers', name: 'Drivers', module: 'drivers',
+      status: 'quiet', statusLabel: 'No active drivers',
+      metrics: '0 active',
+      action: '—',
+    })
+  }
+
+  // Merchants
+  const lossMakers = data.merchantProfitability.filter(m => m.net < 0).length
+  if (lossMakers > 0) {
+    rows.push({
+      key: 'merchants', name: 'Merchants', module: 'merchants',
+      status: 'warning', statusLabel: `${lossMakers} at a loss`,
+      metrics: `${data.stats.totalMerchants} active · ${lossMakers} operating at a loss`,
+      action: `Review ${lossMakers} loss-maker${lossMakers !== 1 ? 's' : ''}`,
+    })
+  } else {
+    rows.push({
+      key: 'merchants', name: 'Merchants', module: 'merchants',
+      status: 'good', statusLabel: 'All profitable',
+      metrics: `${data.stats.totalMerchants} active · all profitable`,
+      action: '—',
+    })
+  }
+
+  // Inbound
+  const intakeCount = p?.stakes.customersWaitingCount !== undefined ? 0 : 0 // placeholder — we don't have a direct intake count in pulse
+  rows.push({
+    key: 'inbound', name: 'Inbound', module: 'inventory',
+    status: 'quiet', statusLabel: '—',
+    metrics: `${data.stats.totalStockUnits} units in warehouse · ${formatCurrencyCompact(data.stats.totalStockValue)} value`,
+    action: '—',
+  })
+  void intakeCount
+
+  const statusDot: Record<string, string> = {
+    critical: 'bg-red-500',
+    warning: 'bg-orange-500',
+    good: 'bg-green-500',
+    quiet: 'bg-gray-300',
+  }
+  const statusText: Record<string, string> = {
+    critical: 'text-red-700',
+    warning: 'text-orange-700',
+    good: 'text-green-700',
+    quiet: 'text-gray-400',
+  }
+
+  // Sort: critical first, then warning, then good, then quiet
+  const order = { critical: 0, warning: 1, good: 2, quiet: 3 }
+  rows.sort((a, b) => order[a.status] - order[b.status])
+
+  return (
+    <div>
+      {/* Table header */}
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+          Module Status Board
+        </span>
+        <span className="text-[10px] text-gray-400">
+          {rows.filter(r => r.status === 'critical').length} critical · {rows.filter(r => r.status === 'warning').length} warning · {rows.filter(r => r.status === 'good').length} good
+        </span>
+        <div className="flex-1 h-px bg-gray-100" />
+      </div>
+
+      {/* Dense table — no card container, just row separators */}
+      <div className="bg-white rounded-lg overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
+              <th className="text-left px-4 py-2 font-semibold w-32">Module</th>
+              <th className="text-left px-4 py-2 font-semibold w-40">Status</th>
+              <th className="text-left px-4 py-2 font-semibold">Key Metrics</th>
+              <th className="text-right px-4 py-2 font-semibold w-56">Action Needed</th>
+              <th className="w-8"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr
+                key={row.key}
+                onClick={() => onNavigate?.(row.module)}
+                className={`border-b border-gray-50 last:border-0 transition-colors ${
+                  row.action !== '—' ? 'cursor-pointer hover:bg-gray-50' : ''
+                } ${row.status === 'critical' ? 'bg-red-50/30' : row.status === 'warning' ? 'bg-orange-50/20' : ''}`}
+                style={{ height: '36px' }}
+              >
+                <td className="px-4 py-2">
+                  <span className="font-semibold text-gray-900">{row.name}</span>
+                </td>
+                <td className="px-4 py-2">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`w-2 h-2 rounded-full ${statusDot[row.status]}`} />
+                    <span className={`text-[11px] font-medium ${statusText[row.status]}`}>{row.statusLabel}</span>
+                  </span>
+                </td>
+                <td className="px-4 py-2 text-gray-600 text-[11px]">{row.metrics}</td>
+                <td className="px-4 py-2 text-right">
+                  {row.action !== '—' ? (
+                    <span className="text-[11px] text-[#FF6B35] font-semibold">{row.action} →</span>
+                  ) : (
+                    <span className="text-[11px] text-gray-300">—</span>
+                  )}
+                </td>
+                <td className="px-2 text-gray-300">
+                  {row.action !== '—' && <ChevronDown size={10} className="-rotate-90" />}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
 }
 
 // ── Pulse ──
@@ -813,34 +1074,6 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
     )
   }
 
-  // KPI cells with trends + clickable navigation
-  const kpiCells = [
-    { label: 'REVENUE', value: formatCurrencyCompact(data.stats.totalRevenue), trend: data.comparison.revenueChange, trendLabel: 'vs last month' },
-    { label: 'ORDERS', value: data.orders.total, trend: data.comparison.ordersChange, trendLabel: 'vs last month' },
-    { label: 'DELIVERED', value: data.orders.delivered },
-    { label: 'CYCLE TIME', value: data.avgCycleTimeHours > 0 ? `${data.avgCycleTimeHours}h` : '—', trendLabel: 'avg order→delivery' },
-    { label: 'ON-TIME %', value: `${data.onTimeRate}%`, highlight: data.onTimeRate < 80, highlightColor: 'red' as const },
-    { label: '1ST ATTEMPT %', value: `${data.firstAttemptRate}%`, highlight: data.firstAttemptRate < 70, highlightColor: 'orange' as const },
-    { label: 'COD PENDING', value: formatCurrencyCompact(data.cod.pendingBankings), highlight: data.cod.pendingBankings > 0, highlightColor: 'orange' as const },
-    { label: 'EXCEPTIONS', value: data.exceptionCount, highlight: data.exceptionCount > 0, highlightColor: 'red' as const },
-  ]
-
-  const stockHealthData = [
-    { name: 'Healthy', value: data.inventory.healthy, fill: '#22C55E' },
-    { name: 'Low', value: data.inventory.low, fill: '#F59E0B' },
-    { name: 'Critical', value: data.inventory.critical, fill: '#EF4444' },
-  ]
-
-  const orderStatusData = data.orderStatusDistribution
-    .filter(s => s.count > 0)
-    .map(s => ({ name: STATUS_LABELS[s.status] || s.status, value: s.count, fill: STATUS_COLORS[s.status] || '#9CA3AF' }))
-
-  const shrinkageChartData = data.shrinkage.byReason.map((s, i) => ({
-    name: s.reason || 'Unknown',
-    qty: s.qty,
-    fill: COLORS[i % COLORS.length],
-  }))
-
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       {/* Header */}
@@ -898,17 +1131,168 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* Pulse — the real-time heartbeat. The first thing you see, the thing that grabs you. */}
-      <Pulse data={data} onNavigate={onNavigate} />
+      {/* ════════════════════════════════════════════════════════════ */}
+      {/* EMERGENCY-FIRST LAYOUT                                        */}
+      {/* 1. Emergency strip (borderless) — what's on fire right now    */}
+      {/* 2. Module Status Board (dense table) — one row per module     */}
+      {/* 3. Pulse mini-row (borderless inline) — momentum/predictions  */}
+      {/* 4. Revenue chart (no card) — the one supporting visualization */}
+      {/* 5. Audit basis footer                                         */}
+      {/* ════════════════════════════════════════════════════════════ */}
 
-      {/* KPI Ribbon — supporting numbers, below the Pulse */}
-      <KpiRibbon cells={kpiCells} />
+      {/* 1. Emergency strip — borderless colored band, no card */}
+      {(() => {
+        const p = data.pulse
+        if (!p) return null
+        const now = new Date(p.timeAwareness.currentTime)
+        const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
+        const hasOverdue = p.stakes.overdueParcelsCount > 0
+        const hasUnbanked = p.stakes.unbankedCOD > 0
+        const hasStale = p.predictions.willGoStaleSoon > 0
+        const hasEmergencies = hasOverdue || hasUnbanked || hasStale
 
-      {/* Row 1: Revenue Trend + Order Status Donut */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 p-4 lg:col-span-2">
-          {(() => { const t = revenueTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          <ResponsiveContainer width="100%" height={220}>
+        if (!hasEmergencies) {
+          return (
+            <div className="rounded-lg px-4 py-2.5 bg-green-50 flex items-center gap-2">
+              <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+              <span className="text-xs text-green-700 font-medium">
+                All clear as of {timeStr} — no overdue parcels, no unbanked COD, nothing about to go stale.
+              </span>
+            </div>
+          )
+        }
+
+        const emergencies: string[] = []
+        if (hasOverdue) emergencies.push(`${p.stakes.overdueParcelsCount} overdue parcel${p.stakes.overdueParcelsCount !== 1 ? 's' : ''}`)
+        if (hasUnbanked) emergencies.push(`${formatCurrencyCompact(p.stakes.unbankedCOD)} unbanked COD`)
+        if (hasStale) emergencies.push(`${p.predictions.willGoStaleSoon} about to go stale`)
+
+        return (
+          <div className="rounded-lg px-4 py-2.5 bg-red-50 flex items-center gap-3 flex-wrap">
+            <AlertTriangle size={14} className="text-red-600 shrink-0" />
+            <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold">
+              Emergency · {timeStr}
+            </span>
+            <span className="text-sm text-red-900 font-medium">
+              {emergencies.join(' · ')}
+            </span>
+            <span className="text-[10px] text-red-600 ml-auto">
+              See Module Status Board below for actions
+            </span>
+          </div>
+        )
+      })()}
+
+      {/* 2. Module Status Board — the centerpiece. Dense table, one row per module. */}
+      <ModuleStatusBoard data={data} onNavigate={onNavigate} />
+
+      {/* 3. Pulse mini-row — borderless inline, no cards */}
+      {(() => {
+        const p = data.pulse
+        if (!p) return null
+        const now = new Date(p.timeAwareness.currentTime)
+        const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
+        const paceUp = p.momentum.paceDeltaPct > 0
+        const paceDown = p.momentum.paceDeltaPct < 0
+        return (
+          <div className="flex items-stretch gap-1 text-[11px]">
+            {/* Momentum */}
+            <div className="flex-1 px-3 py-2 rounded-lg bg-gray-50">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Zap size={10} className="text-orange-500" />
+                <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Momentum</span>
+                <InfoTip term="pulsePace" size={10} />
+              </div>
+              <span className="font-mono font-bold text-gray-900">{p.momentum.todayPace}</span>
+              <span className="text-gray-500">/hr</span>
+              {p.momentum.yesterdayPace > 0 && (
+                <span className={`ml-1.5 ${paceUp ? 'text-green-700' : paceDown ? 'text-red-700' : 'text-gray-500'}`}>
+                  {paceUp ? '↑' : paceDown ? '↓' : '—'}{Math.abs(p.momentum.paceDeltaPct)}%
+                </span>
+              )}
+              <span className="block text-[9px] text-gray-400 mt-0.5">
+                30min: +{p.momentum.last30Min.newOrders} · ✓{p.momentum.last30Min.delivered}
+                {p.momentum.last30Min.failed > 0 && ` · ✗${p.momentum.last30Min.failed}`}
+              </span>
+            </div>
+
+            {/* Predictions */}
+            <div className="flex-1 px-3 py-2 rounded-lg bg-gray-50">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <AlertTriangle size={10} className={p.predictions.willGoStaleSoon > 0 || p.predictions.willFinishLate ? 'text-orange-500' : 'text-gray-400'} />
+                <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Predictions</span>
+                {p.predictions.estimatedFinishTime && <InfoTip term="pulseFinishTime" size={10} />}
+              </div>
+              {p.predictions.willGoStaleSoon > 0 ? (
+                <span className="font-bold text-orange-700">{p.predictions.willGoStaleSoon} about to go stale</span>
+              ) : p.predictions.willFinishLate ? (
+                <span className="font-bold text-orange-700">Finish {p.predictions.estimatedFinishTime} — late</span>
+              ) : p.predictions.estimatedFinishTime ? (
+                <span className="font-bold text-green-700">Finish {p.predictions.estimatedFinishTime} — on track</span>
+              ) : (
+                <span className="text-gray-500">Nothing to deliver</span>
+              )}
+              {p.predictions.parcelsStillToDeliver > 0 && (
+                <span className="block text-[9px] text-gray-400 mt-0.5">
+                  {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr
+                </span>
+              )}
+            </div>
+
+            {/* Day progress */}
+            <div className="flex-1 px-3 py-2 rounded-lg bg-gray-50">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Clock size={10} className="text-blue-500" />
+                <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Day progress</span>
+                <InfoTip term="pulseDeliveryWindow" size={10} />
+              </div>
+              <span className="font-mono font-bold text-gray-900">{p.timeAwareness.percentThroughWindow}%</span>
+              <span className="text-gray-500"> through window</span>
+              <div className="h-1 bg-gray-200 rounded-full overflow-hidden mt-1">
+                <div
+                  className={`h-full rounded-full ${p.timeAwareness.percentThroughWindow >= 80 ? 'bg-red-500' : p.timeAwareness.percentThroughWindow >= 60 ? 'bg-orange-500' : 'bg-blue-500'}`}
+                  style={{ width: `${p.timeAwareness.percentThroughWindow}%` }}
+                />
+              </div>
+              {p.timeAwareness.parcelsPerHourNeeded > 0 && (
+                <span className="block text-[9px] text-gray-400 mt-0.5">
+                  Need {p.timeAwareness.parcelsPerHourNeeded}/hr to finish by {p.timeAwareness.deliveryWindowEnd}:00
+                </span>
+              )}
+            </div>
+
+            {/* Streaks */}
+            <div className="flex-1 px-3 py-2 rounded-lg bg-gray-50">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Flame size={10} className="text-orange-500" />
+                <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Streaks</span>
+              </div>
+              {p.streaks.daysWithoutStockout > 0 && (
+                <span className="text-green-700 font-medium">{p.streaks.daysWithoutStockout}d no stockout</span>
+              )}
+              {p.streaks.hoursSinceLastFailure > 0 && (
+                <span className="text-green-700 font-medium ml-1.5">{p.streaks.hoursSinceLastFailure}h no failure</span>
+              )}
+              {p.streaks.isBestWeekThisQuarter && (
+                <span className="block text-[9px] text-green-700 font-medium mt-0.5">Best week this quarter</span>
+              )}
+              {p.streaks.daysWithoutStockout === 0 && p.streaks.hoursSinceLastFailure === 0 && !p.streaks.isBestWeekThisQuarter && (
+                <span className="text-gray-400 text-[10px]">No active streaks</span>
+              )}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* 4. Revenue chart — the one supporting visualization. No card container. */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Revenue Trend</span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+        {(() => { const t = revenueTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
+        <div className="bg-white rounded-lg p-4">
+          <ResponsiveContainer width="100%" height={180}>
             <AreaChart data={data.revenueByMonth}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
@@ -929,280 +1313,28 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
             </AreaChart>
           </ResponsiveContainer>
         </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          {(() => { const t = orderStatusTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          {orderStatusData.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-16">No orders</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={orderStatusData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2}>
-                  {orderStatusData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                </Pie>
-                <Tooltip contentStyle={tooltipStyle} />
-              </PieChart>
-            </ResponsiveContainer>
-          )}
-          <div className="flex flex-wrap gap-2 mt-2">
-            {orderStatusData.map((s, i) => (
-              <span key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
-                <span className="w-2 h-2 rounded-full" style={{ background: s.fill }} />
-                {s.name} ({s.value})
-              </span>
-            ))}
-          </div>
-        </div>
       </div>
 
-      {/* Row 2: Driver Performance + COD Status */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden lg:col-span-2">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            {(() => { const t = driverTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-            {onNavigate && <button onClick={() => onNavigate('drivers')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
+      {/* 5. Audit basis footer */}
+      {(() => {
+        const p = data.pulse
+        if (!p) return null
+        const now = new Date(p.timeAwareness.currentTime)
+        const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
+        return (
+          <div className="px-3 py-2">
+            <p className="text-[10px] text-gray-400 leading-relaxed">
+              <strong className="text-gray-600">Audit basis:</strong> Data as of {timeStr}. Delivery window = 8:00am–6:00pm.
+              Overdue = dispatched &gt; 6h ago. Stale = sort &gt; 2h, staging &gt; 4h. "About to go stale" = sort &gt; 90 min.
+              Pace = orders since midnight ÷ hours elapsed. Finish time = parcels left ÷ deliveries in last 2 hours.
+              Streaks based on shrinkage records with "stock" in reason. Hover any (i) for full definition.
+            </p>
           </div>
-          {data.driverPerformance.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No active drivers</p>
-          ) : (
-            <DenseTable>
-              <thead>
-                <tr>
-                  <DenseTh>Driver</DenseTh>
-                  <DenseTh className="text-right">Disp</DenseTh>
-                  <DenseTh className="text-right">Del</DenseTh>
-                  <DenseTh className="text-right">Failed</DenseTh>
-                  <DenseTh className="text-right">COD</DenseTh>
-                  <DenseTh className="text-center">Banking</DenseTh>
-                </tr>
-              </thead>
-              <tbody>
-                {data.driverPerformance.map((d, i) => (
-                  <DenseTr key={d.driverId} tint={d.failed > 0 ? 'bg-red-50/40' : ''}>
-                    <DenseTd className="text-gray-900 font-medium">{d.name}</DenseTd>
-                    <DenseTd mono right>{d.dispatched}</DenseTd>
-                    <DenseTd mono right className="text-green-700">{d.delivered}</DenseTd>
-                    <DenseTd mono right className={d.failed > 0 ? 'text-red-600 font-bold' : 'text-gray-400'}>{d.failed}</DenseTd>
-                    <DenseTd mono right className="text-orange-700">{d.codCollected > 0 ? formatCurrencyCompact(d.codCollected) : '—'}</DenseTd>
-                    <DenseTd className="text-center">
-                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                        d.bankingStatus === 'pending' ? 'bg-orange-100 text-orange-700'
-                        : d.bankingStatus === 'shortfall' ? 'bg-red-100 text-red-700'
-                        : 'bg-green-100 text-green-700'
-                      }`}>
-                        {d.bankingStatus.toUpperCase()}
-                      </span>
-                    </DenseTd>
-                  </DenseTr>
-                ))}
-              </tbody>
-            </DenseTable>
-          )}
-        </div>
+        )
+      })()}
 
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          {(() => { const t = codTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Collected</span>
-              <span className="font-mono font-bold text-green-700">{formatCurrency(data.cod.collectedTotal)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Banked</span>
-              <span className="font-mono font-bold text-blue-700">{formatCurrency(data.cod.banked)}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-500">Pending</span>
-              <span className={`font-mono font-bold ${data.cod.pendingBankings > 0 ? 'text-orange-700' : 'text-gray-400'}`}>
-                {formatCurrency(data.cod.pendingBankings)}
-              </span>
-            </div>
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">Banking Rate</span>
-                <span className={`font-mono font-bold ${data.cod.bankingRate >= 90 ? 'text-green-700' : data.cod.bankingRate >= 70 ? 'text-orange-700' : 'text-red-700'}`}>
-                  {data.cod.bankingRate}%
-                </span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${data.cod.bankingRate >= 90 ? 'bg-green-500' : data.cod.bankingRate >= 70 ? 'bg-orange-500' : 'bg-red-500'}`}
-                  style={{ width: `${data.cod.bankingRate}%` }}
-                />
-              </div>
-            </div>
-            {/* First-attempt success rate (#6) */}
-            <div className="pt-2 border-t border-gray-100">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-500">1st Attempt Success</span>
-                <span className={`font-mono font-bold ${data.firstAttemptRate >= 80 ? 'text-green-700' : data.firstAttemptRate >= 60 ? 'text-orange-700' : 'text-red-700'}`}>
-                  {data.firstAttemptRate}%
-                </span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${data.firstAttemptRate >= 80 ? 'bg-green-500' : data.firstAttemptRate >= 60 ? 'bg-orange-500' : 'bg-red-500'}`}
-                  style={{ width: `${data.firstAttemptRate}%` }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 3: Throughput + Inventory + Shrinkage Chart (#7) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 p-4 lg:col-span-2">
-          {(() => { const t = throughputTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={data.throughputData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
-              <XAxis dataKey="day" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-              <Tooltip contentStyle={tooltipStyle} />
-              <Bar dataKey="inbound" fill="#3B82F6" radius={[4, 4, 0, 0]} name="Inbound" />
-              <Bar dataKey="outbound" fill="#FF6B35" radius={[4, 4, 0, 0]} name="Outbound" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          {(() => { const t = inventoryTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          <ResponsiveContainer width="100%" height={140}>
-            <PieChart>
-              <Pie data={stockHealthData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>
-                {stockHealthData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-              </Pie>
-              <Tooltip contentStyle={tooltipStyle} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="flex justify-center gap-3 mt-1">
-            {stockHealthData.map((s, i) => (
-              <span key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
-                <span className="w-2 h-2 rounded-full" style={{ background: s.fill }} />
-                {s.name} ({s.value})
-              </span>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Row 4: Shrinkage Chart (#7) + Merchant Profitability (#8) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {/* Shrinkage by Reason (#7) */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          {(() => { const t = shrinkageTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          {onNavigate && <button onClick={() => onNavigate('returns')} className="float-right text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase -mt-5">View →</button>}
-          {shrinkageChartData.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-8">No shrinkage recorded</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={shrinkageChartData} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-                <YAxis type="category" dataKey="name" tick={{ fontSize: 10, fill: '#6B7280' }} axisLine={false} tickLine={false} width={80} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="qty" radius={[0, 4, 4, 0]}>
-                  {shrinkageChartData.map((entry, i) => <Cell key={i} fill={entry.fill} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-
-        {/* Merchant Profitability (#8) */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            {(() => { const t = merchantProfitabilityTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-            {onNavigate && <button onClick={() => onNavigate('merchants')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
-          </div>
-          {data.merchantProfitability.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No merchant data</p>
-          ) : (
-            <DenseTable>
-              <thead>
-                <tr>
-                  <DenseTh>Merchant</DenseTh>
-                  <DenseTh className="text-right">Revenue</DenseTh>
-                  <DenseTh className="text-right">Costs</DenseTh>
-                  <DenseTh className="text-right">Net</DenseTh>
-                </tr>
-              </thead>
-              <tbody>
-                {data.merchantProfitability.slice(0, 8).map((m, i) => {
-                  const costs = m.commission + m.shrinkage + m.returns
-                  return (
-                    <DenseTr key={i} tint={m.net < 0 ? 'bg-red-50/40' : ''}>
-                      <DenseTd className="text-gray-900 font-medium truncate max-w-[120px]">{m.name}</DenseTd>
-                      <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.revenue)}</DenseTd>
-                      <DenseTd mono right className="text-red-600">{costs > 0 ? formatCurrencyCompact(costs) : '—'}</DenseTd>
-                      <DenseTd mono right className={m.net >= 0 ? 'text-green-700 font-bold' : 'text-red-600 font-bold'}>
-                        {formatCurrencyCompact(m.net)}
-                      </DenseTd>
-                    </DenseTr>
-                  )
-                })}
-              </tbody>
-            </DenseTable>
-          )}
-        </div>
-      </div>
-
-      {/* Row 5: Top Merchants + Payment Methods */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-            {(() => { const t = topMerchantsTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          </div>
-          {data.topMerchants.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No payments recorded</p>
-          ) : (
-            <DenseTable>
-              <thead><tr><DenseTh>Merchant</DenseTh><DenseTh className="text-right">Revenue</DenseTh></tr></thead>
-              <tbody>
-                {data.topMerchants.slice(0, 5).map((m, i) => (
-                  <DenseTr key={i}>
-                    <DenseTd className="text-gray-900 font-medium">{m.name}</DenseTd>
-                    <DenseTd mono right className="text-green-700">{formatCurrency(m.amount)}</DenseTd>
-                  </DenseTr>
-                ))}
-              </tbody>
-            </DenseTable>
-          )}
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
-          {(() => { const t = paymentMethodsTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
-          {data.paymentMethods.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-6">No payments recorded</p>
-          ) : (
-            <>
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie data={data.paymentMethods.map(p => ({ name: p.method, value: p.amount }))} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={55}>
-                    {data.paymentMethods.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} formatter={(v) => formatCurrency(Number(v))} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="flex flex-wrap justify-center gap-2 mt-1">
-                {data.paymentMethods.map((p, i) => (
-                  <span key={i} className="flex items-center gap-1 text-[10px] text-gray-500">
-                    <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                    {p.method} ({p.count})
-                  </span>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Duplicates removed:
-          - Live Activity Feed (Recent Inbound + Recent Outbound) — pure noise, no story value
-          - Alerts section — already covered by Dashboard Story bullets above
-          - Comparison strip — already covered by Dashboard Story headline + KPI ribbon trends
-          Keeping the dashboard focused: Story → KPIs → 5 chart rows. That's it. */}
+      {/* Old chart rows removed — replaced by Module Status Board + single revenue chart above. */}
     </motion.div>
   )
 }
+
