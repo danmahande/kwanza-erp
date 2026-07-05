@@ -344,10 +344,24 @@ export async function GET(request: NextRequest) {
     const last30MinFailed = await db.outboundRecord.count({ where: { status: 'failed', createdAt: { gte: thirtyMinAgo } } })
 
     // ── Predictions: what's about to go wrong ──
+    // "About to go stale" = orders in sort/pending that are 90-120 min old
+    // (will cross the 2h stale threshold in the next 30 min).
+    // BUG FIX: the old query was `createdAt < 90min ago` which caught orders
+    // from 91 min old to 6 days old — those are already stale, not "about to
+    // go stale." The correct window is 90-120 min old.
+    const twoHoursAgoForStale = new Date(now.getTime() - 2 * 60 * 60 * 1000)
     const willGoStaleSoon = await db.outboundRecord.count({
       where: {
         status: { in: ['picking', 'packing', 'pending'] },
-        createdAt: { lt: ninetyMinAgo },
+        createdAt: { gte: twoHoursAgoForStale, lt: ninetyMinAgo },
+      },
+    })
+    // Also count already-stale parcels (created > 2h ago, still in sort) for
+    // the emergency strip — these are past the threshold, not "about to" cross it
+    const alreadyStale = await db.outboundRecord.count({
+      where: {
+        status: { in: ['picking', 'packing', 'pending'] },
+        createdAt: { lt: twoHoursAgoForStale },
       },
     })
     const parcelsStillToDeliver = await db.outboundRecord.count({
@@ -370,13 +384,21 @@ export async function GET(request: NextRequest) {
     const deliveryWindowEnd = 18
     const currentHour = now.getHours() + now.getMinutes() / 60
     const totalWindowHours = deliveryWindowEnd - deliveryWindowStart
+    const isAfterHours = currentHour >= deliveryWindowEnd
+    const isBeforeHours = currentHour < deliveryWindowStart
     const hoursIntoWindow = Math.max(0, Math.min(totalWindowHours, currentHour - deliveryWindowStart))
     const percentThroughWindow = Math.round((hoursIntoWindow / totalWindowHours) * 100)
-    const parcelsPerHourNeeded = parcelsStillToDeliver > 0 && (totalWindowHours - hoursIntoWindow) > 0
+    const parcelsPerHourNeeded = parcelsStillToDeliver > 0 && (totalWindowHours - hoursIntoWindow) > 0 && !isAfterHours
       ? Math.ceil(parcelsStillToDeliver / (totalWindowHours - hoursIntoWindow))
       : 0
 
     // ── Streaks ──
+    // Days without stockout: counts back from today, checking each day for
+    // shrinkage records with "stock" in the reason. The streak breaks on the
+    // first day a stockout-related shrinkage was recorded.
+    // NOTE: if no shrinkage records exist at all, this returns 30 (the cap).
+    // We also return totalShrinkageRecordCount so the frontend can distinguish
+    // "30 days genuinely clean" from "no shrinkage records to check."
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
     const stockoutDays = await db.shrinkageRecord.findMany({
       where: { reason: { contains: 'stock' }, createdAt: { gte: thirtyDaysAgo } },
@@ -392,6 +414,10 @@ export async function GET(request: NextRequest) {
         break
       }
     }
+    // Check if there are ANY shrinkage records at all — if not, the streak
+    // is "no data" not "30 days clean"
+    const totalShrinkageRecordCount = await db.shrinkageRecord.count()
+    const stockoutStreakHasData = totalShrinkageRecordCount > 0
     const lastFailure = await db.outboundRecord.findFirst({
       where: { status: 'failed' },
       orderBy: { createdAt: 'desc' },
@@ -435,6 +461,7 @@ export async function GET(request: NextRequest) {
       },
       predictions: {
         willGoStaleSoon,
+        alreadyStale,
         estimatedFinishTime,
         willFinishLate,
         parcelsStillToDeliver,
@@ -444,12 +471,15 @@ export async function GET(request: NextRequest) {
         currentTime: now.toISOString(),
         currentHour: Math.floor(currentHour),
         deliveryWindowEnd,
+        isAfterHours,
+        isBeforeHours,
         percentThroughWindow,
         parcelsRemaining: parcelsStillToDeliver,
         parcelsPerHourNeeded,
       },
       streaks: {
         daysWithoutStockout,
+        stockoutStreakHasData,
         hoursSinceLastFailure,
         isBestWeekThisQuarter: isBestWeek && thisWeekRev > 0,
       },

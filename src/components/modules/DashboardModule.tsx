@@ -67,6 +67,7 @@ interface DashboardData {
     }
     predictions: {
       willGoStaleSoon: number
+      alreadyStale: number
       estimatedFinishTime: string | null
       willFinishLate: boolean
       parcelsStillToDeliver: number
@@ -76,12 +77,15 @@ interface DashboardData {
       currentTime: string
       currentHour: number
       deliveryWindowEnd: number
+      isAfterHours: boolean
+      isBeforeHours: boolean
       percentThroughWindow: number
       parcelsRemaining: number
       parcelsPerHourNeeded: number
     }
     streaks: {
       daysWithoutStockout: number
+      stockoutStreakHasData: boolean
       hoursSinceLastFailure: number
       isBestWeekThisQuarter: boolean
     }
@@ -1148,15 +1152,15 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
         const hasOverdue = p.stakes.overdueParcelsCount > 0
         const hasUnbanked = p.stakes.unbankedCOD > 0
-        const hasStale = p.predictions.willGoStaleSoon > 0
-        const hasEmergencies = hasOverdue || hasUnbanked || hasStale
+        const hasAlreadyStale = p.predictions.alreadyStale > 0
+        const hasEmergencies = hasOverdue || hasUnbanked || hasAlreadyStale
 
         if (!hasEmergencies) {
           return (
             <div className="rounded-lg px-4 py-2.5 bg-green-50 flex items-center gap-2">
               <CheckCircle2 size={14} className="text-green-600 shrink-0" />
               <span className="text-xs text-green-700 font-medium">
-                All clear as of {timeStr} — no overdue parcels, no unbanked COD, nothing about to go stale.
+                All clear as of {timeStr} — no overdue parcels, no unbanked COD, nothing stale.
               </span>
             </div>
           )
@@ -1165,7 +1169,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         const emergencies: string[] = []
         if (hasOverdue) emergencies.push(`${p.stakes.overdueParcelsCount} overdue parcel${p.stakes.overdueParcelsCount !== 1 ? 's' : ''}`)
         if (hasUnbanked) emergencies.push(`${formatCurrencyCompact(p.stakes.unbankedCOD)} unbanked COD`)
-        if (hasStale) emergencies.push(`${p.predictions.willGoStaleSoon} about to go stale`)
+        if (hasAlreadyStale) emergencies.push(`${p.predictions.alreadyStale} already stale (in sort > 2h)`)
 
         return (
           <div className="rounded-lg px-4 py-2.5 bg-red-50 flex items-center gap-3 flex-wrap">
@@ -1219,11 +1223,13 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
             {/* Predictions */}
             <div className="flex-1 px-3 py-2 rounded-lg bg-gray-50">
               <div className="flex items-center gap-1.5 mb-0.5">
-                <AlertTriangle size={10} className={p.predictions.willGoStaleSoon > 0 || p.predictions.willFinishLate ? 'text-orange-500' : 'text-gray-400'} />
+                <AlertTriangle size={10} className={p.predictions.willGoStaleSoon > 0 || p.predictions.alreadyStale > 0 || p.predictions.willFinishLate ? 'text-orange-500' : 'text-gray-400'} />
                 <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Predictions</span>
                 {p.predictions.estimatedFinishTime && <InfoTip term="pulseFinishTime" size={10} />}
               </div>
-              {p.predictions.willGoStaleSoon > 0 ? (
+              {p.predictions.alreadyStale > 0 ? (
+                <span className="font-bold text-red-700">{p.predictions.alreadyStale} already stale</span>
+              ) : p.predictions.willGoStaleSoon > 0 ? (
                 <span className="font-bold text-orange-700">{p.predictions.willGoStaleSoon} about to go stale</span>
               ) : p.predictions.willFinishLate ? (
                 <span className="font-bold text-orange-700">Finish {p.predictions.estimatedFinishTime} — late</span>
@@ -1235,6 +1241,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               {p.predictions.parcelsStillToDeliver > 0 && (
                 <span className="block text-[9px] text-gray-400 mt-0.5">
                   {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr
+                  {p.predictions.willGoStaleSoon > 0 && ' · "about to go stale" = 90-120 min in sort'}
                 </span>
               )}
             </div>
@@ -1246,18 +1253,34 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
                 <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Day progress</span>
                 <InfoTip term="pulseDeliveryWindow" size={10} />
               </div>
-              <span className="font-mono font-bold text-gray-900">{p.timeAwareness.percentThroughWindow}%</span>
-              <span className="text-gray-500"> through window</span>
-              <div className="h-1 bg-gray-200 rounded-full overflow-hidden mt-1">
-                <div
-                  className={`h-full rounded-full ${p.timeAwareness.percentThroughWindow >= 80 ? 'bg-red-500' : p.timeAwareness.percentThroughWindow >= 60 ? 'bg-orange-500' : 'bg-blue-500'}`}
-                  style={{ width: `${p.timeAwareness.percentThroughWindow}%` }}
-                />
-              </div>
-              {p.timeAwareness.parcelsPerHourNeeded > 0 && (
-                <span className="block text-[9px] text-gray-400 mt-0.5">
-                  Need {p.timeAwareness.parcelsPerHourNeeded}/hr to finish by {p.timeAwareness.deliveryWindowEnd}:00
-                </span>
+              {p.timeAwareness.isAfterHours ? (
+                <>
+                  <span className="font-bold text-gray-500">Window closed</span>
+                  <span className="block text-[9px] text-gray-400 mt-0.5">
+                    After {p.timeAwareness.deliveryWindowEnd}:00 · {p.timeAwareness.parcelsRemaining} parcels still undelivered
+                  </span>
+                </>
+              ) : p.timeAwareness.isBeforeHours ? (
+                <>
+                  <span className="font-bold text-gray-500">Not yet open</span>
+                  <span className="block text-[9px] text-gray-400 mt-0.5">Window opens at 8:00am</span>
+                </>
+              ) : (
+                <>
+                  <span className="font-mono font-bold text-gray-900">{p.timeAwareness.percentThroughWindow}%</span>
+                  <span className="text-gray-500"> through window</span>
+                  <div className="h-1 bg-gray-200 rounded-full overflow-hidden mt-1">
+                    <div
+                      className={`h-full rounded-full ${p.timeAwareness.percentThroughWindow >= 80 ? 'bg-red-500' : p.timeAwareness.percentThroughWindow >= 60 ? 'bg-orange-500' : 'bg-blue-500'}`}
+                      style={{ width: `${p.timeAwareness.percentThroughWindow}%` }}
+                    />
+                  </div>
+                  {p.timeAwareness.parcelsPerHourNeeded > 0 && (
+                    <span className="block text-[9px] text-gray-400 mt-0.5">
+                      Need {p.timeAwareness.parcelsPerHourNeeded}/hr to finish by {p.timeAwareness.deliveryWindowEnd}:00
+                    </span>
+                  )}
+                </>
               )}
             </div>
 
@@ -1267,16 +1290,18 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
                 <Flame size={10} className="text-orange-500" />
                 <span className="text-[9px] uppercase tracking-wider text-gray-500 font-semibold">Streaks</span>
               </div>
-              {p.streaks.daysWithoutStockout > 0 && (
+              {p.streaks.stockoutStreakHasData && p.streaks.daysWithoutStockout > 0 ? (
                 <span className="text-green-700 font-medium">{p.streaks.daysWithoutStockout}d no stockout</span>
-              )}
+              ) : !p.streaks.stockoutStreakHasData ? (
+                <span className="text-gray-400 text-[10px]">No shrinkage records to check</span>
+              ) : null}
               {p.streaks.hoursSinceLastFailure > 0 && (
                 <span className="text-green-700 font-medium ml-1.5">{p.streaks.hoursSinceLastFailure}h no failure</span>
               )}
               {p.streaks.isBestWeekThisQuarter && (
                 <span className="block text-[9px] text-green-700 font-medium mt-0.5">Best week this quarter</span>
               )}
-              {p.streaks.daysWithoutStockout === 0 && p.streaks.hoursSinceLastFailure === 0 && !p.streaks.isBestWeekThisQuarter && (
+              {p.streaks.daysWithoutStockout === 0 && p.streaks.hoursSinceLastFailure === 0 && !p.streaks.isBestWeekThisQuarter && !p.streaks.stockoutStreakHasData && (
                 <span className="text-gray-400 text-[10px]">No active streaks</span>
               )}
             </div>
