@@ -303,6 +303,158 @@ export async function GET(request: NextRequest) {
     if (codPendingBankings > 0) alerts.push({ type: 'warning', message: `UGX ${codPendingBankings.toLocaleString()} COD cash pending verification`, module: 'payments', time: 'Now' })
     if (comparison.revenueChange < 0) alerts.push({ type: 'info', message: `Revenue down ${Math.abs(comparison.revenueChange)}% vs last period`, module: 'finance', time: 'Today' })
 
+    // ── PULSE: the real-time heartbeat of the business ──
+    // This is what makes the dashboard feel ALIVE. Five sub-objects:
+    //   stakes        — money and time at risk, right now
+    //   momentum      — today's pace vs yesterday, last 30 min of activity
+    //   predictions   — what's about to go wrong in the next 30-60 min
+    //   timeAwareness — where you are in the day vs where you should be
+    //   streaks       — what's going well that you'd want to maintain
+
+    const todayStartPulse = new Date(now); todayStartPulse.setHours(0, 0, 0, 0)
+    const yesterdayStart = new Date(now); yesterdayStart.setDate(yesterdayStart.getDate() - 1); yesterdayStart.setHours(0, 0, 0, 0)
+    const thirtyMinAgo = new Date(now.getTime() - 30 * 60 * 1000)
+    const sixHoursAgo = new Date(now.getTime() - 6 * 60 * 60 * 1000)
+    const ninetyMinAgo = new Date(now.getTime() - 90 * 60 * 1000)
+
+    // ── Stakes: money and time at risk right now ──
+    const overdueParcels = await db.outboundRecord.findMany({
+      where: { status: 'dispatched', dispatchedAt: { lt: sixHoursAgo } },
+      select: { id: true, orderNumber: true, outboundId: true, customerName: true, saleAmount: true, codCollected: true, dispatchedAt: true, assignedDriver: true },
+      take: 20,
+    })
+    const waitingParcels = await db.outboundRecord.count({
+      where: { status: { in: ['picking', 'packing', 'packed', 'pending'] } },
+    })
+    const overdueRevenue = overdueParcels.reduce((s, p) => s + (p.saleAmount || 0), 0)
+    const atRiskRevenue = overdueRevenue + codPendingBankings
+
+    // ── Momentum: today's pace vs yesterday, last 30 min ──
+    const hoursElapsedToday = Math.max(0.5, (now.getTime() - todayStartPulse.getTime()) / (1000 * 60 * 60))
+    const todayOrdersCount = await db.outboundRecord.count({ where: { createdAt: { gte: todayStartPulse } } })
+    const todayPace = Math.round((todayOrdersCount / hoursElapsedToday) * 10) / 10
+
+    const yesterdaySameTimeEnd = new Date(yesterdayStart.getTime() + (now.getTime() - todayStartPulse.getTime()))
+    const yesterdayOrdersCount = await db.outboundRecord.count({ where: { createdAt: { gte: yesterdayStart, lte: yesterdaySameTimeEnd } } })
+    const yesterdayPace = Math.round((yesterdayOrdersCount / hoursElapsedToday) * 10) / 10
+    const paceDeltaPct = yesterdayPace > 0 ? Math.round(((todayPace - yesterdayPace) / yesterdayPace) * 100) : 0
+
+    const last30MinNew = await db.outboundRecord.count({ where: { createdAt: { gte: thirtyMinAgo } } })
+    const last30MinDelivered = await db.outboundRecord.count({ where: { status: 'delivered', deliveredAt: { gte: thirtyMinAgo } } })
+    const last30MinFailed = await db.outboundRecord.count({ where: { status: 'failed', createdAt: { gte: thirtyMinAgo } } })
+
+    // ── Predictions: what's about to go wrong ──
+    const willGoStaleSoon = await db.outboundRecord.count({
+      where: {
+        status: { in: ['picking', 'packing', 'pending'] },
+        createdAt: { lt: ninetyMinAgo },
+      },
+    })
+    const parcelsStillToDeliver = await db.outboundRecord.count({
+      where: { status: { in: ['picking', 'packing', 'packed', 'pending', 'dispatched'] } },
+    })
+    const twoHoursAgoForRate = new Date(now.getTime() - 2 * 60 * 60 * 1000)
+    const recentDeliveries = await db.outboundRecord.count({ where: { status: 'delivered', deliveredAt: { gte: twoHoursAgoForRate } } })
+    const deliveryRatePerHour = recentDeliveries / 2
+    let estimatedFinishTime: string | null = null
+    let willFinishLate = false
+    if (parcelsStillToDeliver > 0 && deliveryRatePerHour > 0) {
+      const hoursToFinish = parcelsStillToDeliver / deliveryRatePerHour
+      const finishAt = new Date(now.getTime() + hoursToFinish * 60 * 60 * 1000)
+      estimatedFinishTime = finishAt.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
+      willFinishLate = finishAt.getHours() >= 18
+    }
+
+    // ── Time awareness ──
+    const deliveryWindowStart = 8
+    const deliveryWindowEnd = 18
+    const currentHour = now.getHours() + now.getMinutes() / 60
+    const totalWindowHours = deliveryWindowEnd - deliveryWindowStart
+    const hoursIntoWindow = Math.max(0, Math.min(totalWindowHours, currentHour - deliveryWindowStart))
+    const percentThroughWindow = Math.round((hoursIntoWindow / totalWindowHours) * 100)
+    const parcelsPerHourNeeded = parcelsStillToDeliver > 0 && (totalWindowHours - hoursIntoWindow) > 0
+      ? Math.ceil(parcelsStillToDeliver / (totalWindowHours - hoursIntoWindow))
+      : 0
+
+    // ── Streaks ──
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+    const stockoutDays = await db.shrinkageRecord.findMany({
+      where: { reason: { contains: 'stock' }, createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true },
+    })
+    const stockoutDaySet = new Set(stockoutDays.map(s => s.createdAt.toDateString()))
+    let daysWithoutStockout = 0
+    for (let i = 0; i < 30; i++) {
+      const checkDay = new Date(now); checkDay.setDate(checkDay.getDate() - i)
+      if (!stockoutDaySet.has(checkDay.toDateString())) {
+        daysWithoutStockout++
+      } else {
+        break
+      }
+    }
+    const lastFailure = await db.outboundRecord.findFirst({
+      where: { status: 'failed' },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    })
+    const hoursSinceLastFailure = lastFailure
+      ? Math.floor((now.getTime() - lastFailure.createdAt.getTime()) / (60 * 60 * 1000))
+      : 0
+    const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1)
+    const thisWeekStart = new Date(now); thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay()); thisWeekStart.setHours(0, 0, 0, 0)
+    const thisWeekRevAgg = await db.outboundRecord.aggregate({ where: { status: 'delivered', deliveredAt: { gte: thisWeekStart } }, _sum: { saleAmount: true } })
+    const thisWeekRev = thisWeekRevAgg._sum.saleAmount ?? 0
+    let isBestWeek = true
+    for (let w = 1; w < 13; w++) {
+      const wStart = new Date(thisWeekStart); wStart.setDate(wStart.getDate() - w * 7)
+      const wEnd = new Date(thisWeekStart); wEnd.setDate(wEnd.getDate() - (w - 1) * 7)
+      if (wStart < quarterStart) break
+      const wAgg = await db.outboundRecord.aggregate({ where: { status: 'delivered', deliveredAt: { gte: wStart, lt: wEnd } }, _sum: { saleAmount: true } })
+      if ((wAgg._sum.saleAmount ?? 0) > thisWeekRev) { isBestWeek = false; break }
+    }
+
+    const pulse = {
+      stakes: {
+        unbankedCOD: codPendingBankings,
+        overdueParcelsCount: overdueParcels.length,
+        overdueParcels: overdueParcels.slice(0, 5).map(p => ({
+          id: String(p.orderNumber || p.outboundId),
+          customerName: p.customerName,
+          driver: p.assignedDriver || '—',
+          hoursOverdue: Math.floor((now.getTime() - (p.dispatchedAt?.getTime() || now.getTime())) / (60 * 60 * 1000)),
+          saleAmount: p.saleAmount || 0,
+        })),
+        customersWaitingCount: waitingParcels,
+        atRiskRevenue,
+      },
+      momentum: {
+        todayPace,
+        yesterdayPace,
+        paceDeltaPct,
+        last30Min: { newOrders: last30MinNew, delivered: last30MinDelivered, failed: last30MinFailed },
+      },
+      predictions: {
+        willGoStaleSoon,
+        estimatedFinishTime,
+        willFinishLate,
+        parcelsStillToDeliver,
+        deliveryRatePerHour: Math.round(deliveryRatePerHour * 10) / 10,
+      },
+      timeAwareness: {
+        currentTime: now.toISOString(),
+        currentHour: Math.floor(currentHour),
+        deliveryWindowEnd,
+        percentThroughWindow,
+        parcelsRemaining: parcelsStillToDeliver,
+        parcelsPerHourNeeded,
+      },
+      streaks: {
+        daysWithoutStockout,
+        hoursSinceLastFailure,
+        isBestWeekThisQuarter: isBestWeek && thisWeekRev > 0,
+      },
+    }
+
     return NextResponse.json({
       stats: {
         totalMerchants, totalProducts, totalCustomers, totalDrivers,
@@ -343,6 +495,7 @@ export async function GET(request: NextRequest) {
       orderStatusDistribution,
       exceptionRate,
       exceptionCount,
+      pulse,
     })
   } catch (error) {
     console.error('Dashboard error:', error)

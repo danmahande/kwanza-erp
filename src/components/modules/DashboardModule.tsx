@@ -10,6 +10,7 @@ import {
 import {
   AlertTriangle, CheckCircle2,
   TrendingUp, ChevronDown, Download,
+  Activity, Clock, Flame, Zap,
 } from 'lucide-react'
 import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -50,6 +51,41 @@ interface DashboardData {
   orderStatusDistribution: Array<{ status: string; count: number }>
   exceptionRate: number
   exceptionCount: number
+  pulse: {
+    stakes: {
+      unbankedCOD: number
+      overdueParcelsCount: number
+      overdueParcels: Array<{ id: string; customerName: string; driver: string; hoursOverdue: number; saleAmount: number }>
+      customersWaitingCount: number
+      atRiskRevenue: number
+    }
+    momentum: {
+      todayPace: number
+      yesterdayPace: number
+      paceDeltaPct: number
+      last30Min: { newOrders: number; delivered: number; failed: number }
+    }
+    predictions: {
+      willGoStaleSoon: number
+      estimatedFinishTime: string | null
+      willFinishLate: boolean
+      parcelsStillToDeliver: number
+      deliveryRatePerHour: number
+    }
+    timeAwareness: {
+      currentTime: string
+      currentHour: number
+      deliveryWindowEnd: number
+      percentThroughWindow: number
+      parcelsRemaining: number
+      parcelsPerHourNeeded: number
+    }
+    streaks: {
+      daysWithoutStockout: number
+      hoursSinceLastFailure: number
+      isBestWeekThisQuarter: boolean
+    }
+  }
 }
 
 interface DashboardModuleProps {
@@ -71,6 +107,218 @@ const STATUS_LABELS: Record<string, string> = {
 const tooltipStyle = {
   borderRadius: '12px', border: 'none', boxShadow: '0 8px 30px rgba(0,0,0,0.12)',
   fontSize: '12px', padding: '8px 12px',
+}
+
+// ── Pulse ──
+// The real-time heartbeat of the business. Replaces the static Story + KPI
+// ribbon at the very top of the dashboard. Five sections that make the
+// business feel ALIVE:
+//   1. Stakes line    — money and time at risk, right now
+//   2. Momentum line  — today's pace vs yesterday, last 30 min of activity
+//   3. Predictions    — what's about to go wrong in the next 30-60 min
+//   4. Time awareness — where you are in the day vs where you should be
+//   5. Streaks        — what's going well that you'd want to maintain
+function Pulse({
+  data,
+  onNavigate,
+}: {
+  data: DashboardData
+  onNavigate?: (module: string) => void
+}) {
+  const p = data.pulse
+  if (!p) return null
+
+  const now = new Date(p.timeAwareness.currentTime)
+  const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
+  const hasHighStakes = p.stakes.atRiskRevenue > 0 || p.stakes.overdueParcelsCount > 0
+  const hasPredictions = p.predictions.willGoStaleSoon > 0 || p.predictions.willFinishLate
+  const paceUp = p.momentum.paceDeltaPct > 0
+  const paceDown = p.momentum.paceDeltaPct < 0
+
+  return (
+    <div className="space-y-2">
+      {/* ── Hero stakes line — the first thing you read ── */}
+      <div className={`rounded-lg px-4 py-3 border-2 ${
+        hasHighStakes ? 'bg-red-50 border-red-300' :
+        'bg-[#1B2A4A] border-[#1B2A4A]'
+      }`}>
+        <div className="flex items-center gap-3 flex-wrap">
+          <Activity size={16} className={hasHighStakes ? 'text-red-600' : 'text-blue-300'} />
+          <span className={`text-[10px] uppercase tracking-wider font-semibold ${hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}`}>
+            Right now · {timeStr}
+          </span>
+          <div className={`flex items-center gap-4 flex-wrap text-sm font-medium ${hasHighStakes ? 'text-red-900' : 'text-white'}`}>
+            {p.stakes.atRiskRevenue > 0 && (
+              <span>
+                <span className="font-mono font-bold">{formatCurrencyCompact(p.stakes.atRiskRevenue)}</span>
+                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> at risk</span>
+              </span>
+            )}
+            {p.stakes.overdueParcelsCount > 0 && (
+              <span>
+                <span className="font-mono font-bold">{p.stakes.overdueParcelsCount}</span>
+                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> overdue {p.stakes.overdueParcelsCount === 1 ? 'parcel' : 'parcels'}</span>
+              </span>
+            )}
+            {p.stakes.unbankedCOD > 0 && (
+              <span>
+                <span className="font-mono font-bold">{formatCurrencyCompact(p.stakes.unbankedCOD)}</span>
+                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> unbanked</span>
+              </span>
+            )}
+            {p.stakes.customersWaitingCount > 0 && (
+              <span>
+                <span className="font-mono font-bold">{p.stakes.customersWaitingCount}</span>
+                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> customers waiting</span>
+              </span>
+            )}
+            {!hasHighStakes && p.stakes.customersWaitingCount === 0 && (
+              <span className="text-blue-200/70 italic">All clear — no money or parcels at risk right now.</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Momentum + Predictions + Time row ── */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        {/* Momentum */}
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Zap size={12} className="text-orange-500" />
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Momentum</span>
+          </div>
+          <p className="text-sm font-bold text-gray-900">
+            {p.momentum.todayPace} <span className="text-xs font-normal text-gray-500">orders/hr today</span>
+          </p>
+          {p.momentum.yesterdayPace > 0 && (
+            <p className={`text-[11px] mt-0.5 ${paceUp ? 'text-green-700' : paceDown ? 'text-red-700' : 'text-gray-500'}`}>
+              {paceUp ? '↑' : paceDown ? '↓' : '—'} {Math.abs(p.momentum.paceDeltaPct)}% vs yesterday ({p.momentum.yesterdayPace}/hr)
+            </p>
+          )}
+          <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-3 text-[10px] text-gray-500">
+            <span>Last 30 min:</span>
+            <span className="text-blue-600 font-mono font-bold">+{p.momentum.last30Min.newOrders}</span>
+            <span className="text-green-600 font-mono font-bold">✓{p.momentum.last30Min.delivered}</span>
+            {p.momentum.last30Min.failed > 0 && (
+              <span className="text-red-600 font-mono font-bold">✗{p.momentum.last30Min.failed}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Predictions */}
+        <div className={`bg-white rounded-lg border p-3 ${hasPredictions ? 'border-orange-200' : 'border-gray-200'}`}>
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <AlertTriangle size={12} className={hasPredictions ? 'text-orange-500' : 'text-gray-400'} />
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Predictions</span>
+          </div>
+          {p.predictions.willGoStaleSoon > 0 ? (
+            <p className="text-sm font-bold text-orange-700">
+              {p.predictions.willGoStaleSoon} parcel{p.predictions.willGoStaleSoon !== 1 ? 's' : ''} about to go stale
+            </p>
+          ) : p.predictions.willFinishLate ? (
+            <p className="text-sm font-bold text-orange-700">
+              Will finish at {p.predictions.estimatedFinishTime} — late
+            </p>
+          ) : p.predictions.estimatedFinishTime ? (
+            <p className="text-sm font-bold text-green-700">
+              On track — finish at {p.predictions.estimatedFinishTime}
+            </p>
+          ) : (
+            <p className="text-sm font-bold text-gray-700">
+              Nothing to deliver right now
+            </p>
+          )}
+          {p.predictions.parcelsStillToDeliver > 0 && (
+            <p className="text-[11px] mt-0.5 text-gray-500">
+              {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr current rate
+            </p>
+          )}
+        </div>
+
+        {/* Time awareness */}
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Clock size={12} className="text-blue-500" />
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Day progress</span>
+          </div>
+          <p className="text-sm font-bold text-gray-900">
+            {p.timeAwareness.percentThroughWindow}% through delivery window
+          </p>
+          <div className="h-2 bg-gray-100 rounded-full overflow-hidden mt-1.5">
+            <div
+              className={`h-full rounded-full ${p.timeAwareness.percentThroughWindow >= 80 ? 'bg-red-500' : p.timeAwareness.percentThroughWindow >= 60 ? 'bg-orange-500' : 'bg-blue-500'}`}
+              style={{ width: `${p.timeAwareness.percentThroughWindow}%` }}
+            />
+          </div>
+          {p.timeAwareness.parcelsPerHourNeeded > 0 && (
+            <p className="text-[11px] mt-1 text-gray-500">
+              Need <span className="font-mono font-bold text-gray-900">{p.timeAwareness.parcelsPerHourNeeded}/hr</span> to finish by {p.timeAwareness.deliveryWindowEnd}:00
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* ── Streaks + overdue details row ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        {/* Streaks — what's going well */}
+        <div className="bg-white rounded-lg border border-green-200 p-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <Flame size={12} className="text-orange-500" />
+            <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Streaks</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap text-xs">
+            {p.streaks.daysWithoutStockout > 0 && (
+              <span className="text-green-700 font-medium">
+                <span className="font-mono font-bold">{p.streaks.daysWithoutStockout}</span> days without stockout
+              </span>
+            )}
+            {p.streaks.hoursSinceLastFailure > 0 && (
+              <span className="text-green-700 font-medium">
+                <span className="font-mono font-bold">{p.streaks.hoursSinceLastFailure}h</span> since last failure
+              </span>
+            )}
+            {p.streaks.isBestWeekThisQuarter && (
+              <span className="text-green-700 font-medium">
+                Best week this quarter
+              </span>
+            )}
+            {p.streaks.daysWithoutStockout === 0 && p.streaks.hoursSinceLastFailure === 0 && !p.streaks.isBestWeekThisQuarter && (
+              <span className="text-gray-400 italic">No active streaks yet today.</span>
+            )}
+          </div>
+        </div>
+
+        {/* Overdue parcels detail — only if there are any */}
+        {p.stakes.overdueParcels.length > 0 ? (
+          <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+            <div className="px-3 py-1.5 bg-red-50 border-b border-red-100 flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-red-700 font-semibold">
+                Overdue · {p.stakes.overdueParcelsCount}
+              </span>
+              <button onClick={() => onNavigate?.('outbound')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View →</button>
+            </div>
+            <div className="divide-y divide-red-50">
+              {p.stakes.overdueParcels.map(o => (
+                <div key={o.id} className="px-3 py-1.5 flex items-center gap-2 text-[11px] bg-red-50/20">
+                  <span className="font-mono font-bold text-gray-900 w-20 shrink-0">{o.id}</span>
+                  <span className="text-gray-700 flex-1 truncate">{o.customerName}</span>
+                  <span className="text-gray-500 truncate max-w-[80px]">{o.driver}</span>
+                  <span className="font-mono text-red-700 font-bold shrink-0">{o.hoursOverdue}h</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-white rounded-lg border border-green-200 px-3 py-2.5 flex items-center gap-2">
+            <CheckCircle2 size={14} className="text-green-600 shrink-0" />
+            <span className="text-[11px] text-green-700 font-medium">
+              No overdue parcels — all in-transit deliveries are within the 6-hour threshold.
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // ── Dashboard Story ──
@@ -572,10 +820,10 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* Dashboard Story — the single voice of the dashboard. Headline + bullets. */}
-      <DashboardStory data={data} period={period} onNavigate={onNavigate} />
+      {/* Pulse — the real-time heartbeat. The first thing you see, the thing that grabs you. */}
+      <Pulse data={data} onNavigate={onNavigate} />
 
-      {/* KPI Ribbon */}
+      {/* KPI Ribbon — supporting numbers, below the Pulse */}
       <KpiRibbon cells={kpiCells} />
 
       {/* Row 1: Revenue Trend + Order Status Donut */}
