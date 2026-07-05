@@ -2,17 +2,16 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, AreaChart, Area,
 } from 'recharts'
 import {
-  AlertTriangle, CheckCircle2, XCircle, AlertCircle, Shield,
-  TrendingUp, TrendingDown, ChevronRight, Clock, ChevronDown, Download,
+  AlertTriangle, CheckCircle2,
+  TrendingUp, ChevronDown, Download,
 } from 'lucide-react'
-import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr, StatusPill } from '@/components/shared/ops-ui'
+import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 interface DashboardData {
@@ -74,185 +73,97 @@ const tooltipStyle = {
   fontSize: '12px', padding: '8px 12px',
 }
 
-// ── Period Headline ──
-// Plain-English summary of the selected period, generated from live data.
-// This is the FIRST thing the supervisor reads when they land on the dashboard.
-// It answers "what happened this period?" in 1-3 sentences.
-function PeriodHeadline({ data, period }: { data: DashboardData; period: string }) {
-  const parts: string[] = []
-
-  // Revenue + trend
+// ── Dashboard Story ──
+// ONE unified voice for the dashboard. Merges the old PeriodHeadline +
+// TodaysStory into a single section that:
+//   1. Opens with a bold headline sentence (the period summary)
+//   2. Lists 3-5 bullet points of what's worth knowing (critical/warning/good)
+//   3. Each bullet is clickable to the relevant module
+// This is the ONLY "voice" of the dashboard. Everything below is supporting data.
+function DashboardStory({
+  data,
+  period,
+  onNavigate,
+}: {
+  data: DashboardData
+  period: string
+  onNavigate?: (module: string) => void
+}) {
+  // ── Build the headline sentence ──
+  const headlineParts: string[] = []
   if (data.stats.totalRevenue > 0) {
     const revChange = data.comparison.revenueChange
     let revPhrase = `${formatCurrency(data.stats.totalRevenue)} in revenue`
     if (revChange !== 0) {
       revPhrase += ` — ${revChange > 0 ? 'up' : 'down'} ${Math.abs(revChange)}% vs last month`
     }
-    parts.push(revPhrase)
+    headlineParts.push(revPhrase)
   } else if (data.orders.total === 0) {
-    parts.push('No revenue or orders this period yet')
+    headlineParts.push('No revenue or orders this period yet')
   }
-
-  // Orders + delivery
   if (data.orders.total > 0) {
     const deliveredPct = data.orders.total > 0 ? Math.round((data.orders.delivered / data.orders.total) * 100) : 0
-    parts.push(`${data.orders.total} orders, ${data.orders.delivered} delivered (${deliveredPct}%)`)
+    headlineParts.push(`${data.orders.total} orders, ${data.orders.delivered} delivered (${deliveredPct}%)`)
   }
-
-  // On-time rate (with target context)
   if (data.onTimeRate > 0 && data.orders.delivered > 0) {
     const target = 90
     if (data.onTimeRate < target) {
-      parts.push(`on-time delivery at ${data.onTimeRate}% — below your ${target}% target`)
+      headlineParts.push(`on-time at ${data.onTimeRate}% — below your ${target}% target`)
     } else {
-      parts.push(`on-time delivery at ${data.onTimeRate}% — meeting target`)
+      headlineParts.push(`on-time at ${data.onTimeRate}% — meeting target`)
     }
   }
-
-  // Stock issues
   if (data.inventory.critical > 0) {
-    parts.push(`${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock`)
+    headlineParts.push(`${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock`)
   } else if (data.inventory.low > 0) {
-    parts.push(`${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`)
+    headlineParts.push(`${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`)
   }
-
-  // Pending COD
   if (data.cod.pendingBankings > 0) {
-    parts.push(`${formatCurrencyCompact(data.cod.pendingBankings)} in COD cash pending verification`)
+    headlineParts.push(`${formatCurrencyCompact(data.cod.pendingBankings)} in COD cash pending verification`)
   }
-
-  // Exceptions
   if (data.exceptionCount > 0) {
-    parts.push(`${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded`)
+    headlineParts.push(`${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded`)
   }
 
-  // Compose
-  let text: string
-  if (parts.length === 0) {
-    text = 'Nothing recorded for this period yet.'
-  } else if (parts.length === 1) {
-    text = parts[0] + '.'
+  let headline: string
+  if (headlineParts.length === 0) {
+    headline = 'Nothing recorded for this period yet.'
+  } else if (headlineParts.length === 1) {
+    headline = headlineParts[0] + '.'
   } else {
-    // First sentence = revenue + orders (the most important)
-    // Remaining sentences = on-time, stock, COD, exceptions
-    const first = parts[0] + (parts[1] ? `, ${parts[1]}` : '') + '.'
-    const rest = parts.slice(2)
-    text = first + (rest.length > 0 ? ' ' + rest.join('. ') + '.' : '')
+    const first = headlineParts[0] + (headlineParts[1] ? `, ${headlineParts[1]}` : '') + '.'
+    const rest = headlineParts.slice(2)
+    headline = first + (rest.length > 0 ? ' ' + rest.join('. ') + '.' : '')
   }
 
-  // Determine tone
-  const hasProblems = data.exceptionCount > 0 || data.cod.pendingBankings > 0 || data.inventory.critical > 0 || (data.onTimeRate > 0 && data.onTimeRate < 80)
-  const isQuiet = data.orders.total === 0 && data.stats.totalRevenue === 0
-
-  return (
-    <div className={`rounded-lg px-4 py-3 border ${
-      hasProblems ? 'bg-red-50 border-red-200' :
-      isQuiet ? 'bg-gray-50 border-gray-200' :
-      'bg-blue-50 border-blue-200'
-    }`}>
-      <div className="flex items-start gap-2">
-        {hasProblems ? (
-          <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
-        ) : isQuiet ? (
-          <CheckCircle2 size={14} className="text-gray-500 mt-0.5 shrink-0" />
-        ) : (
-          <TrendingUp size={14} className="text-blue-600 mt-0.5 shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
-            {period} · {new Date().toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-          <p className={`text-sm font-medium ${
-            hasProblems ? 'text-red-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
-          }`}>
-            {text}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Today's Story panel ──
-// Always-visible replacement for the conditional "Needs Attention" panel.
-// When everything's good: green strip with a positive summary.
-// When there are issues: orange/red list with navigation links.
-// This is the dashboard's voice — it always tells you what's worth knowing.
-function TodaysStory({
-  data,
-  onNavigate,
-}: {
-  data: DashboardData
-  onNavigate?: (module: string) => void
-}) {
-  // Collect story items — each is a sentence with a severity and a destination
+  // ── Build the bullet items ──
   type StoryItem = { severity: 'critical' | 'warning' | 'good'; message: string; module?: string }
   const items: StoryItem[] = []
 
-  // Critical stock
   if (data.inventory.critical > 0) {
-    items.push({
-      severity: 'critical',
-      message: `${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock — reorder now`,
-      module: 'products',
-    })
+    items.push({ severity: 'critical', message: `${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock — reorder now`, module: 'products' })
   }
-  // Low stock
   if (data.inventory.low > 0) {
-    items.push({
-      severity: 'warning',
-      message: `${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`,
-      module: 'products',
-    })
+    items.push({ severity: 'warning', message: `${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`, module: 'products' })
   }
-  // Pending COD
   if (data.cod.pendingBankings > 0) {
-    items.push({
-      severity: 'warning',
-      message: `${formatCurrency(data.cod.pendingBankings)} in COD cash waiting to be verified`,
-      module: 'payments',
-    })
+    items.push({ severity: 'warning', message: `${formatCurrency(data.cod.pendingBankings)} in COD cash waiting to be verified`, module: 'payments' })
   }
-  // On-time below target
   if (data.onTimeRate > 0 && data.onTimeRate < 80 && data.orders.delivered > 0) {
-    items.push({
-      severity: 'warning',
-      message: `On-time delivery is ${data.onTimeRate}% — below the 80% acceptable threshold`,
-      module: 'outbound',
-    })
+    items.push({ severity: 'warning', message: `On-time delivery is ${data.onTimeRate}% — below the 80% acceptable threshold`, module: 'outbound' })
   }
-  // First-attempt below threshold
   if (data.firstAttemptRate > 0 && data.firstAttemptRate < 60 && data.orders.delivered > 0) {
-    items.push({
-      severity: 'warning',
-      message: `First-attempt success rate is ${data.firstAttemptRate}% — many deliveries need a second attempt`,
-      module: 'outbound',
-    })
+    items.push({ severity: 'warning', message: `First-attempt success rate is ${data.firstAttemptRate}% — many deliveries need a second attempt`, module: 'outbound' })
   }
-  // Exceptions
   if (data.exceptionCount > 0) {
-    items.push({
-      severity: 'critical',
-      message: `${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded — failed deliveries, returns, or shrinkage`,
-      module: 'returns',
-    })
+    items.push({ severity: 'critical', message: `${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded — failed deliveries, returns, or shrinkage`, module: 'returns' })
   }
-  // Shrinkage
   if (data.shrinkage.totalQty > 0) {
-    items.push({
-      severity: 'warning',
-      message: `${data.shrinkage.totalQty} units lost to shrinkage this period`,
-      module: 'returns',
-    })
+    items.push({ severity: 'warning', message: `${data.shrinkage.totalQty} units lost to shrinkage this period`, module: 'returns' })
   }
-  // Drivers with pending bankings
   const driversWithPendingBankings = data.driverPerformance.filter(d => d.bankingStatus === 'pending').length
   if (driversWithPendingBankings > 0) {
-    items.push({
-      severity: 'warning',
-      message: `${driversWithPendingBankings} driver${driversWithPendingBankings !== 1 ? 's' : ''} haven't banked their COD cash yet`,
-      module: 'drivers',
-    })
+    items.push({ severity: 'warning', message: `${driversWithPendingBankings} driver${driversWithPendingBankings !== 1 ? 's' : ''} haven't banked their COD cash yet`, module: 'drivers' })
   }
 
   // POSITIVE items (only show if no critical/warning issues compete for attention)
@@ -271,67 +182,218 @@ function TodaysStory({
     }
   }
 
-  // If literally nothing to say
-  if (items.length === 0) {
-    return (
-      <div className="bg-white rounded-lg border border-gray-200 px-4 py-3 flex items-center gap-2">
-        <CheckCircle2 size={14} className="text-gray-400 shrink-0" />
-        <span className="text-[11px] text-gray-500 font-medium">
-          Not enough data yet to tell a story for this period.
-        </span>
-      </div>
-    )
-  }
-
+  // Determine tone
+  const hasProblems = data.exceptionCount > 0 || data.cod.pendingBankings > 0 || data.inventory.critical > 0 || (data.onTimeRate > 0 && data.onTimeRate < 80)
+  const isQuiet = data.orders.total === 0 && data.stats.totalRevenue === 0
   const hasCritical = items.some(i => i.severity === 'critical')
-  const hasWarning = items.some(i => i.severity === 'warning')
-  const allGood = items.every(i => i.severity === 'good')
+  const allGood = items.length > 0 && items.every(i => i.severity === 'good')
 
-  // Tone + header
-  const borderColor = allGood ? 'border-green-200' : hasCritical ? 'border-red-200' : 'border-orange-200'
-  const bgColor = allGood ? 'bg-green-50' : hasCritical ? 'bg-red-50' : 'bg-orange-50'
-  const headerTextColor = allGood ? 'text-green-700' : hasCritical ? 'text-red-700' : 'text-orange-700'
-  const iconColor = allGood ? 'text-green-600' : hasCritical ? 'text-red-600' : 'text-orange-600'
-  const headerText = allGood
-    ? "What's going well"
-    : hasCritical
-      ? `${items.filter(i => i.severity === 'critical').length + items.filter(i => i.severity === 'warning').length} things need your attention`
-      : `${items.length} things to keep an eye on`
+  const borderColor = hasProblems || hasCritical ? 'border-red-200' : allGood ? 'border-green-200' : isQuiet ? 'border-gray-200' : 'border-blue-200'
+  const headlineBg = hasProblems || hasCritical ? 'bg-red-50' : allGood ? 'bg-green-50' : isQuiet ? 'bg-gray-50' : 'bg-blue-50'
+  const headlineTextColor = hasProblems || hasCritical ? 'text-red-900' : allGood ? 'text-green-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
+  const iconColor = hasProblems || hasCritical ? 'text-red-600' : allGood ? 'text-green-600' : isQuiet ? 'text-gray-500' : 'text-blue-600'
 
   return (
     <div className={`bg-white rounded-lg border ${borderColor} overflow-hidden`}>
-      <div className={`px-4 py-2 border-b ${borderColor} ${bgColor} flex items-center gap-2`}>
-        {allGood ? <CheckCircle2 size={14} className={iconColor} /> : <AlertTriangle size={14} className={iconColor} />}
-        <span className={`text-xs font-semibold uppercase tracking-wider ${headerTextColor}`}>{headerText}</span>
-      </div>
-      <div className="divide-y divide-gray-50">
-        {items.map((item, i) => (
-          <button
-            key={i}
-            onClick={() => item.module && onNavigate?.(item.module)}
-            className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
-              item.module ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'
-            }`}
-          >
-            <div className={`w-2 h-2 rounded-full shrink-0 ${
-              item.severity === 'critical' ? 'bg-red-500' :
-              item.severity === 'warning' ? 'bg-orange-500' :
-              'bg-green-500'
-            }`} />
-            <p className={`flex-1 text-xs font-medium ${
-              item.severity === 'critical' ? 'text-red-900' :
-              item.severity === 'warning' ? 'text-orange-900' :
-              'text-green-900'
-            }`}>
-              {item.message}
+      {/* Headline sentence */}
+      <div className={`px-4 py-3 ${headlineBg} border-b ${borderColor}`}>
+        <div className="flex items-start gap-2">
+          {hasProblems || hasCritical ? (
+            <AlertTriangle size={14} className={`${iconColor} mt-0.5 shrink-0`} />
+          ) : isQuiet ? (
+            <CheckCircle2 size={14} className={`${iconColor} mt-0.5 shrink-0`} />
+          ) : allGood ? (
+            <CheckCircle2 size={14} className={`${iconColor} mt-0.5 shrink-0`} />
+          ) : (
+            <TrendingUp size={14} className={`${iconColor} mt-0.5 shrink-0`} />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
+              {period} · {new Date().toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
-            {item.module && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.module} →</span>}
-          </button>
-        ))}
+            <p className={`text-sm font-medium ${headlineTextColor}`}>{headline}</p>
+          </div>
+        </div>
       </div>
+
+      {/* Bullet items */}
+      {items.length > 0 && (
+        <div className="divide-y divide-gray-50">
+          {items.map((item, i) => (
+            <button
+              key={i}
+              onClick={() => item.module && onNavigate?.(item.module)}
+              className={`w-full px-4 py-2.5 flex items-center gap-3 text-left transition-colors ${
+                item.module ? 'hover:bg-gray-50 cursor-pointer' : 'cursor-default'
+              }`}
+            >
+              <div className={`w-2 h-2 rounded-full shrink-0 ${
+                item.severity === 'critical' ? 'bg-red-500' :
+                item.severity === 'warning' ? 'bg-orange-500' :
+                'bg-green-500'
+              }`} />
+              <p className={`flex-1 text-xs font-medium ${
+                item.severity === 'critical' ? 'text-red-900' :
+                item.severity === 'warning' ? 'text-orange-900' :
+                'text-green-900'
+              }`}>
+                {item.message}
+              </p>
+              {item.module && <span className="text-[10px] text-gray-400 uppercase tracking-wider">{item.module} →</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {items.length === 0 && !isQuiet && (
+        <div className="px-4 py-2.5 flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+          <p className="flex-1 text-xs font-medium text-green-900">All clear — nothing needs your attention right now.</p>
+        </div>
+      )}
     </div>
   )
 }
+
+// ── Chart Takeaway ──
+// A one-line sentence above each chart that says what the chart means.
+// Replaces database-label titles like "Revenue Trend (6 months)" with
+// actual sentences like "Revenue trending up — best month in 6."
+function ChartTakeaway({ text, tone = 'neutral' }: { text: string; tone?: 'neutral' | 'good' | 'warning' | 'critical' }) {
+  const toneClass = {
+    neutral: 'text-gray-700',
+    good: 'text-green-700',
+    warning: 'text-orange-700',
+    critical: 'text-red-700',
+  }[tone]
+  return (
+    <p className={`text-xs font-medium mb-2 ${toneClass}`}>{text}</p>
+  )
+}
+
+// ── Takeaway computations ──
+// Each function reads the live data and returns a plain-English sentence
+// summarizing what the chart/table means.
+
+function revenueTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
+  const months = data.revenueByMonth
+  if (!months || months.length === 0) return { text: 'No revenue recorded yet.', tone: 'neutral' }
+  const withRevenue = months.filter(m => (m.revenue || 0) > 0)
+  if (withRevenue.length === 0) return { text: 'No revenue recorded yet.', tone: 'neutral' }
+  const last = withRevenue[withRevenue.length - 1]
+  const previous = withRevenue.slice(0, -1)
+  if (previous.length === 0) return { text: `Revenue at ${formatCurrencyCompact(last.revenue)} this month — first data point.`, tone: 'neutral' }
+  const maxPrev = Math.max(...previous.map(m => m.revenue))
+  const avgPrev = previous.reduce((s, m) => s + m.revenue, 0) / previous.length
+  if (last.revenue > maxPrev) return { text: `Revenue trending up — ${formatCurrencyCompact(last.revenue)} is the best month in the last ${withRevenue.length}.`, tone: 'good' }
+  if (last.revenue < avgPrev * 0.8) {
+    const drop = Math.round(((avgPrev - last.revenue) / avgPrev) * 100)
+    return { text: `Revenue down ${drop}% this month vs the ${previous.length}-month average.`, tone: 'warning' }
+  }
+  return { text: `Revenue steady at ${formatCurrencyCompact(last.revenue)} — in line with the ${previous.length}-month average.`, tone: 'neutral' }
+}
+
+function orderStatusTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
+  const dist = data.orderStatusDistribution
+  const total = dist.reduce((s, d) => s + d.count, 0)
+  if (total === 0) return { text: 'No orders this period.', tone: 'neutral' }
+  const delivered = dist.find(d => d.status === 'delivered')?.count || 0
+  const stuck = dist.filter(d => ['picking', 'packing', 'pending'].includes(d.status)).reduce((s, d) => s + d.count, 0)
+  const failed = dist.find(d => d.status === 'failed')?.count || 0
+  const pct = Math.round((delivered / total) * 100)
+  if (delivered === total) return { text: `All ${total} orders delivered.`, tone: 'good' }
+  const bits: string[] = [`${delivered} of ${total} delivered (${pct}%)`]
+  if (stuck > 0) bits.push(`${stuck} still in picking/packing`)
+  if (failed > 0) bits.push(`${failed} failed`)
+  return { text: bits.join(', ') + '.', tone: failed > 0 ? 'critical' : stuck > 0 ? 'warning' : 'neutral' }
+}
+
+function throughputTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
+  const days = data.throughputData
+  if (!days || days.length === 0) return { text: 'No throughput data yet.', tone: 'neutral' }
+  const totalIn = days.reduce((s, d) => s + (d.inbound || 0), 0)
+  const totalOut = days.reduce((s, d) => s + (d.outbound || 0), 0)
+  if (totalIn === 0 && totalOut === 0) return { text: 'No inbound or outbound recorded this week.', tone: 'neutral' }
+  const peakDay = days.reduce((max, d) => (d.inbound > max.inbound ? d : max), days[0])
+  const bits: string[] = []
+  if (peakDay.inbound > 0) bits.push(`inbound peaked ${peakDay.day}`)
+  if (totalOut > totalIn) bits.push(`outbound higher than inbound this week`)
+  else if (totalIn > totalOut) bits.push(`inbound higher than outbound this week`)
+  else bits.push(`inbound and outbound balanced`)
+  return { text: bits.join('; ') + '.', tone: 'neutral' }
+}
+
+function inventoryTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
+  const inv = data.inventory
+  if (inv.critical > 0) return { text: `${inv.critical} product${inv.critical !== 1 ? 's' : ''} critically low on stock — reorder now.`, tone: 'critical' }
+  if (inv.low > 0) return { text: `${inv.low} product${inv.low !== 1 ? 's' : ''} running low; ${inv.healthy} healthy.`, tone: 'warning' }
+  if (inv.healthy > 0) return { text: `All ${inv.healthy} products at healthy stock levels.`, tone: 'good' }
+  return { text: 'No stock data.', tone: 'neutral' }
+}
+
+function driverTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
+  const drivers = data.driverPerformance
+  if (drivers.length === 0) return { text: 'No active drivers this period.', tone: 'neutral' }
+  const banked = drivers.filter(d => d.bankingStatus === 'banked').length
+  const pending = drivers.filter(d => d.bankingStatus === 'pending').length
+  const withFailed = drivers.filter(d => d.failed > 0).length
+  const bits: string[] = []
+  if (pending > 0) bits.push(`${pending} of ${drivers.length} haven't banked their cash`)
+  else bits.push(`all ${drivers.length} banked their cash`)
+  if (withFailed > 0) bits.push(`${withFailed} had failed deliveries`)
+  return { text: bits.join('; ') + '.', tone: pending > 0 ? 'warning' : 'good' }
+}
+
+function merchantProfitabilityTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
+  const merchants = data.merchantProfitability
+  if (merchants.length === 0) return { text: 'No merchant data this period.', tone: 'neutral' }
+  const totalRev = merchants.reduce((s, m) => s + m.revenue, 0)
+  const top3 = merchants.slice(0, 3).reduce((s, m) => s + m.revenue, 0)
+  const lossMakers = merchants.filter(m => m.net < 0).length
+  const bits: string[] = []
+  if (totalRev > 0) {
+    const pct = Math.round((top3 / totalRev) * 100)
+    bits.push(`top 3 merchants drive ${pct}% of revenue`)
+  }
+  if (lossMakers > 0) bits.push(`${lossMakers} operating at a loss`)
+  return { text: bits.join('; ') + '.', tone: lossMakers > 0 ? 'warning' : 'neutral' }
+}
+
+function shrinkageTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'warning' } {
+  if (data.shrinkage.totalQty === 0) return { text: 'No shrinkage recorded this period.', tone: 'neutral' }
+  const byReason = data.shrinkage.byReason
+  if (byReason.length > 0) {
+    const top = byReason.reduce((max, r) => (r.qty > max.qty ? r : max), byReason[0])
+    return { text: `${data.shrinkage.totalQty} units lost to shrinkage, mostly from ${top.reason || 'unknown'}.`, tone: 'warning' }
+  }
+  return { text: `${data.shrinkage.totalQty} units lost to shrinkage this period.`, tone: 'warning' }
+}
+
+function codTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
+  if (data.cod.collectedTotal === 0) return { text: 'No COD collected this period.', tone: 'neutral' }
+  if (data.cod.pendingBankings === 0) return { text: `All ${formatCurrencyCompact(data.cod.collectedTotal)} in COD cash has been banked.`, tone: 'good' }
+  return { text: `Banking rate at ${data.cod.bankingRate}% — ${formatCurrencyCompact(data.cod.pendingBankings)} still pending.`, tone: 'warning' }
+}
+
+function paymentMethodsTakeaway(data: DashboardData): { text: string; tone: 'neutral' } {
+  const methods = data.paymentMethods
+  if (methods.length === 0) return { text: 'No payments recorded.', tone: 'neutral' }
+  const total = methods.reduce((s, m) => s + m.amount, 0)
+  if (total === 0) return { text: 'No payments recorded.', tone: 'neutral' }
+  const top = methods.reduce((max, m) => (m.amount > max.amount ? m : max), methods[0])
+  const pct = Math.round((top.amount / total) * 100)
+  if (pct >= 60) return { text: `${top.method} dominates at ${pct}% of payments.`, tone: 'neutral' }
+  return { text: `Payments split across ${methods.length} methods, no single method dominates.`, tone: 'neutral' }
+}
+
+function topMerchantsTakeaway(data: DashboardData): { text: string; tone: 'neutral' } {
+  const merchants = data.topMerchants
+  if (merchants.length === 0) return { text: 'No top merchants data.', tone: 'neutral' }
+  const total = merchants.reduce((s, m) => s + m.amount, 0)
+  const top = merchants[0]
+  const pct = total > 0 ? Math.round((top.amount / total) * 100) : 0
+  return { text: `${top.name} is the top merchant at ${formatCurrencyCompact(top.amount)} (${pct}% of top ${merchants.length}).`, tone: 'neutral' }
+}
+
 
 export default function DashboardModule({ onNavigate }: DashboardModuleProps = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
@@ -510,19 +572,16 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* Period Headline — plain-English summary, the first thing the supervisor reads */}
-      <PeriodHeadline data={data} period={period} />
+      {/* Dashboard Story — the single voice of the dashboard. Headline + bullets. */}
+      <DashboardStory data={data} period={period} onNavigate={onNavigate} />
 
       {/* KPI Ribbon */}
       <KpiRibbon cells={kpiCells} />
 
-      {/* Today's Story — always-visible replacement for the conditional Needs Attention panel */}
-      <TodaysStory data={data} onNavigate={onNavigate} />
-
       {/* Row 1: Revenue Trend + Order Status Donut */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 p-4 lg:col-span-2">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Revenue Trend (6 months)</h3>
+          {(() => { const t = revenueTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={data.revenueByMonth}>
               <defs>
@@ -546,7 +605,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Order Status</h3>
+          {(() => { const t = orderStatusTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           {orderStatusData.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-16">No orders</p>
           ) : (
@@ -574,7 +633,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden lg:col-span-2">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Driver Performance</h3>
+            {(() => { const t = driverTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
             {onNavigate && <button onClick={() => onNavigate('drivers')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
           </div>
           {data.driverPerformance.length === 0 ? (
@@ -616,7 +675,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Status</h3>
+          {(() => { const t = codTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs text-gray-500">Collected</span>
@@ -668,7 +727,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       {/* Row 3: Throughput + Inventory + Shrinkage Chart (#7) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 p-4 lg:col-span-2">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Warehouse Throughput (7 days)</h3>
+          {(() => { const t = throughputTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={data.throughputData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
@@ -682,7 +741,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Inventory Health</h3>
+          {(() => { const t = inventoryTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           <ResponsiveContainer width="100%" height={140}>
             <PieChart>
               <Pie data={stockHealthData} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={35} outerRadius={55} paddingAngle={2}>
@@ -706,10 +765,8 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         {/* Shrinkage by Reason (#7) */}
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
-            Shrinkage by Reason
-            {onNavigate && <button onClick={() => onNavigate('returns')} className="float-right text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View →</button>}
-          </h3>
+          {(() => { const t = shrinkageTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
+          {onNavigate && <button onClick={() => onNavigate('returns')} className="float-right text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase -mt-5">View →</button>}
           {shrinkageChartData.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-8">No shrinkage recorded</p>
           ) : (
@@ -730,7 +787,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         {/* Merchant Profitability (#8) */}
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Merchant Profitability</h3>
+            {(() => { const t = merchantProfitabilityTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
             {onNavigate && <button onClick={() => onNavigate('merchants')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase">View all →</button>}
           </div>
           {data.merchantProfitability.length === 0 ? (
@@ -769,7 +826,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Top Merchants by Revenue</h3>
+            {(() => { const t = topMerchantsTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           </div>
           {data.topMerchants.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">No payments recorded</p>
@@ -777,7 +834,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
             <DenseTable>
               <thead><tr><DenseTh>Merchant</DenseTh><DenseTh className="text-right">Revenue</DenseTh></tr></thead>
               <tbody>
-                {data.topMerchants.map((m, i) => (
+                {data.topMerchants.slice(0, 5).map((m, i) => (
                   <DenseTr key={i}>
                     <DenseTd className="text-gray-900 font-medium">{m.name}</DenseTd>
                     <DenseTd mono right className="text-green-700">{formatCurrency(m.amount)}</DenseTd>
@@ -789,7 +846,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
 
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Payment Methods</h3>
+          {(() => { const t = paymentMethodsTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
           {data.paymentMethods.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-6">No payments recorded</p>
           ) : (
@@ -815,113 +872,11 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* Live Activity Feed (#18) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Recent Inbound</h3>
-          </div>
-          {data.recentInbound.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">No recent inbound</p>
-          ) : (
-            <div className="max-h-48 overflow-y-auto">
-              {data.recentInbound.slice(0, 8).map((r, i) => {
-                const id = String(r.inboundId || '')
-                const product = String(r.productName || '')
-                const merchant = String(r.merchantName || '')
-                const qty = String(r.qtyIn || '')
-                const time = r.createdAt ? new Date(String(r.createdAt)).toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''
-                return (
-                  <div key={i} className="px-4 py-1.5 border-b border-gray-50 flex items-center gap-2 text-[11px]">
-                    <span className="font-mono text-gray-500 w-20">{id}</span>
-                    <span className="flex-1 text-gray-700 truncate">{product}</span>
-                    <span className="text-gray-400 truncate max-w-[80px]">{merchant}</span>
-                    <span className="font-mono text-blue-600">x{qty}</span>
-                    <span className="text-gray-400 w-20 text-right">{time}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50">
-            <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Recent Outbound</h3>
-          </div>
-          {data.recentOutbound.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">No recent outbound</p>
-          ) : (
-            <div className="max-h-48 overflow-y-auto">
-              {data.recentOutbound.slice(0, 8).map((r, i) => {
-                const id = String(r.orderNumber || r.outboundId || '')
-                const customer = String(r.customerName || '')
-                const product = String(r.productName || '')
-                const qty = String(r.qty || '')
-                const status = String(r.status || '')
-                const time = r.createdAt ? new Date(String(r.createdAt)).toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' }) : ''
-                return (
-                  <div key={i} className="px-4 py-1.5 border-b border-gray-50 flex items-center gap-2 text-[11px]">
-                    <span className="font-mono text-gray-500 w-20">{id}</span>
-                    <span className="flex-1 text-gray-700 truncate">{customer}</span>
-                    <span className="text-gray-400 truncate max-w-[80px]">{product}</span>
-                    <span className="font-mono text-orange-600">x{qty}</span>
-                    <StatusPill status={status} />
-                    <span className="text-gray-400 w-20 text-right">{time}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Alerts */}
-      {data.alerts.length > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2 border-b border-gray-100 bg-gray-50 flex items-center gap-2">
-            <Shield size={14} className="text-red-500" />
-            <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider">Alerts</span>
-            <Badge className="bg-red-100 text-red-700 border-0 text-[10px] ml-auto">{data.alerts.length}</Badge>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {data.alerts.map((alert, i) => (
-              <div key={i} className={`flex items-center gap-3 px-4 py-2 text-xs ${
-                alert.type === 'critical' ? 'bg-red-50/50' : alert.type === 'warning' ? 'bg-orange-50/50' : 'bg-blue-50/50'
-              }`}>
-                {alert.type === 'critical' ? <XCircle size={13} className="text-red-500 shrink-0" /> :
-                 alert.type === 'warning' ? <AlertCircle size={13} className="text-orange-500 shrink-0" /> :
-                 <CheckCircle2 size={13} className="text-blue-500 shrink-0" />}
-                <span className="flex-1 text-gray-700">{alert.message}</span>
-                <Badge variant="outline" className="text-[9px] shrink-0 text-gray-400 border-gray-200">{alert.module}</Badge>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Comparison strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          { label: 'Revenue Change', value: data.comparison.revenueChange },
-          { label: 'Orders Change', value: data.comparison.ordersChange },
-          { label: 'Stock Value Change', value: data.comparison.stockValueChange },
-          { label: 'Avg Order Change', value: data.comparison.avgOrderChange },
-        ].map((c, i) => {
-          const isPositive = c.value >= 0
-          return (
-            <div key={i} className="bg-white rounded-lg border border-gray-100 px-4 py-2 flex items-center gap-2">
-              {isPositive ? <TrendingUp size={14} className="text-green-500" /> : <TrendingDown size={14} className="text-red-500" />}
-              <div>
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider">{c.label}</p>
-                <p className={`text-sm font-mono font-bold ${isPositive ? 'text-green-700' : 'text-red-700'}`}>
-                  {isPositive ? '+' : ''}{c.value}%
-                </p>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      {/* Duplicates removed:
+          - Live Activity Feed (Recent Inbound + Recent Outbound) — pure noise, no story value
+          - Alerts section — already covered by Dashboard Story bullets above
+          - Comparison strip — already covered by Dashboard Story headline + KPI ribbon trends
+          Keeping the dashboard focused: Story → KPIs → 5 chart rows. That's it. */}
     </motion.div>
   )
 }
