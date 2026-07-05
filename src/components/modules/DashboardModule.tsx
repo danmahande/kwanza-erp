@@ -13,6 +13,7 @@ import {
   Activity, Clock, Flame, Zap,
 } from 'lucide-react'
 import { KpiRibbon, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 interface DashboardData {
@@ -112,12 +113,15 @@ const tooltipStyle = {
 // ── Pulse ──
 // The real-time heartbeat of the business. Replaces the static Story + KPI
 // ribbon at the very top of the dashboard. Five sections that make the
-// business feel ALIVE:
-//   1. Stakes line    — money and time at risk, right now
+// business feel ALIVE — and every number is auditable: hover (i) for the
+// definition, click any number to verify it in the relevant module.
+//
+//   1. Stakes line    — money and time at risk, right now (each component labeled, no overlap)
 //   2. Momentum line  — today's pace vs yesterday, last 30 min of activity
 //   3. Predictions    — what's about to go wrong in the next 30-60 min
 //   4. Time awareness — where you are in the day vs where you should be
 //   5. Streaks        — what's going well that you'd want to maintain
+//   6. Audit basis    — small footer stating the assumptions behind every calculation
 function Pulse({
   data,
   onNavigate,
@@ -130,52 +134,102 @@ function Pulse({
 
   const now = new Date(p.timeAwareness.currentTime)
   const timeStr = now.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })
-  const hasHighStakes = p.stakes.atRiskRevenue > 0 || p.stakes.overdueParcelsCount > 0
+  const hasOverdue = p.stakes.overdueParcelsCount > 0
+  const hasUnbanked = p.stakes.unbankedCOD > 0
+  const hasHighStakes = hasOverdue || hasUnbanked
   const hasPredictions = p.predictions.willGoStaleSoon > 0 || p.predictions.willFinishLate
   const paceUp = p.momentum.paceDeltaPct > 0
   const paceDown = p.momentum.paceDeltaPct < 0
 
+  // Calculate the overdue parcel revenue (for transparent breakdown)
+  const overdueRevenue = p.stakes.overdueParcels.reduce((s, o) => s + o.saleAmount, 0)
+  // Note: atRiskRevenue from API = overdueRevenue + unbankedCOD. We show
+  // the components separately so the supervisor can audit each one.
+
   return (
     <div className="space-y-2">
       {/* ── Hero stakes line — the first thing you read ── */}
+      {/* Each stake shown separately, labeled, with (i) for definition, clickable to verify */}
       <div className={`rounded-lg px-4 py-3 border-2 ${
         hasHighStakes ? 'bg-red-50 border-red-300' :
         'bg-[#1B2A4A] border-[#1B2A4A]'
       }`}>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 flex-wrap mb-2">
           <Activity size={16} className={hasHighStakes ? 'text-red-600' : 'text-blue-300'} />
           <span className={`text-[10px] uppercase tracking-wider font-semibold ${hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}`}>
             Right now · {timeStr}
           </span>
-          <div className={`flex items-center gap-4 flex-wrap text-sm font-medium ${hasHighStakes ? 'text-red-900' : 'text-white'}`}>
-            {p.stakes.atRiskRevenue > 0 && (
-              <span>
-                <span className="font-mono font-bold">{formatCurrencyCompact(p.stakes.atRiskRevenue)}</span>
-                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> at risk</span>
+          {hasHighStakes ? (
+            <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold ml-auto">
+              {hasOverdue && hasUnbanked ? '2 things at risk' : '1 thing at risk'} — click any number to verify
+            </span>
+          ) : (
+            <span className="text-[10px] uppercase tracking-wider text-blue-200/70 ml-auto">
+              All clear — nothing at risk right now
+            </span>
+          )}
+        </div>
+
+        {/* Each stake is its own labeled, auditable row — no overlapping totals */}
+        <div className={`space-y-1.5 ${hasHighStakes ? 'text-red-900' : 'text-white'}`}>
+          {hasOverdue && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => onNavigate?.('outbound')}
+                className="flex items-center gap-1.5 hover:underline"
+                title="Click to see these parcels in Outbound"
+              >
+                <span className="font-mono font-bold text-base">{p.stakes.overdueParcelsCount}</span>
+                <span className={hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}>
+                  overdue {p.stakes.overdueParcelsCount === 1 ? 'parcel' : 'parcels'}
+                </span>
+                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/50'}>(worth {formatCurrencyCompact(overdueRevenue)})</span>
+              </button>
+              <InfoTip term="pulseOverdueParcel" size={11} />
+              <span className={`text-[10px] ${hasHighStakes ? 'text-red-600' : 'text-blue-200/50'}`}>
+                = dispatched &gt; 6h ago, not yet delivered
               </span>
-            )}
-            {p.stakes.overdueParcelsCount > 0 && (
-              <span>
-                <span className="font-mono font-bold">{p.stakes.overdueParcelsCount}</span>
-                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> overdue {p.stakes.overdueParcelsCount === 1 ? 'parcel' : 'parcels'}</span>
+            </div>
+          )}
+          {hasUnbanked && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => onNavigate?.('payments')}
+                className="flex items-center gap-1.5 hover:underline"
+                title="Click to verify these bankings in Payments"
+              >
+                <span className="font-mono font-bold text-base">{formatCurrencyCompact(p.stakes.unbankedCOD)}</span>
+                <span className={hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}>unbanked COD cash</span>
+              </button>
+              <InfoTip term="pulseUnbankedCOD" size={11} />
+              <span className={`text-[10px] ${hasHighStakes ? 'text-red-600' : 'text-blue-200/50'}`}>
+                = collected by riders, not yet deposited
               </span>
-            )}
-            {p.stakes.unbankedCOD > 0 && (
-              <span>
-                <span className="font-mono font-bold">{formatCurrencyCompact(p.stakes.unbankedCOD)}</span>
-                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> unbanked</span>
+            </div>
+          )}
+          {p.stakes.customersWaitingCount > 0 && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => onNavigate?.('outbound')}
+                className="flex items-center gap-1.5 hover:underline"
+                title="Click to see these orders in Outbound"
+              >
+                <span className="font-mono font-bold text-base">{p.stakes.customersWaitingCount}</span>
+                <span className={hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}>
+                  customers waiting
+                </span>
+              </button>
+              <InfoTip term="pulseCustomersWaiting" size={11} />
+              <span className={`text-[10px] ${hasHighStakes ? 'text-red-600' : 'text-blue-200/50'}`}>
+                = parcels in picking, packing, or staging
               </span>
-            )}
-            {p.stakes.customersWaitingCount > 0 && (
-              <span>
-                <span className="font-mono font-bold">{p.stakes.customersWaitingCount}</span>
-                <span className={hasHighStakes ? 'text-red-600' : 'text-blue-200/70'}> customers waiting</span>
-              </span>
-            )}
-            {!hasHighStakes && p.stakes.customersWaitingCount === 0 && (
-              <span className="text-blue-200/70 italic">All clear — no money or parcels at risk right now.</span>
-            )}
-          </div>
+            </div>
+          )}
+          {!hasHighStakes && p.stakes.customersWaitingCount === 0 && (
+            <div className="text-blue-200/70 italic text-sm">
+              No money or parcels at risk right now. Hover any (i) below to see how each metric is calculated.
+            </div>
+          )}
         </div>
       </div>
 
@@ -186,6 +240,7 @@ function Pulse({
           <div className="flex items-center gap-1.5 mb-1.5">
             <Zap size={12} className="text-orange-500" />
             <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Momentum</span>
+            <InfoTip term="pulsePace" size={11} />
           </div>
           <p className="text-sm font-bold text-gray-900">
             {p.momentum.todayPace} <span className="text-xs font-normal text-gray-500">orders/hr today</span>
@@ -193,14 +248,16 @@ function Pulse({
           {p.momentum.yesterdayPace > 0 && (
             <p className={`text-[11px] mt-0.5 ${paceUp ? 'text-green-700' : paceDown ? 'text-red-700' : 'text-gray-500'}`}>
               {paceUp ? '↑' : paceDown ? '↓' : '—'} {Math.abs(p.momentum.paceDeltaPct)}% vs yesterday ({p.momentum.yesterdayPace}/hr)
+              {paceDown && Math.abs(p.momentum.paceDeltaPct) >= 20 && ' — concerning'}
+              {paceUp && Math.abs(p.momentum.paceDeltaPct) >= 20 && ' — busier than usual'}
             </p>
           )}
           <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-3 text-[10px] text-gray-500">
             <span>Last 30 min:</span>
-            <span className="text-blue-600 font-mono font-bold">+{p.momentum.last30Min.newOrders}</span>
-            <span className="text-green-600 font-mono font-bold">✓{p.momentum.last30Min.delivered}</span>
+            <span className="text-blue-600 font-mono font-bold">+{p.momentum.last30Min.newOrders} new</span>
+            <span className="text-green-600 font-mono font-bold">✓{p.momentum.last30Min.delivered} del</span>
             {p.momentum.last30Min.failed > 0 && (
-              <span className="text-red-600 font-mono font-bold">✗{p.momentum.last30Min.failed}</span>
+              <span className="text-red-600 font-mono font-bold">✗{p.momentum.last30Min.failed} failed</span>
             )}
           </div>
         </div>
@@ -210,6 +267,8 @@ function Pulse({
           <div className="flex items-center gap-1.5 mb-1.5">
             <AlertTriangle size={12} className={hasPredictions ? 'text-orange-500' : 'text-gray-400'} />
             <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Predictions</span>
+            {p.predictions.willGoStaleSoon > 0 && <InfoTip term="pulseStaleParcel" size={11} />}
+            {p.predictions.estimatedFinishTime && <InfoTip term="pulseFinishTime" size={11} />}
           </div>
           {p.predictions.willGoStaleSoon > 0 ? (
             <p className="text-sm font-bold text-orange-700">
@@ -231,6 +290,9 @@ function Pulse({
           {p.predictions.parcelsStillToDeliver > 0 && (
             <p className="text-[11px] mt-0.5 text-gray-500">
               {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr current rate
+              <span className="block text-gray-400 text-[10px] mt-0.5">
+                {p.predictions.willGoStaleSoon > 0 ? '= in sort > 90 min (will cross 2h threshold)' : '= rate from last 2 hours of deliveries'}
+              </span>
             </p>
           )}
         </div>
@@ -240,6 +302,7 @@ function Pulse({
           <div className="flex items-center gap-1.5 mb-1.5">
             <Clock size={12} className="text-blue-500" />
             <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Day progress</span>
+            <InfoTip term="pulseDeliveryWindow" size={11} />
           </div>
           <p className="text-sm font-bold text-gray-900">
             {p.timeAwareness.percentThroughWindow}% through delivery window
@@ -253,6 +316,9 @@ function Pulse({
           {p.timeAwareness.parcelsPerHourNeeded > 0 && (
             <p className="text-[11px] mt-1 text-gray-500">
               Need <span className="font-mono font-bold text-gray-900">{p.timeAwareness.parcelsPerHourNeeded}/hr</span> to finish by {p.timeAwareness.deliveryWindowEnd}:00
+              <span className="block text-gray-400 text-[10px] mt-0.5">
+                = {p.timeAwareness.parcelsRemaining} parcels ÷ hours left in 8am–6pm window
+              </span>
             </p>
           )}
         </div>
@@ -268,13 +334,14 @@ function Pulse({
           </div>
           <div className="flex items-center gap-3 flex-wrap text-xs">
             {p.streaks.daysWithoutStockout > 0 && (
-              <span className="text-green-700 font-medium">
+              <span className="text-green-700 font-medium flex items-center gap-1">
                 <span className="font-mono font-bold">{p.streaks.daysWithoutStockout}</span> days without stockout
+                <InfoTip term="pulseDaysWithoutStockout" size={11} />
               </span>
             )}
             {p.streaks.hoursSinceLastFailure > 0 && (
               <span className="text-green-700 font-medium">
-                <span className="font-mono font-bold">{p.streaks.hoursSinceLastFailure}h</span> since last failure
+                <span className="font-mono font-bold">{p.streaks.hoursSinceLastFailure}h</span> since last failed delivery
               </span>
             )}
             {p.streaks.isBestWeekThisQuarter && (
@@ -293,9 +360,9 @@ function Pulse({
           <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
             <div className="px-3 py-1.5 bg-red-50 border-b border-red-100 flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-red-700 font-semibold">
-                Overdue · {p.stakes.overdueParcelsCount}
+                Overdue parcels · {p.stakes.overdueParcelsCount} (showing top {p.stakes.overdueParcels.length})
               </span>
-              <button onClick={() => onNavigate?.('outbound')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View →</button>
+              <button onClick={() => onNavigate?.('outbound')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View all →</button>
             </div>
             <div className="divide-y divide-red-50">
               {p.stakes.overdueParcels.map(o => (
@@ -316,6 +383,17 @@ function Pulse({
             </span>
           </div>
         )}
+      </div>
+
+      {/* ── Audit basis footer — explains the assumptions behind every calculation ── */}
+      <div className="bg-gray-50 rounded-lg border border-gray-200 px-3 py-2">
+        <p className="text-[10px] text-gray-500 leading-relaxed">
+          <strong className="text-gray-700">Audit basis:</strong> Data as of {timeStr}. Delivery window = 8:00am–6:00pm.
+          Overdue = dispatched &gt; 6 hours ago. Stale = sort &gt; 2h, staging &gt; 4h.
+          "About to go stale" = sort &gt; 90 min. Pace = orders since midnight ÷ hours elapsed.
+          Finish time = parcels left ÷ deliveries in last 2 hours. Streaks based on shrinkage records with "stock" in reason.
+          Hover any (i) icon for the full definition + example.
+        </p>
       </div>
     </div>
   )

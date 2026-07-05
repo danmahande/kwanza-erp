@@ -139,6 +139,61 @@ export const glossary: Record<string, GlossaryTerm> = {
     long: 'Cash reconciliation verifies that the cash drivers collected from COD deliveries matches what was expected. If a driver collected UGX 50,000 for a UGX 50,000 order, it reconciles. If they collected UGX 47,000, there is a UGX 3,000 shortfall that must be investigated before the merchant is paid. This is the financial mirror of physical reconciliation.',
     example: 'Driver delivered 5 COD orders worth UGX 250,000 total. They banked UGX 250,000 — fully reconciled. Another driver delivered 3 orders worth UGX 150,000 but banked UGX 145,000 — UGX 5,000 shortfall flagged for investigation.',
   },
+  // ── Pulse metrics (dashboard) ──
+  pulseOverdueParcel: {
+    term: 'Overdue Parcel',
+    short: 'A parcel dispatched to a rider more than 6 hours ago that still hasn\'t been marked delivered, returned, or failed.',
+    long: 'An overdue parcel is one that has been assigned to a rider and dispatched (status = "dispatched") but has been on the road for more than 6 hours without a delivery outcome. The 6-hour threshold reflects a typical delivery day in Kampala — anything beyond that likely means the rider is stuck, the customer can\'t be reached, or the parcel was lost. Overdue parcels should be investigated immediately: call the rider, check the customer address, or mark the delivery as failed so stock can be restored.',
+    example: 'DS-014 was dispatched at 9:00am. By 4:00pm it still shows status "dispatched" — that\'s 7 hours, so it counts as overdue. The supervisor clicks the parcel ID to see customer + rider details and decides whether to call the rider or mark it failed.',
+  },
+  pulseStaleParcel: {
+    term: 'Stale Parcel',
+    short: 'A parcel stuck in the warehouse too long — over 2 hours in picking/packing, or over 4 hours in staging.',
+    long: 'A stale parcel has been sitting in one workflow stage past its threshold. Sort & Pack threshold is 2 hours (picking + packing should be fast). Staging threshold is 4 hours (packed parcels waiting for a rider). When a parcel crosses these thresholds, it gets an orange flag. "About to go stale" means a parcel is within 30 minutes of crossing the threshold — the warehouse team has a short window to act before it becomes a problem.',
+    example: 'DS-022 entered Sort & Pack at 10:00am. At 11:45am it\'s been there 1h 45m — within 15 minutes of the 2-hour threshold. The Pulse shows it as "about to go stale" so the supervisor can ask the picker to prioritize it.',
+  },
+  pulseUnbankedCOD: {
+    term: 'Unbanked COD',
+    short: 'Cash collected by riders from COD deliveries that hasn\'t been deposited and verified yet.',
+    long: 'When a rider delivers a COD (Cash on Delivery) order, they collect cash from the customer. That cash must be banked (deposited) and then verified by the supervisor before it\'s reconciled to the merchant. "Unbanked COD" is the total cash sitting in riders\' pockets right now — money the business is responsible for but hasn\'t yet secured. The longer it stays unbanked, the higher the risk of loss, theft, or discrepancy.',
+    example: 'Three riders delivered COD orders today worth UGX 150,000, UGX 80,000, and UGX 220,000. None have banked yet. Unbanked COD = UGX 450,000. The supervisor should ensure all three bank before end of day.',
+  },
+  pulsePace: {
+    term: 'Order Pace (orders/hour)',
+    short: 'How many new orders are being created per hour today, compared to the same time window yesterday.',
+    long: 'Order pace = total orders created today ÷ hours elapsed since midnight. It\'s a measure of how busy the business is right now. Comparing to yesterday\'s pace (same time window — midnight to current time) tells you whether today is faster or slower than a normal day. A 20%+ drop is concerning (fewer orders coming in); a 20%+ increase is encouraging (busier than usual).',
+    example: 'By 2:00pm today, 28 orders have been created. That\'s 28 ÷ 14 hours = 2.0 orders/hour. Yesterday at 2:00pm there were 35 orders, so yesterday\'s pace was 2.5/hour. Today is 20% slower than yesterday.',
+  },
+  pulseDeliveryWindow: {
+    term: 'Delivery Window',
+    short: 'The standard 10-hour delivery day from 8:00am to 6:00pm. Used to calculate whether you\'re on track to finish on time.',
+    long: 'The delivery window is the operational day for outbound logistics — 8:00am to 6:00pm (10 hours). Before 8am, riders are loading. After 6pm, deliveries are considered late. The Pulse shows what percent of the window has elapsed and how many parcels per hour you need to deliver to finish by 6pm. If you need 12/hr but your current rate is 8/hr, you\'ll finish late — the Pulse flags this.',
+    example: 'At 2:00pm you\'re 60% through the window (6 of 10 hours elapsed). If 48 parcels remain, you need 48 ÷ 4 = 12 parcels/hour to finish by 6pm. Your current rate is 8/hr — you\'ll finish around 8pm, which is late.',
+  },
+  pulseCustomersWaiting: {
+    term: 'Customers Waiting',
+    short: 'Parcels currently in picking, packing, or staging — customers are waiting for these to be delivered.',
+    long: 'Customers waiting = parcels with status picking, packing, packed, or pending. These are orders that have been placed but not yet dispatched to a rider. The customer is waiting. A high number means the warehouse is the bottleneck; a low number means orders are flowing through to dispatch smoothly.',
+    example: '12 parcels show status picking (3), packing (2), packed (5), pending (2). 12 customers are waiting for their orders to be dispatched.',
+  },
+  pulseFinishTime: {
+    term: 'Estimated Finish Time',
+    short: 'Predicted time all today\'s remaining parcels will be delivered, based on the current delivery rate.',
+    long: 'Estimated finish time = current time + (parcels still to deliver ÷ delivery rate per hour). The delivery rate is calculated from the last 2 hours of deliveries. If the estimate is after 6:00pm, the Pulse flags it as "late" — meaning riders will be working past the standard delivery window. This prediction assumes the current pace continues; if pace drops, the finish time moves later.',
+    example: 'At 2:00pm there are 48 parcels left to deliver. In the last 2 hours, 16 were delivered — rate = 8/hour. 48 ÷ 8 = 6 hours. Estimated finish = 2:00pm + 6 hours = 8:00pm. That\'s after 6pm, so it\'s flagged as late.',
+  },
+  pulseDaysWithoutStockout: {
+    term: 'Days Without Stockout',
+    short: 'Consecutive days (up to 30) with no shrinkage record logged for stock-related reasons.',
+    long: 'Counts backward from today, checking each day for any ShrinkageRecord with "stock" in the reason field (e.g., "stock damaged", "stock lost", "out of stock"). The streak breaks on the first day a stockout-related shrinkage was recorded. If no such records exist in the last 30 days, the streak shows 30. This is a proxy for inventory health — long streaks mean stock is being managed well.',
+    example: 'Today is Monday. The last shrinkage record with "stock" in the reason was logged last Tuesday. The streak is 6 days (Wed, Thu, Fri, Sat, Sun, Mon).',
+  },
+  pulseAtRiskRevenue: {
+    term: 'At-Risk Revenue',
+    short: 'Total money currently exposed to risk = overdue parcels\' sale value + unbanked COD cash.',
+    long: 'At-risk revenue is the sum of (a) the sale value of all overdue parcels (parcels dispatched > 6 hours ago, still not delivered — these may fail and lose revenue) and (b) unbanked COD cash (cash in riders\' pockets that hasn\'t been deposited — may be lost or short). It\'s the total amount of money the business could lose if everything currently at risk goes wrong. Note: the two components don\'t overlap — overdue parcels\' sale value is future revenue at risk; unbanked COD is collected cash at risk.',
+    example: '3 overdue parcels with sale values UGX 50,000, UGX 80,000, UGX 100,000 = UGX 230,000. Plus UGX 450,000 unbanked COD. At-risk revenue = UGX 680,000.',
+  },
 }
 
 /**
