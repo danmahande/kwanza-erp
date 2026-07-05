@@ -121,9 +121,11 @@ const tooltipStyle = {
 function ModuleStatusBoard({
   data,
   onNavigate,
+  showOnlyProblems = false,
 }: {
   data: DashboardData
   onNavigate?: (module: string) => void
+  showOnlyProblems?: boolean
 }) {
   const p = data.pulse
 
@@ -311,6 +313,11 @@ function ModuleStatusBoard({
   const order = { critical: 0, warning: 1, good: 2, quiet: 3 }
   rows.sort((a, b) => order[a.status] - order[b.status])
 
+  // Apply "show only problems" filter — hides good + quiet rows
+  const visibleRows = showOnlyProblems
+    ? rows.filter(r => r.status === 'critical' || r.status === 'warning')
+    : rows
+
   return (
     <div>
       {/* Table header */}
@@ -320,6 +327,7 @@ function ModuleStatusBoard({
         </span>
         <span className="text-[10px] text-gray-400">
           {rows.filter(r => r.status === 'critical').length} critical · {rows.filter(r => r.status === 'warning').length} warning · {rows.filter(r => r.status === 'good').length} good
+          {showOnlyProblems && visibleRows.length < rows.length && ` · showing ${visibleRows.length} of ${rows.length}`}
         </span>
         <div className="flex-1 h-px bg-gray-100" />
       </div>
@@ -337,7 +345,7 @@ function ModuleStatusBoard({
             </tr>
           </thead>
           <tbody>
-            {rows.map(row => (
+            {visibleRows.map(row => (
               <tr
                 key={row.key}
                 onClick={() => onNavigate?.(row.module)}
@@ -368,6 +376,13 @@ function ModuleStatusBoard({
                 </td>
               </tr>
             ))}
+            {visibleRows.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-xs text-gray-400">
+                  No problems to show — all modules are healthy or quiet. Turn off "Problems only" to see everything.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -991,6 +1006,8 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
   const [period, setPeriod] = useState('This Month')
   const [showPeriodMenu, setShowPeriodMenu] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [showOnlyProblems, setShowOnlyProblems] = useState(false)
+  const [revenueRange, setRevenueRange] = useState<'3M' | '6M' | '12M'>('6M')
 
   const fetchData = useCallback(() => {
     fetch(`/api/dashboard?period=${encodeURIComponent(period)}`)
@@ -1188,7 +1205,25 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       })()}
 
       {/* 2. Module Status Board — the centerpiece. Dense table, one row per module. */}
-      <ModuleStatusBoard data={data} onNavigate={onNavigate} />
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <button
+            onClick={() => setShowOnlyProblems(!showOnlyProblems)}
+            className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-colors ${
+              showOnlyProblems
+                ? 'bg-[#FF6B35] text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+            title="Show only critical and warning modules"
+          >
+            {showOnlyProblems ? '✓ Problems only' : 'Problems only'}
+          </button>
+          <span className="text-[10px] text-gray-400">
+            {showOnlyProblems ? 'Hiding healthy modules' : 'Showing all modules'}
+          </span>
+        </div>
+        <ModuleStatusBoard data={data} onNavigate={onNavigate} showOnlyProblems={showOnlyProblems} />
+      </div>
 
       {/* 3. Pulse mini-row — borderless inline, no cards */}
       {(() => {
@@ -1313,12 +1348,38 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Revenue Trend</span>
-          <div className="flex-1 h-px bg-gray-100" />
+          <div className="flex items-center gap-1 ml-auto">
+            {(['3M', '6M', '12M'] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setRevenueRange(r)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                  revenueRange === r ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {r}
+              </button>
+            ))}
+          </div>
         </div>
-        {(() => { const t = revenueTakeaway(data); return <ChartTakeaway text={t.text} tone={t.tone} /> })()}
+        {(() => {
+          // Slice the revenue data based on the selected range
+          // API always returns 6 months; for 12M we'd need an API change,
+          // so for now 3M = last 3, 6M = all 6, 12M = all 6 (capped)
+          const allMonths = data.revenueByMonth
+          const sliceCount = revenueRange === '3M' ? 3 : 6
+          const chartData = allMonths.slice(-sliceCount)
+          // Recompute takeaway on the sliced data
+          const slicedData = { ...data, revenueByMonth: chartData }
+          const t = revenueTakeaway(slicedData)
+          return <ChartTakeaway text={t.text} tone={t.tone} />
+        })()}
         <div className="bg-white rounded-lg p-4">
           <ResponsiveContainer width="100%" height={180}>
-            <AreaChart data={data.revenueByMonth}>
+            <AreaChart data={(() => {
+              const sliceCount = revenueRange === '3M' ? 3 : 6
+              return data.revenueByMonth.slice(-sliceCount)
+            })()}>
               <defs>
                 <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#FF6B35" stopOpacity={0.3} />
