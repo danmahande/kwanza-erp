@@ -413,10 +413,10 @@ export default function MerchantsModule() {
     fetchData()
   }
 
-  // Toggle hold status — opens dialog to capture reason when placing on hold
+  // Toggle hold status: opens dialog to capture reason when placing on hold
   const handleHoldToggle = (merchant: Merchant) => {
     if (merchant.isOnHold) {
-      // Release — no reason needed
+      // Release: no reason needed
       fetch('/api/merchants', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: merchant.id, isOnHold: false }),
@@ -443,7 +443,7 @@ export default function MerchantsModule() {
     fetchData()
   }
 
-  // #17: CSV import — parse and bulk create
+  // #17: CSV import: parse and bulk create
   const handleImport = async () => {
     if (!importText.trim()) { toast.error('Paste CSV data first'); return }
     const lines = importText.trim().split('\n')
@@ -573,7 +573,7 @@ export default function MerchantsModule() {
         })}
       </div>
 
-      {/* Follow-ups due banner — surfaces merchants with overdue follow-up communications */}
+      {/* Follow-ups due banner */}
       {followUpsDue > 0 && (
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3">
           <AlertTriangle size={16} className="text-orange-600 shrink-0" />
@@ -585,19 +585,19 @@ export default function MerchantsModule() {
             {data.filter(m => m.pendingFollowUps > 0).slice(0, 5).map(m => (
               <button key={m.id} onClick={() => { handleExpand(m); setActiveTab('communication'); }}
                 className="bg-white border border-orange-300 hover:bg-orange-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-orange-700">
-                {m.businessName} · {m.pendingFollowUps}
+                {m.businessName}, {m.pendingFollowUps}
               </button>
             ))}
           </div>
         </div>
       )}
 
-      {/* On-hold warning banner — surfaces merchants currently blocked */}
+      {/* On-hold warning banner */}
       {onHoldMerchants > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
           <Pause size={16} className="text-red-600 shrink-0" />
           <div className="flex-1 text-xs">
-            <p className="text-red-800 font-semibold">{onHoldMerchants} merchant{onHoldMerchants > 1 ? 's' : ''} on hold — new inbounds/orders blocked</p>
+            <p className="text-red-800 font-semibold">{onHoldMerchants} merchant{onHoldMerchants > 1 ? 's' : ''} on hold. New inbounds and orders blocked.</p>
             <p className="text-red-600 text-[11px] mt-0.5">Click the red square in the status column to release a hold.</p>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -680,12 +680,12 @@ export default function MerchantsModule() {
         </DenseTable>
       )}
 
-      {/* Profile slide-over — replaces inline expansion */}
+      {/* Profile slide-over */}
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
         title={selectedMerchant?.businessName || ''}
-        subtitle={selectedMerchant ? `${selectedMerchant.merchantId} · ${(selectedMerchant.deliveryType || 'self-delivery').replace('-', ' ')}` : ''}
+        subtitle={selectedMerchant ? `${selectedMerchant.merchantId}, ${(selectedMerchant.deliveryType || 'self-delivery').replace('-', ' ')}` : ''}
         width="lg"
       >
         {selectedMerchant && (() => {
@@ -712,7 +712,7 @@ export default function MerchantsModule() {
                 </div>
               </div>
 
-              {/* Action icon buttons — now includes Hold toggle */}
+              {/* Action icon buttons */}
               <div className="flex items-center gap-2 flex-wrap">
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleEdit(m) }}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
                 <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenRateCard(m) }}><FileText size={12} className="mr-1" /> Rate Card</Button>
@@ -729,14 +729,14 @@ export default function MerchantsModule() {
                 <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
                   <AlertOctagon size={14} className="text-red-600 shrink-0 mt-0.5" />
                   <div className="text-xs">
-                    <p className="font-semibold text-red-700">Service Held — new inbounds/orders blocked</p>
+                    <p className="font-semibold text-red-700">Service held. New inbounds and orders blocked.</p>
                     <p className="text-red-600 mt-0.5">Reason: {m.holdReason || 'Not specified'}</p>
                     {m.holdSetAt && <p className="text-red-500 text-[10px] mt-0.5">Set {timeAgo(m.holdSetAt)} by {m.holdSetBy || 'admin'}</p>}
                   </div>
                 </div>
               )}
 
-              {/* Tab bar — Overview | Performance | Communication */}
+              {/* Tab bar */}
               <div className="flex items-center gap-1 border-b border-gray-200">
                 {[
                   { key: 'overview' as const, label: 'Overview', icon: Building2 },
@@ -883,7 +883,7 @@ export default function MerchantsModule() {
                     <div className="py-12 text-center text-xs text-gray-400">Computing performance metrics...</div>
                   ) : performanceData ? (
                     <>
-                      {/* Single dense card — all rates stacked with thin progress bars */}
+                      {/* Single dense card with all rates */}
                       <div className="bg-white rounded-lg border border-gray-200 p-4">
                         <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Delivery Performance ({performanceData.window.days}d)</h3>
                         <div className="space-y-3">
@@ -915,12 +915,12 @@ export default function MerchantsModule() {
                         </div>
                       </div>
 
-                      {/* Cycle time + 7-day volume — single card each */}
+                      {/* Cycle time + 7-day volume */}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="bg-white rounded-lg border border-gray-200 p-4">
                           <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Cycle Time</h3>
                           <p className="text-2xl font-mono font-bold text-gray-900">{performanceData.cycleTime.avgDays}<span className="text-xs text-gray-400 ml-1">days</span></p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours}h avg · {performanceData.cycleTime.samples} samples</p>
+                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours}h avg, {performanceData.cycleTime.samples} samples</p>
                           <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px]">
                             <div><span className="text-gray-400">In Transit:</span> <span className="font-mono font-bold text-blue-600">{performanceData.totals.inTransit}</span></div>
                             <div><span className="text-gray-400">Failed:</span> <span className="font-mono font-bold text-red-600">{performanceData.totals.failed}</span></div>
@@ -950,7 +950,7 @@ export default function MerchantsModule() {
                         </div>
                       </div>
 
-                      {/* COD reconciliation — single card with stacked rows */}
+                      {/* COD reconciliation */}
                       <div className="bg-white rounded-lg border border-gray-200 p-4">
                         <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Reconciliation ({performanceData.window.days}d)</h3>
                         <div className="space-y-2 text-xs">
@@ -972,7 +972,7 @@ export default function MerchantsModule() {
                           </div>
                         </div>
                         {performanceData.cod.shortfall > 0 && (
-                          <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Cash collection shortfall — investigate driver banking or undelivered orders.</p>
+                          <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Cash collection shortfall. Check driver banking or undelivered orders.</p>
                         )}
                       </div>
                     </>
@@ -1006,9 +1006,9 @@ export default function MerchantsModule() {
                       <Input type="datetime-local" value={commForm.followUpAt} onChange={e => setCommForm({ ...commForm, followUpAt: e.target.value })}
                         className="rounded-md text-xs h-8" title="Schedule follow-up (optional)" />
                     </div>
-                    <Input placeholder="Subject — e.g. 'Discussed late COD remittance for June statement'" value={commForm.subject}
+                    <Input placeholder="Subject, e.g. Late COD remittance for June statement" value={commForm.subject}
                       onChange={e => setCommForm({ ...commForm, subject: e.target.value })} className="rounded-md text-xs h-8" />
-                    <textarea placeholder="Notes — what was discussed, what was agreed..." value={commForm.notes}
+                    <textarea placeholder="Notes: what was discussed, what was agreed" value={commForm.notes}
                       onChange={e => setCommForm({ ...commForm, notes: e.target.value })} rows={2}
                       className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs" />
                     <div className="flex items-center justify-between">
@@ -1045,7 +1045,7 @@ export default function MerchantsModule() {
                                   {e.isResolved ? (
                                     <span className="text-[9px] px-1 rounded bg-green-100 text-green-700">RESOLVED</span>
                                   ) : (
-                                    <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ' · OVERDUE' : ''}</span>
+                                    <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ', OVERDUE' : ''}</span>
                                   )}
                                   <span className="text-[9px] text-gray-400 ml-auto">{new Date(e.createdAt).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
@@ -1108,7 +1108,7 @@ export default function MerchantsModule() {
               <div><Label className="text-xs font-medium mb-1 block">Alt Phone</Label><Input value={form.altPhone} onChange={e => setForm({ ...form, altPhone: e.target.value })} className="rounded-xl" /></div>
             </div>
             <div><Label className="text-xs font-medium mb-1 block">Email <span className="text-red-400">*</span></Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="rounded-xl" /></div>
-            <div><Label className="text-xs font-medium mb-1 block">Contact Person</Label><Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} placeholder="Person responsible for this account" className="rounded-xl" /></div>
+            <div><Label className="text-xs font-medium mb-1 block">Contact Person</Label><Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} placeholder="Name" className="rounded-xl" /></div>
             <div><Label className="text-xs font-medium mb-1 block">Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Physical address" className="rounded-xl" /></div>
           </div>
 
@@ -1144,13 +1144,13 @@ export default function MerchantsModule() {
           {/* Notes */}
           <div className="space-y-3 pt-3 border-t border-gray-100">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Notes</p>
-            <div><Label className="text-xs font-medium mb-1 block">Internal Notes</Label><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any notes about this merchant..." rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" /></div>
+            <div><Label className="text-xs font-medium mb-1 block">Internal Notes</Label><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Notes" rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" /></div>
           </div>
         </div>
       </DetailSlideOver>
 
       {/* Rate card slide-over (unchanged) */}
-      <DetailSlideOver open={rateCardOpen} onClose={() => setRateCardOpen(false)} title={`Rate Card — ${selectedMerchant?.businessName || ''}`} subtitle={rateCard ? `Valid from ${new Date(rateCard.validFrom).toLocaleDateString()}` : 'Creating new rate card'} width="lg"
+      <DetailSlideOver open={rateCardOpen} onClose={() => setRateCardOpen(false)} title={`Rate Card, ${selectedMerchant?.businessName || ''}`} subtitle={rateCard ? `Valid from ${new Date(rateCard.validFrom).toLocaleDateString()}` : 'Creating new rate card'} width="lg"
         footer={<div className="flex gap-3 ml-auto"><Button variant="outline" onClick={() => setRateCardOpen(false)} className="rounded-xl">Cancel</Button><Button onClick={handleSaveRateCard} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Save</Button></div>}>
         <div className="grid grid-cols-2 gap-3">
           {[{ k: 'inboundReceivingPerUnit', l: 'Inbound Receiving (UGX/unit)' }, { k: 'storagePerUnitPerDay', l: 'Storage (UGX/unit/day)' }, { k: 'pickPerUnit', l: 'Pick (UGX/unit)' }, { k: 'packPerOrder', l: 'Pack (UGX/order)' }, { k: 'returnProcessingPerUnit', l: 'Return (UGX/unit)' }, { k: 'commissionPercent', l: 'Commission (%)' }, { k: 'codRemittanceFeePerOrder', l: 'COD Fee (UGX/order)' }, { k: 'codShortfallPenalty', l: 'COD Shortfall Penalty (UGX)' }].map(f => (
@@ -1184,7 +1184,7 @@ export default function MerchantsModule() {
       {/* Statement dialog (unchanged) */}
       <AlertDialog open={statementOpen} onOpenChange={setStatementOpen}>
         <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><FileText size={18} /> Generate Statement — {selectedMerchant?.businessName}</AlertDialogTitle><AlertDialogDescription>Generates a monthly statement with all fees, sales, COD, and shrinkage.</AlertDialogDescription></AlertDialogHeader>
+          <AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><FileText size={18} /> Generate Statement, {selectedMerchant?.businessName}</AlertDialogTitle><AlertDialogDescription>Generates a monthly statement with all fees, sales, COD, and shrinkage.</AlertDialogDescription></AlertDialogHeader>
           <div className="py-3"><Label className="text-sm font-medium mb-1.5 block">Period (YYYY-MM)</Label><Input type="month" value={statementPeriod} onChange={e => setStatementPeriod(e.target.value)} className="rounded-xl" /></div>
           <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleGenerateStatement} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Generate</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
@@ -1197,7 +1197,7 @@ export default function MerchantsModule() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Place on Hold dialog — captures reason */}
+      {/* Place on Hold dialog */}
       <AlertDialog open={holdDialogOpen} onOpenChange={setHoldDialogOpen}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader>
@@ -1208,7 +1208,7 @@ export default function MerchantsModule() {
           </AlertDialogHeader>
           <div className="py-3">
             <Label className="text-sm font-medium mb-1.5 block">Reason for hold</Label>
-            <Input value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="e.g. Overdue June statement by UGX 1.2M / Quality dispute on batch B-045" className="rounded-xl" />
+            <Input value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="e.g. Overdue June statement" className="rounded-xl" />
             <p className="text-[10px] text-gray-400 mt-1">This reason is shown on the merchant's profile banner and logged in the audit trail.</p>
           </div>
           <AlertDialogFooter>

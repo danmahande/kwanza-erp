@@ -204,7 +204,7 @@ export default function ProductsModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Products"
-        description="Product catalog. Each product belongs to a merchant."
+        description="Catalog"
         kpiCells={[
           { label: 'TOTAL', value: totalProducts },
           { label: 'ACTIVE', value: activeProducts },
@@ -223,8 +223,8 @@ export default function ProductsModule() {
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
             <Package size={32} className="text-gray-300" />
           </div>
-          <p className="text-gray-500 font-medium">No products yet</p>
-          <p className="text-sm text-gray-400 mt-1">Add your first product to the catalog</p>
+          <p className="text-gray-500 font-medium">No products</p>
+          <p className="text-sm text-gray-400 mt-1">Click "Add Product" to create one.</p>
         </motion.div>
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -258,8 +258,8 @@ export default function ProductsModule() {
                           <p className="font-medium text-gray-900 text-sm">{p.productLabel}</p>
                           <p className="text-[10px] text-gray-400 font-mono">
                             {p.productId}
-                            {p.brand && ` · ${p.brand}`}
-                            {p.variant && ` · ${p.variant}`}
+                            {p.brand && `, ${p.brand}`}
+                            {p.variant && `, ${p.variant}`}
                           </p>
                         </td>
                         <td className="px-4 py-2 text-gray-700 text-xs">{p.merchantName || '—'}</td>
