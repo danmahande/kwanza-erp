@@ -113,11 +113,7 @@ const tooltipStyle = {
   fontSize: '12px', padding: '8px 12px',
 }
 
-// ── Module Status Board ──
-// The centerpiece of the emergency-first dashboard. One dense table where
-// each row is a module summary: status dot, key metrics, action needed.
-// No card containers — just a table with row separators. Clickable rows
-// navigate to the relevant module.
+// Dense table, one row per area of the operation. Clickable rows navigate.
 function ModuleStatusBoard({
   data,
   onNavigate,
@@ -134,7 +130,7 @@ function ModuleStatusBoard({
     key: string
     name: string
     module: string
-    status: 'critical' | 'warning' | 'good' | 'quiet'
+    status: 'critical' | 'warning' | 'ok' | 'quiet'
     statusLabel: string
     metrics: string
     action: string
@@ -146,20 +142,20 @@ function ModuleStatusBoard({
     rows.push({
       key: 'inventory', name: 'Inventory', module: 'inventory',
       status: 'critical', statusLabel: `${data.inventory.critical} out of stock`,
-      metrics: `${data.inventory.healthy} healthy · ${data.inventory.low} low · ${data.inventory.critical} critical`,
+      metrics: `${data.inventory.healthy} healthy, ${data.inventory.low} low, ${data.inventory.critical} critical`,
       action: `Reorder ${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''}`,
     })
   } else if (data.inventory.low > 0) {
     rows.push({
       key: 'inventory', name: 'Inventory', module: 'inventory',
       status: 'warning', statusLabel: `${data.inventory.low} running low`,
-      metrics: `${data.inventory.healthy} healthy · ${data.inventory.low} low · 0 critical`,
+      metrics: `${data.inventory.healthy} healthy, ${data.inventory.low} low, 0 critical`,
       action: `Review ${data.inventory.low} low-stock product${data.inventory.low !== 1 ? 's' : ''}`,
     })
   } else {
     rows.push({
       key: 'inventory', name: 'Inventory', module: 'inventory',
-      status: 'good', statusLabel: 'All healthy',
+      status: 'ok', statusLabel: 'All healthy',
       metrics: `${data.inventory.healthy} products in stock`,
       action: '—',
     })
@@ -172,14 +168,14 @@ function ModuleStatusBoard({
     rows.push({
       key: 'outbound', name: 'Outbound', module: 'outbound',
       status: 'critical', statusLabel: `${overdue} overdue`,
-      metrics: `${inMotion} in motion · ${overdue} overdue · ${data.orders.delivered} delivered today`,
+      metrics: `${inMotion} in motion, ${overdue} overdue, ${data.orders.delivered} delivered today`,
       action: `Investigate ${overdue} overdue parcel${overdue !== 1 ? 's' : ''}`,
     })
   } else if (inMotion > 0) {
     rows.push({
       key: 'outbound', name: 'Outbound', module: 'outbound',
-      status: 'good', statusLabel: `${inMotion} in motion`,
-      metrics: `${inMotion} in motion · ${data.orders.delivered} delivered today`,
+      status: 'ok', statusLabel: `${inMotion} in motion`,
+      metrics: `${inMotion} in motion, ${data.orders.delivered} today`,
       action: '—',
     })
   } else {
@@ -196,14 +192,14 @@ function ModuleStatusBoard({
     rows.push({
       key: 'payments', name: 'Payments', module: 'payments',
       status: 'warning', statusLabel: `${formatCurrencyCompact(data.cod.pendingBankings)} pending`,
-      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected · ${data.cod.bankingRate}% banked`,
+      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected, ${data.cod.bankingRate}% banked`,
       action: `Verify pending COD bankings`,
     })
   } else if (data.cod.collectedTotal > 0) {
     rows.push({
       key: 'payments', name: 'Payments', module: 'payments',
-      status: 'good', statusLabel: 'All banked',
-      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected · 100% banked`,
+      status: 'ok', statusLabel: 'All banked',
+      metrics: `${formatCurrencyCompact(data.cod.collectedTotal)} collected, 100% banked`,
       action: '—',
     })
   } else {
@@ -220,7 +216,7 @@ function ModuleStatusBoard({
     rows.push({
       key: 'returns', name: 'Returns', module: 'returns',
       status: 'critical', statusLabel: `${data.exceptionCount} exceptions`,
-      metrics: `${data.exceptionCount} exceptions · ${data.shrinkage.totalQty} units shrinkage`,
+      metrics: `${data.exceptionCount} exceptions, ${data.shrinkage.totalQty} units shrinkage`,
       action: `Process ${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''}`,
     })
   } else if (data.shrinkage.totalQty > 0) {
@@ -233,7 +229,7 @@ function ModuleStatusBoard({
   } else {
     rows.push({
       key: 'returns', name: 'Returns', module: 'returns',
-      status: 'good', statusLabel: 'All clear',
+      status: 'ok', statusLabel: 'All clear',
       metrics: 'No exceptions or shrinkage',
       action: '—',
     })
@@ -249,14 +245,14 @@ function ModuleStatusBoard({
     rows.push({
       key: 'drivers', name: 'Drivers', module: 'drivers',
       status: 'warning', statusLabel: bits[0],
-      metrics: `${data.driverPerformance.length} active · ${bits.join(' · ')}`,
+      metrics: `${data.driverPerformance.length} active, ${bits.join(', ')}`,
       action: driversPending > 0 ? `Follow up with ${driversPending} driver${driversPending !== 1 ? 's' : ''}` : 'Review failed deliveries',
     })
   } else if (data.driverPerformance.length > 0) {
     rows.push({
       key: 'drivers', name: 'Drivers', module: 'drivers',
-      status: 'good', statusLabel: 'All banked',
-      metrics: `${data.driverPerformance.length} active · all cash banked`,
+      status: 'ok', statusLabel: 'All banked',
+      metrics: `${data.driverPerformance.length} active, all cash banked`,
       action: '—',
     })
   } else {
@@ -280,8 +276,8 @@ function ModuleStatusBoard({
   } else {
     rows.push({
       key: 'merchants', name: 'Merchants', module: 'merchants',
-      status: 'good', statusLabel: 'All profitable',
-      metrics: `${data.stats.totalMerchants} active · all profitable`,
+      status: 'ok', statusLabel: 'All profitable',
+      metrics: `${data.stats.totalMerchants} active, all profitable`,
       action: '—',
     })
   }
@@ -291,7 +287,7 @@ function ModuleStatusBoard({
   rows.push({
     key: 'inbound', name: 'Inbound', module: 'inventory',
     status: 'quiet', statusLabel: '—',
-    metrics: `${data.stats.totalStockUnits} units in warehouse · ${formatCurrencyCompact(data.stats.totalStockValue)} value`,
+    metrics: `${data.stats.totalStockUnits} units in warehouse, ${formatCurrencyCompact(data.stats.totalStockValue)} value`,
     action: '—',
   })
   void intakeCount
@@ -299,48 +295,46 @@ function ModuleStatusBoard({
   const statusDot: Record<string, string> = {
     critical: 'bg-red-500',
     warning: 'bg-orange-500',
-    good: 'bg-green-500',
+    ok: 'bg-green-500',
     quiet: 'bg-gray-300',
   }
   const statusText: Record<string, string> = {
     critical: 'text-red-700',
     warning: 'text-orange-700',
-    good: 'text-green-700',
+    ok: 'text-green-700',
     quiet: 'text-gray-400',
   }
 
-  // Sort: critical first, then warning, then good, then quiet
-  const order = { critical: 0, warning: 1, good: 2, quiet: 3 }
+  // Sort: critical first, then warning, then ok, then quiet
+  const order = { critical: 0, warning: 1, ok: 2, quiet: 3 }
   rows.sort((a, b) => order[a.status] - order[b.status])
 
-  // Apply "show only problems" filter — hides good + quiet rows
+  // Apply "show only problems" filter: hides ok + quiet rows
   const visibleRows = showOnlyProblems
     ? rows.filter(r => r.status === 'critical' || r.status === 'warning')
     : rows
 
   return (
     <div>
-      {/* Table header */}
-      <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-          Module Status Board
-        </span>
-        <span className="text-[10px] text-gray-400">
-          {rows.filter(r => r.status === 'critical').length} critical · {rows.filter(r => r.status === 'warning').length} warning · {rows.filter(r => r.status === 'good').length} good
-          {showOnlyProblems && visibleRows.length < rows.length && ` · showing ${visibleRows.length} of ${rows.length}`}
-        </span>
-        <div className="flex-1 h-px bg-gray-100" />
-      </div>
+      {/* Status count only shown when filtering */}
+      {showOnlyProblems && (
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[10px] text-gray-400">
+            {rows.filter(r => r.status === 'critical').length} critical, {rows.filter(r => r.status === 'warning').length} warning
+            {visibleRows.length < rows.length && `, showing ${visibleRows.length} of ${rows.length}`}
+          </span>
+          <div className="flex-1 h-px bg-gray-100" />
+        </div>
+      )}
 
-      {/* Dense table — no card container, just row separators */}
       <div className="bg-white rounded-lg overflow-hidden">
         <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
-              <th className="text-left px-4 py-2 font-semibold w-32">Module</th>
+              <th className="text-left px-4 py-2 font-semibold w-32">Area</th>
               <th className="text-left px-4 py-2 font-semibold w-40">Status</th>
-              <th className="text-left px-4 py-2 font-semibold">Key Metrics</th>
-              <th className="text-right px-4 py-2 font-semibold w-56">Action Needed</th>
+              <th className="text-left px-4 py-2 font-semibold">Details</th>
+              <th className="text-right px-4 py-2 font-semibold w-56">Action</th>
               <th className="w-8"></th>
             </tr>
           </thead>
@@ -379,7 +373,7 @@ function ModuleStatusBoard({
             {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-xs text-gray-400">
-                  No problems to show — all modules are healthy or quiet. Turn off "Problems only" to see everything.
+                  No problems. All areas are healthy or quiet.
                 </td>
               </tr>
             )}
@@ -390,18 +384,7 @@ function ModuleStatusBoard({
   )
 }
 
-// ── Pulse ──
-// The real-time heartbeat of the business. Replaces the static Story + KPI
-// ribbon at the very top of the dashboard. Five sections that make the
-// business feel ALIVE — and every number is auditable: hover (i) for the
-// definition, click any number to verify it in the relevant module.
-//
-//   1. Stakes line    — money and time at risk, right now (each component labeled, no overlap)
-//   2. Momentum line  — today's pace vs yesterday, last 30 min of activity
-//   3. Predictions    — what's about to go wrong in the next 30-60 min
-//   4. Time awareness — where you are in the day vs where you should be
-//   5. Streaks        — what's going well that you'd want to maintain
-//   6. Audit basis    — small footer stating the assumptions behind every calculation
+// Pulse: stakes, momentum, predictions, time, streaks. Every number has (i) for definition.
 function Pulse({
   data,
   onNavigate,
@@ -428,8 +411,8 @@ function Pulse({
 
   return (
     <div className="space-y-2">
-      {/* ── Hero stakes line — the first thing you read ── */}
-      {/* Each stake shown separately, labeled, with (i) for definition, clickable to verify */}
+      {/* Stakes line */}
+      {/* Each stake shown separately, labeled, with (i) for definition, clickable */}
       <div className={`rounded-lg px-4 py-3 border-2 ${
         hasHighStakes ? 'bg-red-50 border-red-300' :
         'bg-[#1B2A4A] border-[#1B2A4A]'
@@ -441,11 +424,11 @@ function Pulse({
           </span>
           {hasHighStakes ? (
             <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold ml-auto">
-              {hasOverdue && hasUnbanked ? '2 things at risk' : '1 thing at risk'} — click any number to verify
+              {hasOverdue && hasUnbanked ? '2 things at risk' : '1 thing at risk'}. Click any number to verify.
             </span>
           ) : (
             <span className="text-[10px] uppercase tracking-wider text-blue-200/70 ml-auto">
-              All clear — nothing at risk right now
+              All clear. Nothing at risk.
             </span>
           )}
         </div>
@@ -507,7 +490,7 @@ function Pulse({
           )}
           {!hasHighStakes && p.stakes.customersWaitingCount === 0 && (
             <div className="text-blue-200/70 italic text-sm">
-              No money or parcels at risk right now. Hover any (i) below to see how each metric is calculated.
+              No money or parcels at risk.
             </div>
           )}
         </div>
@@ -528,12 +511,10 @@ function Pulse({
           {p.momentum.yesterdayPace > 0 && (
             <p className={`text-[11px] mt-0.5 ${paceUp ? 'text-green-700' : paceDown ? 'text-red-700' : 'text-gray-500'}`}>
               {paceUp ? '↑' : paceDown ? '↓' : '—'} {Math.abs(p.momentum.paceDeltaPct)}% vs yesterday ({p.momentum.yesterdayPace}/hr)
-              {paceDown && Math.abs(p.momentum.paceDeltaPct) >= 20 && ' — concerning'}
-              {paceUp && Math.abs(p.momentum.paceDeltaPct) >= 20 && ' — busier than usual'}
             </p>
           )}
           <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-3 text-[10px] text-gray-500">
-            <span>Last 30 min:</span>
+            <span>30 min:</span>
             <span className="text-blue-600 font-mono font-bold">+{p.momentum.last30Min.newOrders} new</span>
             <span className="text-green-600 font-mono font-bold">✓{p.momentum.last30Min.delivered} del</span>
             {p.momentum.last30Min.failed > 0 && (
@@ -556,20 +537,20 @@ function Pulse({
             </p>
           ) : p.predictions.willFinishLate ? (
             <p className="text-sm font-bold text-orange-700">
-              Will finish at {p.predictions.estimatedFinishTime} — late
+              Will finish at {p.predictions.estimatedFinishTime}. Late.
             </p>
           ) : p.predictions.estimatedFinishTime ? (
             <p className="text-sm font-bold text-green-700">
-              On track — finish at {p.predictions.estimatedFinishTime}
+              On track. Finish at {p.predictions.estimatedFinishTime}.
             </p>
           ) : (
             <p className="text-sm font-bold text-gray-700">
-              Nothing to deliver right now
+              Nothing to deliver.
             </p>
           )}
           {p.predictions.parcelsStillToDeliver > 0 && (
             <p className="text-[11px] mt-0.5 text-gray-500">
-              {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr current rate
+              {p.predictions.parcelsStillToDeliver} left, {p.predictions.deliveryRatePerHour}/hr current rate
               <span className="block text-gray-400 text-[10px] mt-0.5">
                 {p.predictions.willGoStaleSoon > 0 ? '= in sort > 90 min (will cross 2h threshold)' : '= rate from last 2 hours of deliveries'}
               </span>
@@ -597,7 +578,7 @@ function Pulse({
             <p className="text-[11px] mt-1 text-gray-500">
               Need <span className="font-mono font-bold text-gray-900">{p.timeAwareness.parcelsPerHourNeeded}/hr</span> to finish by {p.timeAwareness.deliveryWindowEnd}:00
               <span className="block text-gray-400 text-[10px] mt-0.5">
-                = {p.timeAwareness.parcelsRemaining} parcels ÷ hours left in 8am–6pm window
+                = {p.timeAwareness.parcelsRemaining} parcels ÷ hours left in 8am-6pm window
               </span>
             </p>
           )}
@@ -635,12 +616,12 @@ function Pulse({
           </div>
         </div>
 
-        {/* Overdue parcels detail — only if there are any */}
+        {/* Overdue parcels detail */}
         {p.stakes.overdueParcels.length > 0 ? (
           <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
             <div className="px-3 py-1.5 bg-red-50 border-b border-red-100 flex items-center justify-between">
               <span className="text-[10px] uppercase tracking-wider text-red-700 font-semibold">
-                Overdue parcels · {p.stakes.overdueParcelsCount} (showing top {p.stakes.overdueParcels.length})
+                Overdue ({p.stakes.overdueParcelsCount}, showing top {p.stakes.overdueParcels.length})
               </span>
               <button onClick={() => onNavigate?.('outbound')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View all →</button>
             </div>
@@ -659,33 +640,23 @@ function Pulse({
           <div className="bg-white rounded-lg border border-green-200 px-3 py-2.5 flex items-center gap-2">
             <CheckCircle2 size={14} className="text-green-600 shrink-0" />
             <span className="text-[11px] text-green-700 font-medium">
-              No overdue parcels — all in-transit deliveries are within the 6-hour threshold.
+              No overdue parcels. All in-transit deliveries within 6h.
             </span>
           </div>
         )}
       </div>
 
-      {/* ── Audit basis footer — explains the assumptions behind every calculation ── */}
+      {/* Notes footer */}
       <div className="bg-gray-50 rounded-lg border border-gray-200 px-3 py-2">
         <p className="text-[10px] text-gray-500 leading-relaxed">
-          <strong className="text-gray-700">Audit basis:</strong> Data as of {timeStr}. Delivery window = 8:00am–6:00pm.
-          Overdue = dispatched &gt; 6 hours ago. Stale = sort &gt; 2h, staging &gt; 4h.
-          "About to go stale" = sort &gt; 90 min. Pace = orders since midnight ÷ hours elapsed.
-          Finish time = parcels left ÷ deliveries in last 2 hours. Streaks based on shrinkage records with "stock" in reason.
-          Hover any (i) icon for the full definition + example.
+          <strong className="text-gray-700">Notes:</strong> Numbers update every 30s. Data as of {timeStr}. Overdue = dispatched &gt; 6h ago. Stale = sort &gt; 2h, staging &gt; 4h. "About to go stale" = sort &gt; 90 min. Pace = orders since midnight ÷ hours elapsed. Finish time = parcels left ÷ deliveries in last 2h.
         </p>
       </div>
     </div>
   )
 }
 
-// ── Dashboard Story ──
-// ONE unified voice for the dashboard. Merges the old PeriodHeadline +
-// TodaysStory into a single section that:
-//   1. Opens with a bold headline sentence (the period summary)
-//   2. Lists 3-5 bullet points of what's worth knowing (critical/warning/good)
-//   3. Each bullet is clickable to the relevant module
-// This is the ONLY "voice" of the dashboard. Everything below is supporting data.
+// Dashboard Story: headline + bullet items for the selected period.
 function DashboardStory({
   data,
   period,
@@ -701,7 +672,7 @@ function DashboardStory({
     const revChange = data.comparison.revenueChange
     let revPhrase = `${formatCurrency(data.stats.totalRevenue)} in revenue`
     if (revChange !== 0) {
-      revPhrase += ` — ${revChange > 0 ? 'up' : 'down'} ${Math.abs(revChange)}% vs last month`
+      revPhrase += `, ${revChange > 0 ? 'up' : 'down'} ${Math.abs(revChange)}% vs last month`
     }
     headlineParts.push(revPhrase)
   } else if (data.orders.total === 0) {
@@ -714,9 +685,9 @@ function DashboardStory({
   if (data.onTimeRate > 0 && data.orders.delivered > 0) {
     const target = 90
     if (data.onTimeRate < target) {
-      headlineParts.push(`on-time at ${data.onTimeRate}% — below your ${target}% target`)
+      headlineParts.push(`on-time at ${data.onTimeRate}%, below ${target}% target`)
     } else {
-      headlineParts.push(`on-time at ${data.onTimeRate}% — meeting target`)
+      headlineParts.push(`on-time at ${data.onTimeRate}%, meeting target`)
     }
   }
   if (data.inventory.critical > 0) {
@@ -747,7 +718,7 @@ function DashboardStory({
   const items: StoryItem[] = []
 
   if (data.inventory.critical > 0) {
-    items.push({ severity: 'critical', message: `${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock — reorder now`, module: 'products' })
+    items.push({ severity: 'critical', message: `${data.inventory.critical} product${data.inventory.critical !== 1 ? 's' : ''} critically low on stock. Reorder now.`, module: 'products' })
   }
   if (data.inventory.low > 0) {
     items.push({ severity: 'warning', message: `${data.inventory.low} product${data.inventory.low !== 1 ? 's' : ''} running low on stock`, module: 'products' })
@@ -756,13 +727,13 @@ function DashboardStory({
     items.push({ severity: 'warning', message: `${formatCurrency(data.cod.pendingBankings)} in COD cash waiting to be verified`, module: 'payments' })
   }
   if (data.onTimeRate > 0 && data.onTimeRate < 80 && data.orders.delivered > 0) {
-    items.push({ severity: 'warning', message: `On-time delivery is ${data.onTimeRate}% — below the 80% acceptable threshold`, module: 'outbound' })
+    items.push({ severity: 'warning', message: `On-time delivery is ${data.onTimeRate}%, below 80% threshold`, module: 'outbound' })
   }
   if (data.firstAttemptRate > 0 && data.firstAttemptRate < 60 && data.orders.delivered > 0) {
-    items.push({ severity: 'warning', message: `First-attempt success rate is ${data.firstAttemptRate}% — many deliveries need a second attempt`, module: 'outbound' })
+    items.push({ severity: 'warning', message: `First-attempt success rate is ${data.firstAttemptRate}%, many need a second attempt`, module: 'outbound' })
   }
   if (data.exceptionCount > 0) {
-    items.push({ severity: 'critical', message: `${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''} recorded — failed deliveries, returns, or shrinkage`, module: 'returns' })
+    items.push({ severity: 'critical', message: `${data.exceptionCount} exception${data.exceptionCount !== 1 ? 's' : ''}: failed deliveries, returns, or shrinkage`, module: 'returns' })
   }
   if (data.shrinkage.totalQty > 0) {
     items.push({ severity: 'warning', message: `${data.shrinkage.totalQty} units lost to shrinkage this period`, module: 'returns' })
@@ -775,10 +746,10 @@ function DashboardStory({
   // POSITIVE items (only show if no critical/warning issues compete for attention)
   if (items.filter(i => i.severity !== 'good').length === 0) {
     if (data.orders.delivered > 0 && data.onTimeRate >= 90) {
-      items.push({ severity: 'good', message: `On-time delivery is ${data.onTimeRate}% — exceeding target` })
+      items.push({ severity: 'good', message: `On-time delivery is ${data.onTimeRate}%, exceeding target` })
     }
     if (data.cod.bankingRate >= 95 && data.cod.collectedTotal > 0) {
-      items.push({ severity: 'good', message: `COD banking rate is ${data.cod.bankingRate}% — cash is being verified promptly` })
+      items.push({ severity: 'good', message: `COD banking rate is ${data.cod.bankingRate}%, cash verified promptly` })
     }
     if (data.comparison.revenueChange > 0) {
       items.push({ severity: 'good', message: `Revenue is up ${data.comparison.revenueChange}% vs last month` })
@@ -853,17 +824,14 @@ function DashboardStory({
       {items.length === 0 && !isQuiet && (
         <div className="px-4 py-2.5 flex items-center gap-3">
           <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-          <p className="flex-1 text-xs font-medium text-green-900">All clear — nothing needs your attention right now.</p>
+          <p className="flex-1 text-xs font-medium text-green-900">All clear. Nothing needs attention.</p>
         </div>
       )}
     </div>
   )
 }
 
-// ── Chart Takeaway ──
-// A one-line sentence above each chart that says what the chart means.
-// Replaces database-label titles like "Revenue Trend (6 months)" with
-// actual sentences like "Revenue trending up — best month in 6."
+// Chart Takeaway: one-line sentence above each chart.
 function ChartTakeaway({ text, tone = 'neutral' }: { text: string; tone?: 'neutral' | 'good' | 'warning' | 'critical' }) {
   const toneClass = {
     neutral: 'text-gray-700',
@@ -876,9 +844,7 @@ function ChartTakeaway({ text, tone = 'neutral' }: { text: string; tone?: 'neutr
   )
 }
 
-// ── Takeaway computations ──
-// Each function reads the live data and returns a plain-English sentence
-// summarizing what the chart/table means.
+// Takeaway computations: each reads live data and returns a sentence.
 
 function revenueTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
   const months = data.revenueByMonth
@@ -887,15 +853,15 @@ function revenueTakeaway(data: DashboardData): { text: string; tone: 'neutral' |
   if (withRevenue.length === 0) return { text: 'No revenue recorded yet.', tone: 'neutral' }
   const last = withRevenue[withRevenue.length - 1]
   const previous = withRevenue.slice(0, -1)
-  if (previous.length === 0) return { text: `Revenue at ${formatCurrencyCompact(last.revenue)} this month — first data point.`, tone: 'neutral' }
+  if (previous.length === 0) return { text: `Revenue at ${formatCurrencyCompact(last.revenue)} this month. First data point.`, tone: 'neutral' }
   const maxPrev = Math.max(...previous.map(m => m.revenue))
   const avgPrev = previous.reduce((s, m) => s + m.revenue, 0) / previous.length
-  if (last.revenue > maxPrev) return { text: `Revenue trending up — ${formatCurrencyCompact(last.revenue)} is the best month in the last ${withRevenue.length}.`, tone: 'good' }
+  if (last.revenue > maxPrev) return { text: `Revenue trending up. ${formatCurrencyCompact(last.revenue)} is the best month in the last ${withRevenue.length}.`, tone: 'good' }
   if (last.revenue < avgPrev * 0.8) {
     const drop = Math.round(((avgPrev - last.revenue) / avgPrev) * 100)
     return { text: `Revenue down ${drop}% this month vs the ${previous.length}-month average.`, tone: 'warning' }
   }
-  return { text: `Revenue steady at ${formatCurrencyCompact(last.revenue)} — in line with the ${previous.length}-month average.`, tone: 'neutral' }
+  return { text: `Revenue steady at ${formatCurrencyCompact(last.revenue)}, in line with the ${previous.length}-month average.`, tone: 'neutral' }
 }
 
 function orderStatusTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
@@ -930,7 +896,7 @@ function throughputTakeaway(data: DashboardData): { text: string; tone: 'neutral
 
 function inventoryTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
   const inv = data.inventory
-  if (inv.critical > 0) return { text: `${inv.critical} product${inv.critical !== 1 ? 's' : ''} critically low on stock — reorder now.`, tone: 'critical' }
+  if (inv.critical > 0) return { text: `${inv.critical} product${inv.critical !== 1 ? 's' : ''} critically low on stock. Reorder now.`, tone: 'critical' }
   if (inv.low > 0) return { text: `${inv.low} product${inv.low !== 1 ? 's' : ''} running low; ${inv.healthy} healthy.`, tone: 'warning' }
   if (inv.healthy > 0) return { text: `All ${inv.healthy} products at healthy stock levels.`, tone: 'good' }
   return { text: 'No stock data.', tone: 'neutral' }
@@ -977,7 +943,7 @@ function shrinkageTakeaway(data: DashboardData): { text: string; tone: 'neutral'
 function codTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
   if (data.cod.collectedTotal === 0) return { text: 'No COD collected this period.', tone: 'neutral' }
   if (data.cod.pendingBankings === 0) return { text: `All ${formatCurrencyCompact(data.cod.collectedTotal)} in COD cash has been banked.`, tone: 'good' }
-  return { text: `Banking rate at ${data.cod.bankingRate}% — ${formatCurrencyCompact(data.cod.pendingBankings)} still pending.`, tone: 'warning' }
+  return { text: `Banking rate at ${data.cod.bankingRate}%, ${formatCurrencyCompact(data.cod.pendingBankings)} still pending.`, tone: 'warning' }
 }
 
 function paymentMethodsTakeaway(data: DashboardData): { text: string; tone: 'neutral' } {
@@ -1101,7 +1067,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Dashboard</h1>
-          <p className="text-[11px] text-gray-500">Real-time overview · Auto-refresh 30s</p>
+          <p className="text-[11px] text-gray-500">Auto-refresh 30s</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Period selector (#13) */}
@@ -1152,16 +1118,14 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════ */}
-      {/* EMERGENCY-FIRST LAYOUT                                        */}
-      {/* 1. Emergency strip (borderless) — what's on fire right now    */}
-      {/* 2. Module Status Board (dense table) — one row per module     */}
-      {/* 3. Pulse mini-row (borderless inline) — momentum/predictions  */}
-      {/* 4. Revenue chart (no card) — the one supporting visualization */}
-      {/* 5. Audit basis footer                                         */}
-      {/* ════════════════════════════════════════════════════════════ */}
+      {/* Emergency-first layout:
+         1. Emergency strip
+         2. Status table
+         3. Pulse mini-row
+         4. Revenue chart
+         5. Notes footer */}
 
-      {/* 1. Emergency strip — borderless colored band, no card */}
+      {/* 1. Emergency strip */}
       {(() => {
         const p = data.pulse
         if (!p) return null
@@ -1177,7 +1141,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
             <div className="rounded-lg px-4 py-2.5 bg-green-50 flex items-center gap-2">
               <CheckCircle2 size={14} className="text-green-600 shrink-0" />
               <span className="text-xs text-green-700 font-medium">
-                All clear as of {timeStr} — no overdue parcels, no unbanked COD, nothing stale.
+                All clear as of {timeStr}. No overdue parcels, no unbanked COD, nothing stale.
               </span>
             </div>
           )
@@ -1195,16 +1159,16 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               Emergency · {timeStr}
             </span>
             <span className="text-sm text-red-900 font-medium">
-              {emergencies.join(' · ')}
+              {emergencies.join(', ')}
             </span>
             <span className="text-[10px] text-red-600 ml-auto">
-              See Module Status Board below for actions
+              See table below for actions
             </span>
           </div>
         )
       })()}
 
-      {/* 2. Module Status Board — the centerpiece. Dense table, one row per module. */}
+      {/* 2. Status table */}
       <div>
         <div className="flex items-center gap-2 mb-1">
           <button
@@ -1214,18 +1178,15 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
                 ? 'bg-[#FF6B35] text-white'
                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
-            title="Show only critical and warning modules"
+            title="Show only critical and warning"
           >
             {showOnlyProblems ? '✓ Problems only' : 'Problems only'}
           </button>
-          <span className="text-[10px] text-gray-400">
-            {showOnlyProblems ? 'Hiding healthy modules' : 'Showing all modules'}
-          </span>
         </div>
         <ModuleStatusBoard data={data} onNavigate={onNavigate} showOnlyProblems={showOnlyProblems} />
       </div>
 
-      {/* 3. Pulse mini-row — borderless inline, no cards */}
+      {/* 3. Pulse mini-row */}
       {(() => {
         const p = data.pulse
         if (!p) return null
@@ -1250,8 +1211,8 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
                 </span>
               )}
               <span className="block text-[9px] text-gray-400 mt-0.5">
-                30min: +{p.momentum.last30Min.newOrders} · ✓{p.momentum.last30Min.delivered}
-                {p.momentum.last30Min.failed > 0 && ` · ✗${p.momentum.last30Min.failed}`}
+                30 min: +{p.momentum.last30Min.newOrders}, ✓{p.momentum.last30Min.delivered}
+                {p.momentum.last30Min.failed > 0 && `, ✗${p.momentum.last30Min.failed}`}
               </span>
             </div>
 
@@ -1267,16 +1228,16 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               ) : p.predictions.willGoStaleSoon > 0 ? (
                 <span className="font-bold text-orange-700">{p.predictions.willGoStaleSoon} about to go stale</span>
               ) : p.predictions.willFinishLate ? (
-                <span className="font-bold text-orange-700">Finish {p.predictions.estimatedFinishTime} — late</span>
+                <span className="font-bold text-orange-700">Finish {p.predictions.estimatedFinishTime}. Late.</span>
               ) : p.predictions.estimatedFinishTime ? (
-                <span className="font-bold text-green-700">Finish {p.predictions.estimatedFinishTime} — on track</span>
+                <span className="font-bold text-green-700">Finish {p.predictions.estimatedFinishTime}. On track.</span>
               ) : (
                 <span className="text-gray-500">Nothing to deliver</span>
               )}
               {p.predictions.parcelsStillToDeliver > 0 && (
                 <span className="block text-[9px] text-gray-400 mt-0.5">
-                  {p.predictions.parcelsStillToDeliver} left · {p.predictions.deliveryRatePerHour}/hr
-                  {p.predictions.willGoStaleSoon > 0 && ' · "about to go stale" = 90-120 min in sort'}
+                  {p.predictions.parcelsStillToDeliver} left, {p.predictions.deliveryRatePerHour}/hr
+                  {p.predictions.willGoStaleSoon > 0 && ', "about to go stale" = 90-120 min in sort'}
                 </span>
               )}
             </div>
@@ -1292,7 +1253,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
                 <>
                   <span className="font-bold text-gray-500">Window closed</span>
                   <span className="block text-[9px] text-gray-400 mt-0.5">
-                    After {p.timeAwareness.deliveryWindowEnd}:00 · {p.timeAwareness.parcelsRemaining} parcels still undelivered
+                    After {p.timeAwareness.deliveryWindowEnd}:00, {p.timeAwareness.parcelsRemaining} parcels still undelivered
                   </span>
                 </>
               ) : p.timeAwareness.isBeforeHours ? (
@@ -1344,7 +1305,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         )
       })()}
 
-      {/* 4. Revenue chart — the one supporting visualization. No card container. */}
+      {/* 4. Revenue chart */}
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Revenue Trend</span>
@@ -1363,9 +1324,8 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
           </div>
         </div>
         {(() => {
-          // Slice the revenue data based on the selected range
-          // API always returns 6 months; for 12M we'd need an API change,
-          // so for now 3M = last 3, 6M = all 6, 12M = all 6 (capped)
+          // Slice the revenue data based on the selected range.
+          // API returns 6 months; 3M = last 3, 6M = all 6, 12M = all 6 (capped).
           const allMonths = data.revenueByMonth
           const sliceCount = revenueRange === '3M' ? 3 : 6
           const chartData = allMonths.slice(-sliceCount)
@@ -1401,7 +1361,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
-      {/* 5. Audit basis footer */}
+      {/* 5. Notes footer */}
       {(() => {
         const p = data.pulse
         if (!p) return null
@@ -1410,16 +1370,13 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         return (
           <div className="px-3 py-2">
             <p className="text-[10px] text-gray-400 leading-relaxed">
-              <strong className="text-gray-600">Audit basis:</strong> Data as of {timeStr}. Delivery window = 8:00am–6:00pm.
-              Overdue = dispatched &gt; 6h ago. Stale = sort &gt; 2h, staging &gt; 4h. "About to go stale" = sort &gt; 90 min.
-              Pace = orders since midnight ÷ hours elapsed. Finish time = parcels left ÷ deliveries in last 2 hours.
-              Streaks based on shrinkage records with "stock" in reason. Hover any (i) for full definition.
+              <strong className="text-gray-600">Notes:</strong> Numbers update every 30s. Data as of {timeStr}. Overdue = dispatched &gt; 6h ago. Stale = sort &gt; 2h, staging &gt; 4h. "About to go stale" = sort &gt; 90 min. Pace = orders since midnight ÷ hours elapsed. Finish time = parcels left ÷ deliveries in last 2h.
             </p>
           </div>
         )
       })()}
 
-      {/* Old chart rows removed — replaced by Module Status Board + single revenue chart above. */}
+      {/* Old chart rows removed. */}
     </motion.div>
   )
 }
