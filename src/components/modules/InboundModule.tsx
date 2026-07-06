@@ -399,7 +399,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
   const handleMerchantSelect = (merchantId: string) => {
     const m = merchants.find(merch => merch.merchantId === merchantId)
     setForm({ ...form, merchantId, merchantName: m?.businessName || '', productId: '', productName: '', brand: '', variant: '' })
-    fetch(`/api/products?search=${merchantId}`).then(r => r.json()).then((d: Product[]) => setProducts(d))
+    fetch(`/api/products?search=${merchantId}`).then(r => r.json()).then((d: Product[] | { products?: Product[] }) => setProducts(Array.isArray(d) ? d : (d?.products ?? [])))
   }
 
   const handleProductSelect = (productId: string) => {
