@@ -381,6 +381,7 @@ export default function OutboundModule() {
                       type="checkbox"
                       checked={selectedIds.size === filteredData.length && filteredData.length > 0}
                       onChange={toggleSelectAll}
+                      title="Select all filtered records for bulk advance"
                       className="h-4 w-4 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
                     />
                   </th>

@@ -542,39 +542,9 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
 
-      {/* ── Batch Actions Bar ── */}
-      <AnimatePresence>
-        {selectedIds.size > 0 && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-[#1B2A4A] text-white rounded-xl p-2.5 flex items-center gap-3">
-            <CheckSquare size={16} className="text-[#FF6B35]" />
-            <span className="text-sm font-semibold">{selectedIds.size.toLocaleString()} selected</span>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" className="rounded-lg text-xs border-white/20 text-white hover:bg-white/10" onClick={handleExportAll}><Upload size={13} className="mr-1.5" /> Export All</Button>
-            <Button variant="outline" size="sm" className="rounded-lg text-xs border-white/20 text-white hover:bg-white/10" onClick={handleBatchExport}><Upload size={13} className="mr-1.5" /> Export Selected</Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="rounded-lg text-xs border-red-400/30 text-red-300 hover:bg-red-500/20"><Trash2 size={13} className="mr-1.5" /> Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {selectedIds.size} records?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleBatchDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button variant="ghost" size="sm" className="rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/10" onClick={clearSelection}>Clear</Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* ── Results count ── */}
-      <div className="flex items-center justify-between text-xs text-gray-500">
-        <span>{filteredData.length.toLocaleString()} record{filteredData.length !== 1 ? 's' : ''} found</span>
-        <div className="flex items-center gap-2">
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input type="checkbox" checked={allOnPageSelected} ref={el => { if (el) el.indeterminate = someOnPageSelected }} onChange={() => {
-              if (allOnPageSelected) clearSelection()
-              else setSelectedIds(prev => { const n = new Set(prev); paginatedData.forEach(r => n.add(r.id)); return n })
-            }} className="rounded" />
-            <span>Select page</span>
-          </label>
-        </div>
+      <div className="text-xs text-gray-500">
+        {filteredData.length.toLocaleString()} record{filteredData.length !== 1 ? 's' : ''}
       </div>
 
       {/* ── Table ── */}
@@ -588,7 +558,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
           columns={tableColumns}
           keyExtractor={(r) => r.id}
           onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
-          rowClassName={(r) => selectedIds.has(r.id) ? 'bg-[#FF6B35]/5' : ''}
           pageSize={100}
         />
       )}

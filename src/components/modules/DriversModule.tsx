@@ -541,39 +541,10 @@ export default function DriversModule() {
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
 
-      {/* ── Batch Actions Bar ── */}
-      <AnimatePresence>
-        {selectedIds.size > 0 && (
-          <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }}
-            className="bg-[#1B2A4A] text-white rounded-xl p-2.5 flex items-center gap-3">
-            <CheckSquare size={16} className="text-[#FF6B35]" />
-            <span className="text-sm font-semibold">{selectedIds.size.toLocaleString()} selected</span>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" className="rounded-lg text-xs border-white/20 text-white hover:bg-white/10" onClick={handleBatchExport}><Upload size={13} className="mr-1.5" />Export Selected</Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="rounded-lg text-xs border-red-400/30 text-red-300 hover:bg-red-500/20"><Trash2 size={13} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete {selectedIds.size} drivers?</AlertDialogTitle><AlertDialogDescription>Only drivers without outbound movement will be deleted. Drivers with assigned orders will be skipped.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={handleBatchDelete} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button variant="ghost" size="sm" className="rounded-lg text-xs text-white/60 hover:text-white hover:bg-white/10" onClick={clearSelection}>Clear</Button>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* ── Results count ── */}
       {viewMode === 'card' && (
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>{filteredData.length.toLocaleString()} driver{filteredData.length !== 1 ? 's' : ''} found</span>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 cursor-pointer">
-              <input type="checkbox" checked={allOnPageSelected} ref={el => { if (el) el.indeterminate = someOnPageSelected }} onChange={() => {
-                if (allOnPageSelected) clearSelection()
-                else setSelectedIds(prev => { const n = new Set(prev); paginatedData.forEach(r => n.add(r.id)); return n })
-              }} className="rounded" />
-              <span>Select page</span>
-            </label>
-          </div>
+        <div className="text-xs text-gray-500">
+          {filteredData.length.toLocaleString()} driver{filteredData.length !== 1 ? 's' : ''}
         </div>
       )}
 
@@ -590,21 +561,14 @@ export default function DriversModule() {
         <>
           <motion.div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
             {paginatedData.map((driver) => {
-              const isSelected = selectedIds.has(driver.id)
               const pending = driver.expectedBankings - driver.banked
               const successColor = driver.successRate >= 80 ? 'text-green-600' : driver.successRate >= 50 ? 'text-amber-600' : driver.ordersReceived > 0 ? 'text-red-600' : 'text-gray-400'
               const riskColor = driver.riskPercent <= 10 ? 'text-green-600' : driver.riskPercent <= 30 ? 'text-amber-600' : driver.ordersReceived > 0 ? 'text-red-600' : 'text-gray-400'
               return (
                 <motion.div key={driver.id} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                  className={`group relative bg-white rounded-2xl border-2 border-l-4 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${statusBorderAccent(driver.status)} ${isSelected ? 'border-[#FF6B35] shadow-md' : 'border-gray-100'}`}
+                  className={`group relative bg-white rounded-2xl border-2 border-l-4 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${statusBorderAccent(driver.status)} border-gray-100`}
                   onClick={() => openDriverDetail(driver)}
                   onDoubleClick={() => { setDetailOpen(false); setProfileDriver(driver) }}>
-                  {/* Checkbox */}
-                  <div className="absolute top-3 right-3 z-10" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => toggleSelect(driver.id)} className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${isSelected ? 'border-[#FF6B35] bg-[#FF6B35]' : 'border-gray-300 bg-transparent'}`}>
-                      {isSelected && <span className="text-white text-[10px]">✓</span>}
-                    </button>
-                  </div>
                   {/* Top row: Avatar + ID + Status + Notifications */}
                   <div className="flex items-start gap-3 mb-3 pr-8">
                     <div className="w-10 h-10 rounded-xl border-2 border-white shadow-sm overflow-hidden shrink-0 bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 flex items-center justify-center -mt-1">
@@ -711,7 +675,7 @@ export default function DriversModule() {
           columns={tableColumns}
           keyExtractor={(r) => r.id}
           onRowClick={(r) => openDriverDetail(r)}
-          rowClassName={(r) => selectedIds.has(r.id) ? 'bg-[#FF6B35]/5' : ''}
+          rowClassName={() => ''}
           pageSize={100}
         />
       )}
