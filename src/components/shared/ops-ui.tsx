@@ -148,7 +148,7 @@ export function OpsHeader({
           <h1 className="text-lg font-bold text-gray-900 truncate">{title}</h1>
           {description && <p className="text-[11px] text-gray-500">{description}</p>}
         </div>
-        <div className="flex items-center gap-2 relative z-50">
+        <div className="flex items-center gap-2">
           {children}
           {actionLabel && onAction && (
             <Button size="sm" onClick={onAction} className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white">
