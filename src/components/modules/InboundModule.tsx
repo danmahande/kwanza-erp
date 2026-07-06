@@ -542,11 +542,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
 
-      {/* ── Results count ── */}
-      <div className="text-xs text-gray-500">
-        {filteredData.length.toLocaleString()} record{filteredData.length !== 1 ? 's' : ''}
-      </div>
-
       {/* ── Table ── */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
