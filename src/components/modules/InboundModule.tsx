@@ -534,9 +534,42 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         actionLabel="Receive Inventory"
         onAction={() => { resetForm(); setOpen(true) }}
       >
-        <SearchableFilter label="Vendor" options={vendors} selected={filterVendor.length > 1 ? filterVendor : filterVendor[0] || null} onSelect={handleFilterVendorChange} counts={vendorCounts} multi />
-        <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={INBOUND_STATUSES} counts={statusCounts} />
-        <DateRangeFilter value={filterDateRange} onChange={setFilterDateRange} />
+        {/* Vendor filter - native select */}
+        <select
+          value={filterVendor[0] || ''}
+          onChange={e => handleFilterVendorChange(e.target.value || null)}
+          className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
+        >
+          <option value="">All Vendors</option>
+          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+        </select>
+
+        {/* Status filter - native select */}
+        <select
+          value={filterStatus || ''}
+          onChange={e => handleFilterStatusChange(e.target.value || null)}
+          className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
+        >
+          <option value="">All Status</option>
+          {INBOUND_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
+        </select>
+
+        {/* Date filter - native date inputs */}
+        <div className="flex items-center gap-1">
+          <input
+            type="date"
+            value={filterDateRange?.from || ''}
+            onChange={e => setFilterDateRange(prev => ({ from: e.target.value || null, to: prev?.to || null }))}
+            className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
+          />
+          <span className="text-gray-400 text-xs">to</span>
+          <input
+            type="date"
+            value={filterDateRange?.to || ''}
+            onChange={e => setFilterDateRange(prev => ({ from: prev?.from || null, to: e.target.value || null }))}
+            className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
+          />
+        </div>
       </OpsHeader>
 
       {/* ── Active Filters ── */}
