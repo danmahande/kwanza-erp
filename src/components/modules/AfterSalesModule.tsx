@@ -163,7 +163,7 @@ export default function AfterSalesModule() {
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        toast.success('RMA created — order number flipped from DS to RT')
+        toast.success('RMA created. Order number flipped from DS to RT')
         setOpen(false)
         setForm({ originalOrderId: '', customerId: '', customerName: '', reason: '', refundAmount: '', itemIds: '' })
         fetchData()
@@ -198,7 +198,7 @@ export default function AfterSalesModule() {
         }),
       })
       if (res.ok) {
-        toast.success('RMA approved — dispositions applied')
+        toast.success('RMA approved. Dispositions applied')
         setDispositionOpen(false)
         fetchData()
       } else {
@@ -246,7 +246,7 @@ export default function AfterSalesModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="After-Sales (RMA)"
-        description="Customer returns — approve and decide disposition per item"
+        description="Approve returns and set disposition per item"
         kpiCells={[
           { label: 'TOTAL RMAs', value: data.length },
           { label: 'PENDING', value: data.filter(r => r.returnStatus === 'initiated' || r.returnStatus === 'in_review').length },
@@ -435,7 +435,7 @@ export default function AfterSalesModule() {
             >
               <option value="">Select order (or skip for walk-in return)...</option>
               {orders.slice(0, 50).map(o => (
-                <option key={o.orderId} value={o.orderId}>{o.orderNumber} — {o.customerName}</option>
+                <option key={o.orderId} value={o.orderId}>{o.orderNumber}, {o.customerName}</option>
               ))}
             </select>
           </div>
@@ -479,12 +479,12 @@ export default function AfterSalesModule() {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Cpu size={18} />
-              Approve RMA — Set Disposition per Item
+              Approve RMA: Set Disposition per Item
             </AlertDialogTitle>
             <AlertDialogDescription>
               For each returned item, decide what to do with it. <InfoTip term="disposition" size={12} className="ml-1" />
               <br />
-              <strong>RESTOCK</strong> = put back on shelf · <strong>RTV</strong> = return to vendor (auto-creates RTV record) · <strong>DISPOSE</strong> = destroy · <strong>LIQUIDATE</strong> = sell off cheap.
+              <strong>RESTOCK</strong> = put back on shelf, <strong>RTV</strong> = return to vendor (auto-creates RTV record), <strong>DISPOSE</strong> = destroy, <strong>LIQUIDATE</strong> = sell off cheap.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -505,10 +505,10 @@ export default function AfterSalesModule() {
                       }}
                       className="rounded-lg border border-gray-200 bg-white px-2 py-1 text-xs"
                     >
-                      <option value="RESTOCK">RESTOCK — back on shelf</option>
-                      <option value="RTV">RTV — return to vendor</option>
-                      <option value="DISPOSE">DISPOSE — destroy</option>
-                      <option value="LIQUIDATE">LIQUIDATE — sell off cheap</option>
+                      <option value="RESTOCK">RESTOCK: back on shelf</option>
+                      <option value="RTV">RTV: return to vendor</option>
+                      <option value="DISPOSE">DISPOSE: destroy</option>
+                      <option value="LIQUIDATE">LIQUIDATE: sell off cheap</option>
                     </select>
                   </div>
                 ))}

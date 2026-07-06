@@ -382,7 +382,7 @@ export default function RTVModule() {
               <p className="text-xs text-gray-400 mt-0.5">Product ID: {selectedRecord.productId}</p>
             </div>
 
-            {/* Linked Shrinkage Records — sub-component of RTV */}
+            {/* Linked Shrinkage Records */}
             <div className="bg-white rounded-xl border border-gray-200 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle size={14} className="text-red-500" />
@@ -431,7 +431,7 @@ export default function RTVModule() {
               )}
               {linkedShrinkage.length > 0 && (
                 <p className="text-[10px] text-gray-400 mt-2">
-                  {linkedShrinkage.length} shrinkage record(s) linked · Total qty: {linkedShrinkage.reduce((s, r) => s + r.qty, 0)} · Total value: UGX {linkedShrinkage.reduce((s, r) => s + (r.totalValue || 0), 0).toLocaleString()}
+                  {linkedShrinkage.length} shrinkage record(s) linked, Total qty: {linkedShrinkage.reduce((s, r) => s + r.qty, 0)}, Total value: UGX {linkedShrinkage.reduce((s, r) => s + (r.totalValue || 0), 0).toLocaleString()}
                 </p>
               )}
             </div>

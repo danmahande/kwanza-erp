@@ -221,7 +221,7 @@ export default function OutboundModule() {
         }),
       })
       if (res.ok) {
-        toast.success('Exception reported — linked shrinkage record created')
+        toast.success('Exception reported. Linked shrinkage record created.')
         setExceptionOpen(false)
         fetchData()
       } else {
@@ -270,7 +270,7 @@ export default function OutboundModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Outbound Records"
-        description="Forward-moving workflow: Pick → Pack → Dispatch → Deliver"
+        description="Pick, pack, dispatch, deliver"
         kpiCells={[
           { label: 'TOTAL', value: data.length },
           { label: 'READY TO PICK', value: counts.ready_to_pick || 0 },
@@ -337,7 +337,7 @@ export default function OutboundModule() {
                 ))
               ) : (
                 <span className="text-xs text-blue-700">
-                  Mixed statuses — select records in the same stage to bulk-advance them
+                  Mixed statuses. Select records in the same stage to bulk-advance them.
                 </span>
               )}
               <Button
@@ -427,7 +427,7 @@ export default function OutboundModule() {
                         <td className="px-3 py-3">
                           <p className="text-xs text-gray-900">{r.productName}</p>
                           <p className="text-[10px] text-gray-400">
-                            {r.brand && `${r.brand} · `}
+                            {r.brand && `${r.brand}, `}
                             {r.variant && r.variant}
                           </p>
                         </td>

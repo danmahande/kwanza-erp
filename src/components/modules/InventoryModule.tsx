@@ -652,7 +652,7 @@ export default function InventoryModule() {
       ) : paginatedData.length === 0 ? (
         <div className="py-12 text-center text-gray-400 text-sm">
           <Package size={32} className="mx-auto mb-3 text-gray-300" />
-          No products found. Adjust filters or add products in the Products tab.
+          No products. Adjust filters or add products in the Products tab.
         </div>
       ) : (
         <DenseTable>
@@ -711,7 +711,7 @@ export default function InventoryModule() {
         </div>
       )}
 
-      {/* Detail slide-over — single dense card pattern */}
+      {/* Detail slide-over */}
       <DetailSlideOver
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
@@ -726,7 +726,7 @@ export default function InventoryModule() {
       >
         {selectedRecord && (
           <div className="space-y-3">
-            {/* Single dense card — product details */}
+            {/* Product details */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Product Details</h3>
               <div className="space-y-2 text-xs">
@@ -764,7 +764,7 @@ export default function InventoryModule() {
               </div>
             </div>
 
-            {/* Single dense card — stock + pricing */}
+            {/* Stock + pricing */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Stock & Pricing</h3>
               <div className="space-y-2 text-xs">
@@ -803,7 +803,7 @@ export default function InventoryModule() {
               </div>
             </div>
 
-            {/* Single dense card — movement summary */}
+            {/* Movement summary */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement Summary</h3>
               <div className="space-y-2 text-xs">
