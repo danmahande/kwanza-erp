@@ -615,37 +615,7 @@ export default function InventoryModule() {
         </Button>
       </OpsHeader>
 
-      {/* Status filter chips */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Filter size={14} className="text-gray-400" />
-        {[
-          { key: '', label: 'All' },
-          { key: 'in-stock', label: 'In Stock' },
-          { key: 'low-stock', label: 'Low Stock' },
-          { key: 'out-of-stock', label: 'Out of Stock' },
-          { key: 'negative', label: 'Negative' },
-        ].map(chip => {
-          const count = chip.key === '' ? data.length : statusCounts[chip.key] || 0
-          const isActive = filterStatus === chip.key || (chip.key === '' && !filterStatus)
-          return (
-            <button key={chip.key || 'all'} onClick={() => handleFilterStatusChange(chip.key || null)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              {chip.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
-            </button>
-          )
-        })}
-        {/* Vendor filter */}
-        {vendors.length > 0 && (
-          <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
-            className="ml-auto px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white">
-            <option value="">All Vendors</option>
-            {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        )}
-      </div>
-
-      {/* Dense table */}
+      {/* Dense table with inline filters in header */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
       ) : paginatedData.length === 0 ? (
@@ -656,38 +626,77 @@ export default function InventoryModule() {
       ) : (
         <DenseTable>
           <thead>
+            {/* Row 1: column headers */}
             <tr>
               <DenseTh className="w-20">SKU</DenseTh>
               <DenseTh>Product</DenseTh>
               <DenseTh>Merchant</DenseTh>
-              <DenseTh className="w-16 text-right">Stock</DenseTh>
+              <DenseTh className="w-16 text-right">On Hand</DenseTh>
+              <DenseTh className="w-16 text-right">In</DenseTh>
+              <DenseTh className="w-16 text-right">Out</DenseTh>
               <DenseTh className="w-16 text-right">Min</DenseTh>
               <DenseTh className="w-20 text-center">Status</DenseTh>
-              <DenseTh className="w-24 text-right">Unit Cost</DenseTh>
               <DenseTh className="w-24 text-right">Stock Value</DenseTh>
+            </tr>
+            {/* Row 2: inline filters */}
+            <tr className="bg-gray-50/50 border-b border-gray-100">
+              <td colSpan={2} className="px-3 py-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {[
+                    { key: '', label: 'All' },
+                    { key: 'in-stock', label: 'In Stock' },
+                    { key: 'low-stock', label: 'Low' },
+                    { key: 'out-of-stock', label: 'Out' },
+                    { key: 'negative', label: 'Neg' },
+                  ].map(chip => {
+                    const count = chip.key === '' ? data.length : statusCounts[chip.key] || 0
+                    const isActive = filterStatus === chip.key || (chip.key === '' && !filterStatus)
+                    return (
+                      <button key={chip.key || 'all'} onClick={() => handleFilterStatusChange(chip.key || null)}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                        {chip.label}
+                        <span className={`px-1 rounded-full text-[9px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </td>
+              <td className="px-3 py-1.5">
+                {vendors.length > 0 && (
+                  <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
+                    className="px-1.5 py-0.5 rounded-md text-[10px] border border-gray-200 text-gray-600 bg-white max-w-[100px]">
+                    <option value="">All Vendors</option>
+                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                )}
+              </td>
+              <td colSpan={6}></td>
             </tr>
           </thead>
           <tbody>
             {paginatedData.map(p => {
               const status = stockStatus(p)
               const qty = safe(p.computedCurrentQty)
+              const inQty = safe(p.inQty)
+              const outQty = safe(p.outQty)
               return (
                 <DenseTr key={p.id} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
                   tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
                   <DenseTd mono className="text-gray-400 text-[10px]">{p.productId}</DenseTd>
                   <DenseTd>
                     <p className="text-gray-900 font-medium text-xs truncate max-w-[200px]">{p.productLabel}</p>
-                    {p.brand && <p className="text-[10px] text-gray-400">{p.brand}{p.variant ? ` · ${p.variant}` : ''}</p>}
+                    {p.brand && <p className="text-[10px] text-gray-400">{p.brand}{p.variant ? `, ${p.variant}` : ''}</p>}
                   </DenseTd>
                   <DenseTd className="text-gray-600 text-[11px]">{p.merchantName}</DenseTd>
                   <DenseTd mono right className={qty < 0 ? 'text-red-600 font-bold' : qty === 0 ? 'text-gray-400' : 'text-gray-900 font-bold'}>
                     {fmt(qty)}
                   </DenseTd>
+                  <DenseTd mono right className="text-blue-600 text-[11px]">{inQty > 0 ? `+${fmt(inQty)}` : '—'}</DenseTd>
+                  <DenseTd mono right className="text-orange-600 text-[11px]">{outQty > 0 ? `-${fmt(outQty)}` : '—'}</DenseTd>
                   <DenseTd mono right className="text-gray-400">{p.minStock}</DenseTd>
                   <DenseTd className="text-center">
                     <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
                   </DenseTd>
-                  <DenseTd mono right className="text-gray-600">{fmt(p.unitCost)}</DenseTd>
                   <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
                     {fmt(safe(p.currentStockValue))}
                   </DenseTd>
