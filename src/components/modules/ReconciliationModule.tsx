@@ -82,32 +82,13 @@ export default function ReconciliationModule() {
         }}
       />
 
-      {/* Tab filter chips */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {[
-          { key: 'physical' as const, label: 'Physical Goods', icon: Scale, term: 'physicalReconciliation' },
-          { key: 'cash' as const, label: 'Cash', icon: Banknote, term: 'cashReconciliation' },
-        ].map(chip => {
-          const isActive = tab === chip.key
-          const Icon = chip.icon
-          const count = chip.key === 'physical' ? physicalRecords.length : cashRecords.length
-          return (
-            <button key={chip.key} onClick={() => setTab(chip.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              <Icon size={12} /> {chip.label}
-              <InfoTip term={chip.term} size={11} className={isActive ? 'text-white/70' : 'text-gray-400'} />
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Dense table */}
+      {/* Dense table with inline tab filters in header */}
       {currentRecords.length === 0 ? (
         <div className="py-12 text-center text-gray-400 text-sm">No {tab} reconciliation records found.</div>
       ) : (
         <DenseTable>
           <thead>
+            {/* Row 1: column headers */}
             <tr>
               <DenseTh className="w-28">Reference</DenseTh>
               <DenseTh className="w-20 text-right">Expected</DenseTh>
@@ -116,6 +97,28 @@ export default function ReconciliationModule() {
               <DenseTh>Reason</DenseTh>
               <DenseTh className="w-24">By</DenseTh>
               <DenseTh className="w-24">Date</DenseTh>
+            </tr>
+            {/* Row 2: inline tab filters */}
+            <tr className="bg-gray-50/50 border-b border-gray-100">
+              <td colSpan={7} className="px-3 py-1.5">
+                <div className="flex items-center gap-1.5">
+                  {[
+                    { key: 'physical' as const, label: 'Physical Goods', icon: Scale, term: 'physicalReconciliation' },
+                    { key: 'cash' as const, label: 'Cash', icon: Banknote, term: 'cashReconciliation' },
+                  ].map(chip => {
+                    const isActive = tab === chip.key
+                    const Icon = chip.icon
+                    const count = chip.key === 'physical' ? physicalRecords.length : cashRecords.length
+                    return (
+                      <button key={chip.key} onClick={() => setTab(chip.key)}
+                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                        <Icon size={10} /> {chip.label}
+                        <span className={`px-1 rounded-full text-[9px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </td>
             </tr>
           </thead>
           <tbody>

@@ -539,9 +539,6 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         <DateRangeFilter value={filterDateRange} onChange={setFilterDateRange} />
       </OpsHeader>
 
-      {/* ── Active Filters ── */}
-      <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
-
       {/* ── Table ── */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
