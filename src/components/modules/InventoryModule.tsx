@@ -596,9 +596,8 @@ export default function InventoryModule() {
     <div className="space-y-3">
       <OpsHeader
         title="Stock"
-        description="Current stock levels across all products"
+        description="What's on the shelves right now"
         kpiCells={[
-          { label: 'SKUS', value: data.length },
           { label: 'STOCK VALUE', value: `UGX ${fmt(totalStockValue)}` },
           { label: 'LOW STOCK', value: lowStockCount, highlight: lowStockCount > 0, highlightColor: 'orange' as const },
           { label: 'OUT OF STOCK', value: outOfStockCount, highlight: outOfStockCount > 0, highlightColor: 'red' as const },

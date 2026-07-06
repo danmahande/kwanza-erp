@@ -10,17 +10,13 @@ import ReconciliationModule from './ReconciliationModule'
 
 type Tab = 'stock' | 'inbound' | 'tracker' | 'reconciliation'
 
-const tabs: { key: Tab; label: string; icon: typeof Package }[] = [
-  { key: 'inbound', label: 'Inbound', icon: ArrowDownRight },
-  { key: 'stock', label: 'Stock', icon: Package },
-  { key: 'tracker', label: 'Item Tracker', icon: ScanBarcode },
-  { key: 'reconciliation', label: 'Reconciliation', icon: Scale },
+const tabs: { key: Tab; label: string; sub: string; icon: typeof Package }[] = [
+  { key: 'inbound',       label: 'Inbound',       sub: 'Receive stock',     icon: ArrowDownRight },
+  { key: 'stock',         label: 'Stock',         sub: 'What\'s on shelves', icon: Package },
+  { key: 'tracker',       label: 'Item Tracker',  sub: 'Track by barcode',  icon: ScanBarcode },
+  { key: 'reconciliation', label: 'Reconciliation', sub: 'Match system to reality', icon: Scale },
 ]
 
-/**
- * Inventory parent module — composes the 4 inventory submodules as tabs.
- * Reduces sidebar clutter: one "Inventory" entry instead of four.
- */
 export default function InventoryParentModule() {
   const [activeTab, setActiveTab] = useState<Tab>('inbound')
 
@@ -45,6 +41,9 @@ export default function InventoryParentModule() {
             >
               <Icon size={14} />
               {tab.label}
+              <span className={`text-[10px] font-normal ${isActive ? 'text-gray-400' : 'text-gray-400'}`}>
+                {tab.sub}
+              </span>
             </button>
           )
         })}
