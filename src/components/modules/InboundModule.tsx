@@ -60,8 +60,10 @@ const PALLETS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']
 const PAGE_SIZES = [25, 50, 100, 200]
 
 const INBOUND_STATUSES = [
-  { key: 'received', label: 'Received', dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' },
-  { key: 'partial', label: 'Partial', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+  { key: 'received', label: 'Received', dot: 'bg-blue-500', badge: 'bg-blue-100 text-blue-700' },
+  { key: 'put_away', label: 'Put Away', dot: 'bg-amber-500', badge: 'bg-amber-100 text-amber-700' },
+  { key: 'stored', label: 'Stored', dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' },
+  { key: 'partial', label: 'Partial', dot: 'bg-orange-500', badge: 'bg-orange-100 text-orange-700' },
   { key: 'damaged', label: 'Damaged', dot: 'bg-red-500', badge: 'bg-red-100 text-red-700' },
 ]
 
@@ -533,51 +535,45 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         searchPlaceholder="Search inbound records..."
         actionLabel="Receive Inventory"
         onAction={() => { resetForm(); setOpen(true) }}
-      >
-        {/* Vendor filter - native select */}
-        <select
-          value={filterVendor[0] || ''}
-          onChange={e => handleFilterVendorChange(e.target.value || null)}
-          className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
+      />
+
+      {/* Filter chips (Outbound pattern: plain buttons, no Popover) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Filter size={14} className="text-gray-400" />
+        {/* Status chips */}
+        <button
+          onClick={() => handleFilterStatusChange(null)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${!filterStatus ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
         >
-          <option value="">All Vendors</option>
-          {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-
-        {/* Status filter - native select */}
-        <select
-          value={filterStatus || ''}
-          onChange={e => handleFilterStatusChange(e.target.value || null)}
-          className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
-        >
-          <option value="">All Status</option>
-          {INBOUND_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-        </select>
-
-        {/* Date filter - native date inputs */}
-        <div className="flex items-center gap-1">
-          <input
-            type="date"
-            value={filterDateRange?.from || ''}
-            onChange={e => setFilterDateRange(prev => ({ from: e.target.value || null, to: prev?.to || null }))}
-            className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
-          />
-          <span className="text-gray-400 text-xs">to</span>
-          <input
-            type="date"
-            value={filterDateRange?.to || ''}
-            onChange={e => setFilterDateRange(prev => ({ from: prev?.from || null, to: e.target.value || null }))}
-            className="px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white h-9"
-          />
-        </div>
-      </OpsHeader>
-
-      {/* ── Active Filters ── */}
-      <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
-
-      {/* ── Results count ── */}
-      <div className="text-xs text-gray-500">
-        {filteredData.length.toLocaleString()} record{filteredData.length !== 1 ? 's' : ''}
+          All
+          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${!filterStatus ? 'bg-white/20' : 'bg-gray-100'}`}>{data.length}</span>
+        </button>
+        {INBOUND_STATUSES.map(s => {
+          const isActive = filterStatus === s.key
+          const count = statusCounts[s.key] || 0
+          return (
+            <button
+              key={s.key}
+              onClick={() => handleFilterStatusChange(isActive ? null : s.key)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+            >
+              <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+              {s.label}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+            </button>
+          )
+        })}
+        {/* Vendor filter */}
+        {vendors.length > 0 && (
+          <select
+            value={filterVendor[0] || ''}
+            onChange={e => handleFilterVendorChange(e.target.value || null)}
+            className="ml-auto px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white"
+          >
+            <option value="">All Vendors</option>
+            {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+        )}
       </div>
 
       {/* ── Table ── */}
@@ -591,36 +587,10 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
           columns={tableColumns}
           keyExtractor={(r) => r.id}
           onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
-          pageSize={100}
+          pageSize={25}
         />
       )}
-
-      {/* ── Pagination ── */}
-      {sortedData.length > pageSize && (
-        <div className="flex items-center justify-between text-xs text-gray-500 pt-2">
-          <div>
-            Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length.toLocaleString()}
-          </div>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(1)}><ChevronsLeft size={14} /></Button>
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
-            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-              let pageNum: number
-              if (totalPages <= 7) pageNum = i + 1
-              else if (page <= 4) pageNum = i + 1
-              else if (page >= totalPages - 3) pageNum = totalPages - 6 + i
-              else pageNum = page - 3 + i
-              return (
-                <Button key={pageNum} variant={pageNum === page ? 'default' : 'outline'} size="icon"
-                  className={`h-7 w-7 text-xs rounded-lg ${pageNum === page ? 'bg-[#1B2A4A] hover:bg-[#1B2A4A]' : ''}`}
-                  onClick={() => setPage(pageNum)}>{pageNum}</Button>
-              )
-            })}
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(totalPages)}><ChevronsRight size={14} /></Button>
-          </div>
-        </div>
-      )}
+      {/* Pagination handled by DataTable internally */}
 
       {/* ── Detail SlideOver ── */}
       <DetailSlideOver
