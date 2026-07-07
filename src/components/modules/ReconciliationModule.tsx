@@ -147,9 +147,9 @@ export default function ReconciliationModule() {
       <DetailSlideOver
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
-        title={selectedRecord?.referenceId || 'Reconciliation'}
-        subtitle={selectedRecord ? `${selectedRecord.type === 'physical' ? 'Physical Goods' : 'Cash'} Reconciliation` : ''}
-        width="lg"
+        title={selectedRecord?.type === 'physical' ? 'Physical Goods' : 'Cash'}
+        subtitle={selectedRecord?.referenceId || selectedRecord?.id.slice(-6)}
+                width="lg"
         footer={
           <div className="flex items-center justify-between">
             {selectedRecord && (
@@ -214,7 +214,7 @@ export default function ReconciliationModule() {
         onClose={() => setOpen(false)}
         title="New Reconciliation"
         subtitle={tab === 'physical' ? 'Physical Goods' : 'Cash'}
-        width="md"
+        width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
             <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>

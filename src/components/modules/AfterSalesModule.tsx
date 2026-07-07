@@ -14,7 +14,6 @@ import {
   PackageX, Search, Plus, CheckCircle2, XCircle, RotateCcw, Cpu, Filter, ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'

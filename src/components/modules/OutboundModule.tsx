@@ -10,9 +10,7 @@ import {
   Boxes, ClipboardList, FileText, Layers, CheckCircle2, X, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
-import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import {

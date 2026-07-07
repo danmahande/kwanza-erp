@@ -12,7 +12,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { formatCurrency } from '@/lib/currency'

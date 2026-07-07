@@ -274,7 +274,7 @@ export default function DriverProfile({
           { label: 'Risk', value: `${driver.riskPercent}%`, icon: ShieldAlert, color: driver.riskPercent <= 10 ? 'text-green-600' : driver.riskPercent <= 30 ? 'text-amber-600' : 'text-red-600', bg: driver.riskPercent <= 10 ? 'bg-green-50' : driver.riskPercent <= 30 ? 'bg-amber-50' : 'bg-red-50' },
           { label: 'Total Sales', value: fmtMoney(driver.totalSaleAmount), icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50' },
         ].map(kpi => (
-          <div key={kpi.label} className={`rounded-xl p-4 border border-gray-100 ${kpi.bg}`}>
+          <div key={kpi.label} className={`bg-gray-50 rounded-lg border border-gray-100 p-3 ${kpi.bg}`}>
             <div className="flex items-center gap-2 mb-1">
               <kpi.icon size={14} className={kpi.color} />
               <span className="text-[10px] text-gray-500 uppercase tracking-wider font-medium">{kpi.label}</span>

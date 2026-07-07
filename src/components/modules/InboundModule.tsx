@@ -17,7 +17,6 @@ import {
   CheckSquare, Square, Upload, Trash2, User, Building2, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
@@ -702,7 +701,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         onClose={() => setOpen(false)}
         title="Receive Inventory"
         subtitle="New inbound record"
-        width="xl"
+        width="lg"
         footer={
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
@@ -750,7 +749,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
 
           {/* Value preview */}
           {form.qtyIn && form.unitPrice && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200/60 rounded-xl p-3">
+            <div className="bg-green-50 rounded-lg border border-green-100 p-3">
               <p className="text-xs text-gray-500">Total Inbound Value</p>
               <p className="text-lg font-bold text-green-700">UGX {(parseInt(form.qtyIn) * parseFloat(form.unitPrice)).toLocaleString()}</p>
             </div>

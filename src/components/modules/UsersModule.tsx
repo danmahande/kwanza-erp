@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Shield, Users as UsersIcon, UserCheck, UserX, UserMinus, Pencil, Calendar, Lock } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface UserRecord {
@@ -118,11 +118,14 @@ export default function UsersModule() {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      <OfficeHeader
-        title="Users & Access Office"
-        description="Manage system users, roles, and access permissions"
-        icon={Shield}
-        stats={stats}
+      <OpsHeader
+        title="Users"
+        description="Manage system users, roles, and access"
+        kpiCells={[
+          { label: 'TOTAL', value: data.length },
+          { label: 'ACTIVE', value: activeCount },
+          { label: 'INACTIVE', value: inactiveCount, highlight: inactiveCount > 0, highlightColor: 'red' as const },
+        ]}
         actionLabel="Add User"
         onAction={openCreate}
       />
@@ -222,7 +225,7 @@ export default function UsersModule() {
         }
       >
         {editing && (
-          <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
+          <div className="mb-6 bg-gray-50 rounded-lg border border-gray-100 p-3">
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Email</p>

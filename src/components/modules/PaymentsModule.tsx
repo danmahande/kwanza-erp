@@ -307,9 +307,9 @@ export default function PaymentsModule() {
       <DetailSlideOver
         open={open}
         onClose={() => { setOpen(false); setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }) }}
-        title={editing ? `Payment ${editing.paymentId}` : 'Record New Payment'}
-        subtitle={editing ? `${editing.merchantName}` : 'Fill in the payment details below'}
-        width="lg"
+        title={editing ? editing.merchantName : 'Record New Payment'}
+        subtitle={editing ? editing.paymentId : 'Fill in the payment details below'}
+                width="lg"
         footer={
           <div className="flex items-center justify-between">
             {editing && <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}><Trash2 size={16} className="mr-2" /> Delete</Button>}

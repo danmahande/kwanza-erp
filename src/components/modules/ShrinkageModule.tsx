@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader, StatusPill, rowTint, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
@@ -287,8 +286,8 @@ export default function ShrinkageModule() {
       <DetailSlideOver
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        title={selectedRecord?.shrinkageId || ''}
-        subtitle="Shrinkage Record Details"
+        title={selectedRecord?.productName || 'Shrinkage'}
+        subtitle={selectedRecord?.shrinkageId}
         width="lg"
       >
         {selectedRecord && (
@@ -300,7 +299,7 @@ export default function ShrinkageModule() {
             </div>
 
             {/* Qty lost - hero */}
-            <div className="bg-gradient-to-br from-red-50 to-red-100/50 rounded-2xl p-6 text-center border border-red-100">
+            <div className="bg-red-50 rounded-lg border border-red-100 p-4 text-center">
               <AlertOctagon size={24} className="text-red-400 mx-auto mb-2" />
               <p className="text-[10px] text-red-400 uppercase tracking-wider font-bold">Total Quantity Lost</p>
               <p className="text-4xl font-extrabold text-red-600 tabular-nums mt-1">{selectedRecord.qty}</p>
@@ -320,7 +319,7 @@ export default function ShrinkageModule() {
             </div>
 
             {/* Product Info */}
-            <div className="bg-gray-50/80 rounded-xl p-4">
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Package size={14} className="text-red-500" />
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Details</span>
@@ -330,7 +329,7 @@ export default function ShrinkageModule() {
             </div>
 
             {/* Reporter Info */}
-            <div className="bg-gray-50/80 rounded-xl p-4">
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
               <div className="flex items-center gap-2 mb-2">
                 <UserCircle size={14} className="text-[#FF6B35]" />
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reported By</span>

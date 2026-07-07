@@ -304,8 +304,8 @@ export default function ChargesModule() {
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
-        title={selected?.chargeId || ''}
-        subtitle={selected ? `${selected.merchantName} · ${selected.period}` : ''}
+        title={selected?.merchantName || 'Charge'}
+        subtitle={selected?.chargeId}
         width="lg"
       >
         {selected && (() => {

@@ -278,8 +278,8 @@ export default function DisputesModule() {
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
-        title={selected?.disputeId || ''}
-        subtitle={selected ? `${selected.merchantName} · ${selected.statementId}` : ''}
+        title={selected?.merchantName || 'Dispute'}
+        subtitle={selected?.disputeId}
         width="lg"
       >
         {selected && (() => {

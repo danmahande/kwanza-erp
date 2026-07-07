@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
@@ -334,8 +333,8 @@ export default function RTVModule() {
       <DetailSlideOver
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
-        title={selectedRecord?.rtvId || ''}
-        subtitle="RTV Record Details"
+        title={selectedRecord?.productName || 'RTV'}
+        subtitle={selectedRecord?.rtvId}
         width="lg"
       >
         {selectedRecord && (
@@ -363,7 +362,7 @@ export default function RTVModule() {
             </div>
 
             {/* Merchant Info */}
-            <div className="bg-gray-50/80 rounded-xl p-4">
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
               <div className="flex items-center gap-2 mb-2">
                 <User size={14} className="text-[#FF6B35]" />
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Merchant Details</span>
@@ -373,7 +372,7 @@ export default function RTVModule() {
             </div>
 
             {/* Product Info */}
-            <div className="bg-gray-50/80 rounded-xl p-4">
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
               <div className="flex items-center gap-2 mb-2">
                 <Package size={14} className="text-[#FF6B35]" />
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product Details</span>

@@ -272,7 +272,7 @@ export default function PaymentBatchesModule() {
         onClose={() => setCreateOpen(false)}
         title="Create Payment Batch"
         subtitle={`${selectedIds.size} statements selected · Total: ${formatCurrency(selectedTotal)}`}
-        width="md"
+        width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
             <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
@@ -315,9 +315,9 @@ export default function PaymentBatchesModule() {
       <DetailSlideOver
         open={!!viewBatch}
         onClose={() => { setViewBatch(null); setDisburseForm({ bankReference: '' }) }}
-        title={viewBatch ? `Batch ${viewBatch.batchId}` : ''}
-        subtitle={viewBatch ? `${viewBatch.merchantCount} merchants · ${formatCurrency(viewBatch.totalAmount)} · ${viewBatch.paymentMethod}` : ''}
-        width="md"
+        title={viewBatch ? 'Payment Batch' : ''}
+        subtitle={viewBatch ? viewBatch.batchId : ''}
+                width="lg"
         footer={
           viewBatch && viewBatch.status !== 'disbursed' ? (
             <AlertDialog>

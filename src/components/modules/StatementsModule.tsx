@@ -259,9 +259,9 @@ export default function StatementsModule() {
       <DetailSlideOver
         open={open}
         onClose={() => setOpen(false)}
-        title={editing ? `Statement ${editing.statementId}` : 'Generate Statement'}
-        subtitle={editing ? `${editing.merchantName} — ${editing.period}` : 'Select a merchant and the monthly period to generate for'}
-        width="lg"
+        title={editing ? editing.merchantName : 'Generate Statement'}
+        subtitle={editing ? `${editing.statementId}, ${editing.period}` : 'Select a merchant and the monthly period'}
+                width="lg"
         footer={
           <div className="flex items-center gap-2 flex-wrap">
             {editing && !editing.isPaid && (

@@ -14,7 +14,6 @@ import {
   ShoppingCart, Search, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -679,9 +678,9 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
       <DetailSlideOver
         open={viewOpen}
         onClose={() => setViewOpen(false)}
-        title={viewing ? `Order ${viewing.orderNumber}` : ''}
-        subtitle={viewing ? `${viewing.customerName} · ${formatCurrency(viewing.totalAmount)}` : ''}
-        width="md"
+        title={viewing ? viewing.customerName : ''}
+        subtitle={viewing ? `${viewing.orderNumber}, ${formatCurrency(viewing.totalAmount)}` : ''}
+        width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
             {viewing && (
@@ -706,7 +705,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
       >
         {viewing && (
           <div className="space-y-4">
-            <div className="p-4 rounded-xl bg-gradient-to-br from-orange-500/10 to-orange-500/5 border border-orange-400/30">
+            <div className="bg-orange-50 rounded-lg border border-orange-100 p-3">
               <p className="text-xs uppercase tracking-wider text-orange-700 font-semibold mb-1">Order Total</p>
               <p className="text-3xl font-bold text-gray-900">{formatCurrency(viewing.totalAmount)}</p>
               <p className="text-xs text-gray-500 mt-1">{viewing.paymentMethod}</p>

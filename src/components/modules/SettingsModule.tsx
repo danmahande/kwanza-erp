@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Tag, Ruler, CreditCard, Warehouse, Plus, X, Settings } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
+import { OpsHeader } from '@/components/shared/ops-ui'
 
 // ── Badge color palette ──
 const BADGE_COLORS = [
@@ -153,11 +153,15 @@ export default function SettingsModule() {
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
       {/* ── Office Header ── */}
-      <OfficeHeader
-        title="Settings Office"
+      <OpsHeader
+        title="Settings"
         description="Configure system dimensions and preferences"
-        icon={Settings}
-        stats={stats}
+        kpiCells={[
+          { label: 'CATEGORIES', value: cats.length },
+          { label: 'UNITS', value: unts.length },
+          { label: 'PAYMENT METHODS', value: pays.length },
+          { label: 'LOCATIONS', value: locs.length },
+        ]}
       />
 
       {/* ── Settings Grid ── */}

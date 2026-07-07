@@ -17,7 +17,6 @@ import {
   MessageSquare, Plus, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import OfficeHeader from '@/components/shared/OfficeHeader'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
@@ -688,7 +687,7 @@ export default function DriversModule() {
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
         title={selectedRecord?.name || 'Driver Details'}
         subtitle={selectedRecord ? `ID: ${selectedRecord.driverId}` : ''}
-        width="xl"
+        width="lg"
         footer={
           selectedRecord ? (
             <div className="flex gap-3 ml-auto">
