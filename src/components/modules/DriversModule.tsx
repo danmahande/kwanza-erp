@@ -362,9 +362,11 @@ export default function DriversModule() {
     if (isOnShift) {
       await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftEnd: new Date().toISOString() }) })
       toast.success(`${driver.name} checked out`)
+      setSelectedRecord({ ...driver, shiftEnd: new Date().toISOString() })
     } else {
       await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftStart: new Date().toISOString(), shiftEnd: null }) })
       toast.success(`${driver.name} checked in`)
+      setSelectedRecord({ ...driver, shiftStart: new Date().toISOString(), shiftEnd: null })
     }
     fetchData()
   }
