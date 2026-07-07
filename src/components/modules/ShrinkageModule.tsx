@@ -90,7 +90,7 @@ export default function ShrinkageModule() {
   })
 
   // ── Fetch Data ──
-  useEffect(() => { fetch('/api/products').then(r => r.json()).then(setProducts) }, [])
+  useEffect(() => { fetch('/api/products').then(r => r.json()).then((d: Product[] | { products?: Product[] }) => setProducts(Array.isArray(d) ? d : (d?.products ?? []))) }, [])
 
   const fetchData = useCallback(() => {
     fetch(`/api/shrinkage?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))

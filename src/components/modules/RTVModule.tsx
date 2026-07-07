@@ -128,7 +128,7 @@ export default function RTVModule() {
   const handleMerchantSelect = (merchantId: string) => {
     const m = merchants.find(m => m.merchantId === merchantId)
     setForm({ ...form, merchantId, merchantName: m?.businessName || '', productId: '', productName: '' })
-    fetch(`/api/products?search=${merchantId}`).then(r => r.json()).then((d: Product[]) => setProducts(d))
+    fetch(`/api/products?search=${merchantId}`).then(r => r.json()).then((d: Product[] | { products?: Product[] }) => setProducts(Array.isArray(d) ? d : (d?.products ?? [])))
   }
 
   const handleProductSelect = (productId: string) => {
