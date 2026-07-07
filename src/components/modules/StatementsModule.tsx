@@ -219,6 +219,7 @@ export default function StatementsModule() {
               <DenseTh className="w-28 text-right">Fees</DenseTh>
               <DenseTh className="w-28 text-right">Net Payable</DenseTh>
               <DenseTh className="w-28 text-center">Status</DenseTh>
+              <DenseTh className="w-16 text-center">Aging</DenseTh>
               <DenseTh className="w-20 text-right">Actions</DenseTh>
             </tr>
           </thead>
@@ -242,6 +243,14 @@ export default function StatementsModule() {
                   <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(stmt.netPayable)}</DenseTd>
                   <DenseTd className="text-center">
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${statusCls}`}>{statusLabel}</span>
+                  </DenseTd>
+                  <DenseTd className="text-center">
+                    {(() => {
+                      if (stmt.isPaid) return <span className="text-gray-300 text-[10px]">—</span>
+                      const days = Math.floor((Date.now() - new Date(stmt.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+                      const cls = days > 90 ? 'text-red-600 font-bold' : days > 60 ? 'text-orange-600 font-bold' : days > 30 ? 'text-yellow-600 font-medium' : 'text-gray-400'
+                      return <span className={`text-[10px] font-mono ${cls}`} title={`${days} days since statement created`}>{days > 90 ? '90+' : days > 60 ? '60+' : days > 30 ? '30+' : '<30'}</span>
+                    })()}
                   </DenseTd>
                   <DenseTd right>
                     <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>

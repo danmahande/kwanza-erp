@@ -537,7 +537,10 @@ export default function OutboundModule() {
                 <option value="short_stock">Short stock (not enough to fulfil)</option>
                 <option value="wrong_location">Wrong location / can't find</option>
                 <option value="customer_refused">Customer refused delivery</option>
+                <option value="customer_not_reachable">Customer not reachable</option>
+                <option value="wrong_address">Wrong address</option>
                 <option value="expired">Product expired</option>
+                <option value="rider_issue">Rider issue (breakdown, no-show)</option>
                 <option value="other">Other</option>
               </select>
             </div>

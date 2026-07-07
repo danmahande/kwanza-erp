@@ -576,6 +576,28 @@ export default function InventoryModule() {
   const allOnPageSelected = paginatedData.length > 0 && paginatedData.every(p => selectedIds.has(p.id))
   const someOnPageSelected = paginatedData.some(p => selectedIds.has(p.id)) && !allOnPageSelected
 
+  // ABC classification: rank products by stock value, top 20% = A, next 30% = B, rest = C
+  const abcClass = useMemo(() => {
+    const sorted = [...data].sort((a, b) => safe(b.currentStockValue) - safe(a.currentStockValue))
+    const total = sorted.length
+    const aCutoff = Math.max(1, Math.ceil(total * 0.2))
+    const bCutoff = Math.max(aCutoff + 1, Math.ceil(total * 0.5))
+    const map: Record<string, string> = {}
+    sorted.forEach((p, i) => {
+      map[p.id] = i < aCutoff ? 'A' : i < bCutoff ? 'B' : 'C'
+    })
+    return map
+  }, [data])
+
+  // Stock age: days since product was created
+  const stockAge = (createdAt: string) => {
+    const days = Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24))
+    if (days < 1) return '<1d'
+    if (days < 30) return `${days}d`
+    if (days < 365) return `${Math.floor(days / 30)}mo`
+    return `${Math.floor(days / 365)}y`
+  }
+
   const tableColumns: Column<Product>[] = useMemo(() => [
     { key: 'productId', label: 'ID', sortable: true, className: 'font-mono text-xs text-gray-400' },
     { key: 'productLabel', label: 'Product', sortable: true, className: 'font-semibold text-gray-900 max-w-[200px] truncate' },
@@ -635,6 +657,8 @@ export default function InventoryModule() {
               <DenseTh className="w-16 text-right">Out</DenseTh>
               <DenseTh className="w-16 text-right">Min</DenseTh>
               <DenseTh className="w-20 text-center">Status</DenseTh>
+              <DenseTh className="w-12 text-center">ABC</DenseTh>
+              <DenseTh className="w-12 text-right">Age</DenseTh>
               <DenseTh className="w-24 text-right">Stock Value</DenseTh>
             </tr>
             {/* Row 2: inline filters */}
@@ -696,6 +720,10 @@ export default function InventoryModule() {
                   <DenseTd className="text-center">
                     <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
                   </DenseTd>
+                  <DenseTd className="text-center">
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${abcClass[p.id] === 'A' ? 'bg-red-100 text-red-700' : abcClass[p.id] === 'B' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`} title={`ABC Class ${abcClass[p.id] || 'C'}: ${abcClass[p.id] === 'A' ? 'Top 20% by value' : abcClass[p.id] === 'B' ? 'Next 30%' : 'Bottom 50%'}`}>{abcClass[p.id] || 'C'}</span>
+                  </DenseTd>
+                  <DenseTd mono right className="text-gray-400 text-[10px]">{stockAge(p.createdAt)}</DenseTd>
                   <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
                     {fmt(safe(p.currentStockValue))}
                   </DenseTd>

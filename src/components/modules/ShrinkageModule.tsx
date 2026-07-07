@@ -33,10 +33,14 @@ interface ShrinkageRecord {
 
 // ── Reason badge config ──
 const reasonConfig: Record<string, { label: string; bg: string; text: string; border: string }> = {
-  damage: { label: 'Damage',  bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200/60' },
-  theft:  { label: 'Theft',   bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60' },
-  expiry: { label: 'Expiry',  bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200/60' },
-  other:  { label: 'Other',   bg: 'bg-gray-100',  text: 'text-gray-600',   border: 'border-gray-200/60' },
+  damage_storage:   { label: 'Damage in Storage',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200/60' },
+  damage_transit:   { label: 'Damage in Transit',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200/60' },
+  theft:            { label: 'Theft',               bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60' },
+  expiry:           { label: 'Expired',              bg: 'bg-amber-50',  text: 'text-amber-700',  border: 'border-amber-200/60' },
+  miscount:         { label: 'Miscount',             bg: 'bg-blue-50',   text: 'text-blue-700',   border: 'border-blue-200/60' },
+  lost:             { label: 'Lost',                 bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200/60' },
+  quality_rejection:{ label: 'Quality Rejection',    bg: 'bg-pink-50',   text: 'text-pink-700',   border: 'border-pink-200/60' },
+  other:            { label: 'Other',                bg: 'bg-gray-100',  text: 'text-gray-600',   border: 'border-gray-200/60' },
 }
 
 const reasonBadge = (reason: string) => {
@@ -379,9 +383,13 @@ export default function ShrinkageModule() {
             <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
               <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="damage">Damage</SelectItem>
+                <SelectItem value="damage_storage">Damage in Storage</SelectItem>
+                <SelectItem value="damage_transit">Damage in Transit</SelectItem>
                 <SelectItem value="theft">Theft</SelectItem>
-                <SelectItem value="expiry">Expiry</SelectItem>
+                <SelectItem value="expiry">Expired</SelectItem>
+                <SelectItem value="miscount">Miscount</SelectItem>
+                <SelectItem value="lost">Lost</SelectItem>
+                <SelectItem value="quality_rejection">Quality Rejection</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
             </Select>

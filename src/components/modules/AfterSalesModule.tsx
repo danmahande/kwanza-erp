@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -450,7 +451,18 @@ export default function AfterSalesModule() {
           </div>
           <div>
             <Label className="text-gray-700 font-medium mb-1.5 block">Reason for Return <span className="text-red-400">*</span></Label>
-            <Input value={form.reason} onChange={e => setForm({ ...form, reason: e.target.value })} placeholder="e.g. Wrong size, damaged on arrival, customer changed mind" className="rounded-xl" />
+            <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
+              <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select reason" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="wrong_item">Wrong item delivered</SelectItem>
+                <SelectItem value="damaged_arrival">Damaged on arrival</SelectItem>
+                <SelectItem value="customer_changed_mind">Customer changed mind</SelectItem>
+                <SelectItem value="expired">Product expired</SelectItem>
+                <SelectItem value="quality_issue">Quality issue</SelectItem>
+                <SelectItem value="wrong_address">Wrong address</SelectItem>
+                <SelectItem value="other">Other</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-gray-700 font-medium mb-1.5 block">Refund Amount (UGX, optional)</Label>
