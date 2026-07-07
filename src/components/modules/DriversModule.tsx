@@ -272,19 +272,25 @@ export default function DriversModule() {
     { key: 'driverId', label: 'Driver ID', sortable: true, className: 'font-mono text-xs text-gray-400' },
     { key: 'name', label: 'Driver Name', sortable: true, className: 'font-semibold text-gray-900' },
     { key: 'phone', label: 'Phone', sortable: true, className: 'text-gray-600', render: (val) => <span className="flex items-center gap-1"><Phone size={12} className="text-gray-400 shrink-0" />{String(val)}</span> },
-    { key: 'nationalId', label: 'National ID', sortable: true, className: 'text-xs text-gray-500 font-mono' },
-    { key: 'licenseNumber', label: 'License No', sortable: true, className: 'text-xs text-gray-500 font-mono' },
-    { key: 'vehicleType', label: 'Vehicle Type', sortable: true, render: (val) => val ? <span className="bg-gray-50 text-gray-700 px-2 py-0.5 rounded-md text-xs">{String(val)}</span> : <span className="text-gray-300">—</span> },
-    { key: 'vehicleNumber', label: 'Plate No', sortable: true, className: 'text-xs font-mono' },
     { key: 'status', label: 'Status', sortable: true, render: (val) => statusBadge(String(val)) },
-    { key: 'createdBy', label: 'Created By', sortable: true, className: 'text-xs text-gray-500' },
-    { key: 'ordersReceived', label: 'Orders Recvd', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center' },
+    { key: 'shiftStart', label: 'Shift', sortable: false, render: (_val, row) => {
+      const onShift = row.shiftStart && !row.shiftEnd
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); handleShiftToggle(row) }}
+          className={`px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
+            onShift ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200' : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+          }`}
+        >
+          {onShift ? 'Check Out' : 'Check In'}
+        </button>
+      )
+    }},
+    { key: 'vehicleNumber', label: 'Plate No', sortable: true, className: 'text-xs font-mono' },
+    { key: 'ordersReceived', label: 'Orders', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center' },
     { key: 'ordersDelivered', label: 'Delivered', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center' },
     { key: 'successRate', label: 'Success %', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center', render: (val) => { const v = val as number; return <span className={`font-semibold ${v >= 80 ? 'text-green-600' : v >= 50 ? 'text-amber-600' : v > 0 ? 'text-red-600' : 'text-gray-400'}`}>{v}%</span> } },
-    { key: 'damages', label: 'Damages', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center', render: (val) => { const v = val as number; return v > 0 ? <span className="text-red-600 font-medium">{fmtMoney(v)}</span> : <span className="text-gray-300">0</span> } },
-    { key: 'loss', label: 'Loss', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center', render: (val) => { const v = val as number; return v > 0 ? <span className="text-red-600 font-medium">{fmtMoney(v)}</span> : <span className="text-gray-300">0</span> } },
-    { key: 'riskPercent', label: 'Risk %', sortable: true, className: 'tabular-nums text-center', headerClassName: 'text-center', render: (val) => { const v = val as number; return <span className={`font-semibold ${v <= 10 ? 'text-green-600' : v <= 30 ? 'text-amber-600' : v > 0 ? 'text-red-600' : 'text-gray-400'}`}>{v}%</span> } },
-    { key: 'expectedBankings', label: 'Expected Bank', sortable: true, className: 'tabular-nums', render: (val) => fmtMoney(val as number) },
+    { key: 'expectedBankings', label: 'Expected', sortable: true, className: 'tabular-nums', render: (val) => fmtMoney(val as number) },
     { key: 'banked', label: 'Banked', sortable: true, className: 'tabular-nums', render: (val) => fmtMoney(val as number) },
   ], [])
 

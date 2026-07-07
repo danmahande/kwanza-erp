@@ -309,6 +309,13 @@ export default function OutboundModule() {
         })}
       </div>
 
+      {/* Hint when no records selected */}
+      {selectedIds.size === 0 && filteredData.length > 0 && (
+        <div className="text-xs text-gray-400 italic">
+          Tip: Tick the checkbox on one or more orders to print pick lists, pack slips, or bulk-advance them.
+        </div>
+      )}
+
       {/* Bulk action bar (appears when records selected) */}
       <AnimatePresence>
         {selectedIds.size > 0 && (
@@ -443,6 +450,26 @@ export default function OutboundModule() {
                               onTransition={(to) => handleTransition(r, to)}
                               size="sm"
                             />
+                            {r.status === 'dispatched' && (
+                              <>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px] font-semibold text-green-700 border-green-200 hover:bg-green-50 rounded-md"
+                                  onClick={() => handleTransition(r, 'delivered')}
+                                >
+                                  Delivered
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 px-2 text-[10px] font-semibold text-red-600 border-red-200 hover:bg-red-50 rounded-md"
+                                  onClick={() => openException(r)}
+                                >
+                                  Failed
+                                </Button>
+                              </>
+                            )}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -452,15 +479,17 @@ export default function OutboundModule() {
                             >
                               <FileText size={12} className="text-gray-600" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 w-7 p-0"
-                              onClick={() => openException(r)}
-                              title="Report exception"
-                            >
-                              <AlertTriangle size={12} className="text-red-500" />
-                            </Button>
+                            {r.status !== 'dispatched' && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 w-7 p-0"
+                                onClick={() => openException(r)}
+                                title="Report exception"
+                              >
+                                <AlertTriangle size={12} className="text-red-500" />
+                              </Button>
+                            )}
                           </div>
                         </td>
                       </motion.tr>
