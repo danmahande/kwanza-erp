@@ -19,7 +19,6 @@ import {
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
-import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
 import DriverProfile from '@/components/modules/DriverProfile'
 
@@ -146,7 +145,6 @@ export default function DriversModule() {
 
   // ── Selection ──
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('table')
 
   // ── Filters ──
   const [filterStatus, setFilterStatus] = useState<string | null>(null)
@@ -540,7 +538,6 @@ export default function DriversModule() {
         onAction={openCreate}
       >
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={DRIVER_STATUSES} counts={statusCounts} />
-        <ViewToggle value={viewMode} onChange={setViewMode} />
         <Button variant="outline" size="sm" className="rounded-xl border-gray-200 h-9 text-xs font-medium gap-1.5" onClick={handleExportAll}>
           <Upload size={13} />Export
         </Button>
@@ -554,11 +551,9 @@ export default function DriversModule() {
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
 
       {/* ── Results count ── */}
-      {viewMode === 'card' && (
-        <div className="text-xs text-gray-500">
-          {filteredData.length.toLocaleString()} driver{filteredData.length !== 1 ? 's' : ''}
-        </div>
-      )}
+      <div className="text-xs text-gray-500">
+        {filteredData.length.toLocaleString()} driver{filteredData.length !== 1 ? 's' : ''}
+      </div>
 
       {/* ── Loading / Empty / Card Grid / Table ── */}
       {loading ? (
@@ -569,145 +564,6 @@ export default function DriversModule() {
           <p className="text-sm font-medium">No drivers found</p>
           <p className="text-xs mt-1">Try adjusting your search or add a new driver</p>
         </div>
-      ) : viewMode === 'card' ? (
-        <>
-          <motion.div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" initial="hidden" animate="show" variants={{ hidden: {}, show: { transition: { staggerChildren: 0.04 } } }}>
-            {paginatedData.map((driver) => {
-              const pending = driver.expectedBankings - driver.banked
-              const successColor = driver.successRate >= 80 ? 'text-green-600' : driver.successRate >= 50 ? 'text-amber-600' : driver.ordersReceived > 0 ? 'text-red-600' : 'text-gray-400'
-              const riskColor = driver.riskPercent <= 10 ? 'text-green-600' : driver.riskPercent <= 30 ? 'text-amber-600' : driver.ordersReceived > 0 ? 'text-red-600' : 'text-gray-400'
-              return (
-                <motion.div key={driver.id} variants={{ hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } }}
-                  className={`group relative bg-white rounded-2xl border-2 border-l-4 p-5 cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-[#FF6B35]/30 ${statusBorderAccent(driver.status)} border-gray-100`}
-                  onClick={() => openDriverDetail(driver)}
-                  onDoubleClick={() => { setDetailOpen(false); setProfileDriver(driver) }}>
-                  {/* Top row: Avatar + ID + Status + Notifications */}
-                  <div className="flex items-start gap-3 mb-3 pr-8">
-                    <div className="w-10 h-10 rounded-xl border-2 border-white shadow-sm overflow-hidden shrink-0 bg-gradient-to-br from-[#FF6B35]/20 to-[#FF6B35]/5 flex items-center justify-center -mt-1">
-                      {driver.profileImage ? (
-                        <img src={driver.profileImage} alt={driver.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-sm font-bold text-[#FF6B35]">{driver.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">{driver.driverId}</span>
-                        {statusBadge(driver.status)}
-                        {(() => {
-                          const ds = driver.shiftStart as string | null
-                          const de = driver.shiftEnd as string | null
-                          const onShift = ds && !de
-                          return onShift ? (
-                            <span className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-green-200">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> ON SHIFT
-                            </span>
-                          ) : null
-                        })()}
-                        {driver.notificationCount > 0 && (
-                          <span className="flex items-center gap-1 bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
-                            <Bell size={10} />{driver.notificationCount}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {/* Name */}
-                  <h3 className="text-base font-semibold text-gray-900 leading-snug mb-1 group-hover:text-[#FF6B35] transition-colors">{driver.name}</h3>
-                  {/* Phone + Vehicle */}
-                  <div className="flex items-center gap-3 text-xs text-gray-500 mb-3">
-                    <span className="flex items-center gap-1"><Phone size={12} className="text-gray-400 shrink-0" />{driver.phone}</span>
-                    {driver.vehicleNumber && (
-                      <span className="flex items-center gap-1"><Car size={12} className="text-gray-400 shrink-0" />{driver.vehicleNumber}</span>
-                    )}
-                  </div>
-                  {/* Performance metrics row */}
-                  {driver.ordersReceived > 0 && (
-                    <div className="grid grid-cols-3 gap-2 mb-3">
-                      <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Delivered</p>
-                        <p className="text-sm font-bold text-gray-800">{driver.ordersDelivered}/{driver.ordersReceived}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Success</p>
-                        <p className={`text-sm font-bold ${successColor}`}>{driver.successRate}%</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Risk</p>
-                        <p className={`text-sm font-bold ${riskColor}`}>{driver.riskPercent}%</p>
-                      </div>
-                    </div>
-                  )}
-                  {/* Banking row */}
-                  {driver.expectedBankings > 0 && (
-                    <div className="grid grid-cols-2 gap-2 mb-3">
-                      <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Expected</p>
-                        <p className="text-sm font-bold text-gray-800">{fmtMoney(driver.expectedBankings)}</p>
-                      </div>
-                      <div className="bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        <p className="text-[10px] text-gray-400 uppercase tracking-wider">Pending</p>
-                        <p className={`text-sm font-bold ${pending > 0 ? 'text-amber-600' : 'text-green-600'}`}>{fmtMoney(pending)}</p>
-                      </div>
-                    </div>
-                  )}
-                  {/* Bottom row: shift toggle + hint */}
-                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-50">
-                    <div className="flex items-center gap-1.5">
-                      {driver.vehicleType && <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md text-[11px]">{driver.vehicleType}</span>}
-                      {(driver.damages > 0 || driver.loss > 0) && <span className="flex items-center gap-1 text-red-500"><AlertTriangle size={10} />Losses</span>}
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleShiftToggle(driver) }}
-                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
-                        (() => {
-                          const ds = driver.shiftStart as string | null
-                          const de = driver.shiftEnd as string | null
-                          return ds && !de
-                        })()
-                          ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                          : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-                      }`}
-                    >
-                      {(() => {
-                        const ds = driver.shiftStart as string | null
-                        const de = driver.shiftEnd as string | null
-                        return ds && !de ? 'Check Out' : 'Check In'
-                      })()}
-                    </button>
-                  </div>
-                </motion.div>
-              )
-            })}
-          </motion.div>
-
-          {/* Card pagination */}
-          {sortedData.length > pageSize && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
-              <div className="text-xs text-gray-500">
-                Showing {(page - 1) * pageSize + 1}&ndash;{Math.min(page * pageSize, sortedData.length)} of {sortedData.length.toLocaleString()}
-              </div>
-              <div className="flex items-center gap-1">
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(1)}><ChevronsLeft size={14} /></Button>
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
-                {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                  let pageNum: number
-                  if (totalPages <= 7) pageNum = i + 1
-                  else if (page <= 4) pageNum = i + 1
-                  else if (page >= totalPages - 3) pageNum = totalPages - 6 + i
-                  else pageNum = page - 3 + i
-                  return (
-                    <Button key={pageNum} variant={pageNum === page ? 'default' : 'outline'} size="icon"
-                      className={`h-7 w-7 text-xs rounded-lg ${pageNum === page ? 'bg-[#1B2A4A] hover:bg-[#1B2A4A]' : ''}`}
-                      onClick={() => setPage(pageNum)}>{pageNum}</Button>
-                  )
-                })}
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
-                <Button variant="outline" size="icon" className="h-7 w-7 rounded-lg" disabled={page >= totalPages} onClick={() => setPage(totalPages)}><ChevronsRight size={14} /></Button>
-              </div>
-            </div>
-          )}
-        </>
       ) : (
         <DataTable
           data={paginatedData}
@@ -730,36 +586,46 @@ export default function DriversModule() {
         width="lg"
         footer={
           selectedRecord ? (
-            <div className="flex gap-3 ml-auto">
-              <Button variant="outline" onClick={() => { setDetailOpen(false); setProfileDriver(selectedRecord) }} className="rounded-xl text-[#FF6B35] border-[#FF6B35]/30 hover:bg-[#FF6B35]/5">
-                View Full Profile
+            <div className="flex items-center justify-between w-full">
+              <Button
+                variant="outline"
+                size="sm"
+                className={`rounded-xl ${selectedRecord.shiftStart && !selectedRecord.shiftEnd ? 'text-red-600 border-red-200 hover:bg-red-50' : 'text-green-700 border-green-200 hover:bg-green-50'}`}
+                onClick={() => handleShiftToggle(selectedRecord)}
+              >
+                {selectedRecord.shiftStart && !selectedRecord.shiftEnd ? 'Check Out' : 'Check In'}
               </Button>
-              <Button variant="outline" onClick={() => { setDetailOpen(false); handleEdit(selectedRecord) }} className="rounded-xl">
-                Edit
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="rounded-xl border-red-200 text-red-600 hover:bg-red-50">
-                    <Trash2 size={14} className="mr-1.5" />Delete
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete driver &ldquo;{selectedRecord.name}&rdquo;?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {selectedRecord.ordersReceived > 0
-                        ? `This driver has ${selectedRecord.ordersReceived} outbound order(s) and cannot be deleted. Only drivers without any movement can be deleted.`
-                        : 'This action cannot be undone. The driver record will be permanently removed.'}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    {selectedRecord.ordersReceived === 0 && (
-                      <AlertDialogAction onClick={() => handleDelete(selectedRecord)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
-                    )}
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => { setDetailOpen(false); setProfileDriver(selectedRecord) }} className="rounded-xl text-[#FF6B35] border-[#FF6B35]/30 hover:bg-[#FF6B35]/5">
+                  Full Profile
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => { setDetailOpen(false); handleEdit(selectedRecord) }} className="rounded-xl">
+                  Edit
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="rounded-xl border-red-200 text-red-600 hover:bg-red-50">
+                      <Trash2 size={12} className="mr-1" />Delete
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete driver &ldquo;{selectedRecord.name}&rdquo;?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {selectedRecord.ordersReceived > 0
+                          ? `This driver has ${selectedRecord.ordersReceived} outbound order(s) and cannot be deleted. Only drivers without any movement can be deleted.`
+                          : 'This action cannot be undone. The driver record will be permanently removed.'}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      {selectedRecord.ordersReceived === 0 && (
+                        <AlertDialogAction onClick={() => handleDelete(selectedRecord)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+                      )}
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
           ) : undefined
         }

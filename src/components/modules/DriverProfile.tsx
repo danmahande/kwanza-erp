@@ -237,26 +237,6 @@ export default function DriverProfile({
                     </span>
                   ) : null
                 })()}
-                <button
-                  onClick={async () => {
-                    const onShift = driver.shiftStart && !driver.shiftEnd
-                    if (onShift) {
-                      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftEnd: new Date().toISOString() }) })
-                      toast.success(`${driver.name} checked out`)
-                    } else {
-                      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftStart: new Date().toISOString(), shiftEnd: null }) })
-                      toast.success(`${driver.name} checked in`)
-                    }
-                    onBack()
-                  }}
-                  className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                    (driver.shiftStart && !driver.shiftEnd)
-                      ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
-                      : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
-                  }`}
-                >
-                  {(driver.shiftStart && !driver.shiftEnd) ? 'Check Out' : 'Check In'}
-                </button>
               </div>
               <p className="font-mono text-sm text-gray-400 mb-2">{driver.driverId}</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
