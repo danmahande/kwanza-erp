@@ -28,6 +28,7 @@ interface DriverData {
   dateHired: string | null; salaryAmount: number | null; salaryPayDay: number
   status: string; damages: number; loss: number
   expectedBankings: number; banked: number
+  shiftStart: string | null; shiftEnd: string | null
   ordersReceived: number; ordersDelivered: number; successRate: number
   riskPercent: number; totalSaleAmount: number
   totalTrips: number; totalDistance: number; totalCOD: number
@@ -228,6 +229,34 @@ export default function DriverProfile({
               <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-2xl font-bold text-gray-900">{driver.name}</h1>
                 {statusBadge(driver.status)}
+                {(() => {
+                  const onShift = driver.shiftStart && !driver.shiftEnd
+                  return onShift ? (
+                    <span className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-full text-[10px] font-bold border border-green-200">
+                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> ON SHIFT
+                    </span>
+                  ) : null
+                })()}
+                <button
+                  onClick={async () => {
+                    const onShift = driver.shiftStart && !driver.shiftEnd
+                    if (onShift) {
+                      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftEnd: new Date().toISOString() }) })
+                      toast.success(`${driver.name} checked out`)
+                    } else {
+                      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftStart: new Date().toISOString(), shiftEnd: null }) })
+                      toast.success(`${driver.name} checked in`)
+                    }
+                    onBack()
+                  }}
+                  className={`ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                    (driver.shiftStart && !driver.shiftEnd)
+                      ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                      : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                  }`}
+                >
+                  {(driver.shiftStart && !driver.shiftEnd) ? 'Check Out' : 'Check In'}
+                </button>
               </div>
               <p className="font-mono text-sm text-gray-400 mb-2">{driver.driverId}</p>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
@@ -244,13 +273,13 @@ export default function DriverProfile({
       {/* ══════════════════════════════════ */}
       {/* ── NOTIFICATIONS PANEL ── */}
       {/* ══════════════════════════════════ */}
-      {driver.notifications.length > 0 && (
+      {(driver.notifications?.length ?? 0) > 0 && (
         <div className="space-y-2">
           <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wider flex items-center gap-2">
             <Bell size={13} /> Alerts & Notifications
           </h3>
           <AnimatePresence>
-            {driver.notifications.map((n, i) => (
+            {(driver.notifications || []).map((n, i) => (
               <motion.div key={n.type} initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}
                 className={`flex items-start gap-3 p-3 rounded-xl border ${severityStyle(n.severity)}`}>
                 {severityIcon(n.severity)}
