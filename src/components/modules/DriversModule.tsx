@@ -34,6 +34,7 @@ interface Driver {
   dateHired: string | null; salaryAmount: number | null; salaryPayDay: number
   status: string; damages: number; loss: number
   expectedBankings: number; banked: number
+  shiftStart: string | null; shiftEnd: string | null
   createdAt: string; updatedAt: string
   // Computed from API
   ordersReceived: number; ordersDelivered: number; successRate: number
@@ -358,6 +359,18 @@ export default function DriversModule() {
 
   const openCreate = () => { resetForm(); setOpen(true) }
 
+  const handleShiftToggle = async (driver: Driver) => {
+    const isOnShift = !!driver.shiftStart && !driver.shiftEnd
+    if (isOnShift) {
+      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftEnd: new Date().toISOString() }) })
+      toast.success(`${driver.name} checked out`)
+    } else {
+      await fetch('/api/drivers', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: driver.id, shiftStart: new Date().toISOString(), shiftEnd: null }) })
+      toast.success(`${driver.name} checked in`)
+    }
+    fetchData()
+  }
+
   const handleEdit = (driver: Driver) => {
     setEditing(driver)
     setForm({
@@ -581,6 +594,16 @@ export default function DriversModule() {
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-[11px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">{driver.driverId}</span>
                         {statusBadge(driver.status)}
+                        {(() => {
+                          const ds = driver.shiftStart as string | null
+                          const de = driver.shiftEnd as string | null
+                          const onShift = ds && !de
+                          return onShift ? (
+                            <span className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-bold border border-green-200">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> ON SHIFT
+                            </span>
+                          ) : null
+                        })()}
                         {driver.notificationCount > 0 && (
                           <span className="flex items-center gap-1 bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold">
                             <Bell size={10} />{driver.notificationCount}
@@ -628,13 +651,30 @@ export default function DriversModule() {
                       </div>
                     </div>
                   )}
-                  {/* Bottom row: hint + Date */}
-                  <div className="flex items-center justify-between text-xs text-gray-400">
+                  {/* Bottom row: shift toggle + hint */}
+                  <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-50">
                     <div className="flex items-center gap-1.5">
                       {driver.vehicleType && <span className="bg-gray-50 text-gray-600 px-2 py-0.5 rounded-md text-[11px]">{driver.vehicleType}</span>}
                       {(driver.damages > 0 || driver.loss > 0) && <span className="flex items-center gap-1 text-red-500"><AlertTriangle size={10} />Losses</span>}
                     </div>
-                    <span>Double-click for full profile</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleShiftToggle(driver) }}
+                      className={`flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-semibold transition-colors ${
+                        (() => {
+                          const ds = driver.shiftStart as string | null
+                          const de = driver.shiftEnd as string | null
+                          return ds && !de
+                        })()
+                          ? 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'
+                          : 'bg-green-50 text-green-700 hover:bg-green-100 border border-green-200'
+                      }`}
+                    >
+                      {(() => {
+                        const ds = driver.shiftStart as string | null
+                        const de = driver.shiftEnd as string | null
+                        return ds && !de ? 'Check Out' : 'Check In'
+                      })()}
+                    </button>
                   </div>
                 </motion.div>
               )

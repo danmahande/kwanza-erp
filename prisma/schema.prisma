@@ -560,6 +560,10 @@ model Driver {
   loss              Float     @default(0)
   expectedBankings  Float     @default(0)
   banked            Float     @default(0)
+  /// Shift tracking: when the driver checked in (null = off shift)
+  shiftStart        DateTime?
+  /// Shift tracking: when the driver checked out (null = still on shift)
+  shiftEnd          DateTime?
   trips             DriverTrip[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt

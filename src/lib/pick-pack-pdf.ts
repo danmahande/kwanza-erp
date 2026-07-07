@@ -37,9 +37,22 @@ export async function generatePickList(orderIds: string[]): Promise<string> {
   if (orders.length === 0) throw new Error('No orders found for given IDs')
 
   // Build pick items — one per order (since each OutboundRecord is a single line item in this schema)
-  // In a multi-line-item system this would expand to multiple lines per order
+  // Look up actual storage location from InboundRecord for pick-path optimization
+  const productIds = orders.map(o => o.productId)
+  const inboundRecords = await db.inboundRecord.findMany({
+    where: { productId: { in: productIds }, status: 'stored' },
+    select: { productId: true, storageLocation: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  const locationMap = new Map<string, string>()
+  for (const r of inboundRecords) {
+    if (r.storageLocation && !locationMap.has(r.productId)) {
+      locationMap.set(r.productId, r.storageLocation)
+    }
+  }
+
   const items: PickItem[] = orders.map(o => ({
-    storageLocation: o.productId, // TODO: look up actual storageLocation from InventoryItem
+    storageLocation: locationMap.get(o.productId) || 'ZZ-UNASSIGNED',
     productId: o.productId,
     productName: o.productName,
     brand: o.brand,
@@ -49,8 +62,20 @@ export async function generatePickList(orderIds: string[]): Promise<string> {
     customerName: o.customerName,
   }))
 
-  // Sort by storageLocation for pick-path efficiency
-  items.sort((a, b) => a.storageLocation.localeCompare(b.storageLocation))
+  // Sort by storageLocation for pick-path efficiency (zone → level → pallet)
+  items.sort((a, b) => {
+    const aLoc = a.storageLocation || 'ZZ-UNASSIGNED'
+    const bLoc = b.storageLocation || 'ZZ-UNASSIGNED'
+    // Parse location format like "A-L3-P2" → sort by zone, then level, then pallet
+    const aParts = aLoc.split(/[-_]/)
+    const bParts = bLoc.split(/[-_]/)
+    for (let i = 0; i < Math.max(aParts.length, bParts.length); i++) {
+      const aP = aParts[i] || ''
+      const bP = bParts[i] || ''
+      if (aP !== bP) return aP.localeCompare(bP, undefined, { numeric: true })
+    }
+    return 0
+  })
 
   // Generate PDF
   const outDir = '/home/z/my-project/download/pick-lists'

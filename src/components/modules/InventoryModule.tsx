@@ -636,6 +636,25 @@ export default function InventoryModule() {
         </Button>
       </OpsHeader>
 
+      {/* Reorder alert banner */}
+      {(lowStockCount > 0 || outOfStockCount > 0) && (
+        <div className={`rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap ${outOfStockCount > 0 ? 'bg-red-50' : 'bg-orange-50'}`}>
+          <AlertTriangle size={14} className={outOfStockCount > 0 ? 'text-red-600 shrink-0' : 'text-orange-600 shrink-0'} />
+          <span className="text-xs text-gray-700 font-medium">
+            {outOfStockCount > 0 && `${outOfStockCount} product${outOfStockCount !== 1 ? 's' : ''} out of stock`}
+            {outOfStockCount > 0 && lowStockCount > 0 && ', '}
+            {lowStockCount > 0 && `${lowStockCount} product${lowStockCount !== 1 ? 's' : ''} below min stock`}
+            . Reorder now to avoid fulfillment delays.
+          </span>
+          <button
+            onClick={() => handleFilterStatusChange('out-of-stock')}
+            className="ml-auto text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider"
+          >
+            View low stock →
+          </button>
+        </div>
+      )}
+
       {/* Dense table with inline filters in header */}
       {loading ? (
         <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
