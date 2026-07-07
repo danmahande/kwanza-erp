@@ -374,7 +374,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Order Processing"
-        description="Each order spawns an outbound record automatically"
+        description="Create and track customer orders. Each order auto-creates an outbound record."
         kpiCells={[
           { label: 'TOTAL ORDERS', value: data.length },
           { label: 'NEW', value: data.filter(o => o.status === 'new_order').length },
@@ -542,12 +542,12 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
                               onTransition={(to) => handleTransition(o, to)}
                               size="sm"
                             />
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePrintInvoice(o)} title="Print invoice">
-                              <Printer size={12} className="text-gray-600" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleDownloadInvoice(o)} title="Download invoice">
-                              <Download size={12} className="text-gray-600" />
-                            </Button>
+                            <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] font-medium rounded-md" onClick={() => handlePrintInvoice(o)}>
+              <Printer size={11} className="mr-1" /> Invoice
+            </Button>
+            <Button variant="outline" size="sm" className="h-7 px-2 text-[10px] font-medium rounded-md" onClick={() => handleDownloadInvoice(o)}>
+              <Download size={11} className="mr-1" /> PDF
+            </Button>
                           </div>
                         </td>
                       </motion.tr>

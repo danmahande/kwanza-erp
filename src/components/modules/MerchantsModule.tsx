@@ -660,17 +660,18 @@ export default function MerchantsModule() {
                           <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
                             <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); handleHoldToggle(m) }} title={m.isOnHold ? 'Click to release hold' : 'Click to place on hold'}>
-                            <span className={`inline-block w-2.5 h-2.5 rounded-sm ${m.isOnHold ? 'bg-red-500 hover:bg-red-600' : 'bg-gray-200 hover:bg-gray-300'}`} />
-                          </button>
                         </div>
                         {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[8px] px-1 py-0.5 rounded font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
                       </div>
                     </DenseTd>
                     <DenseTd right>
                       <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={() => handleHoldToggle(m)} title={m.isOnHold ? 'Release hold' : 'Place on hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
+                          {m.isOnHold ? 'Hold' : 'Hold'}
+                        </button>
                         <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
                         <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
+                        <button onClick={() => { handleExpand(m); setActiveTab('communication'); }} title="Log communication" className="p-1 text-gray-400 hover:text-[#FF6B35]"><MessageSquare size={12} /></button>
                       </div>
                     </DenseTd>
                   </DenseTr>

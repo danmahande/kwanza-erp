@@ -268,7 +268,7 @@ export default function OutboundModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Outbound Records"
-        description="Pick, pack, dispatch, deliver"
+        description="Pick, pack, dispatch, deliver. Print pick lists and pack slips here."
         kpiCells={[
           { label: 'TOTAL', value: data.length },
           { label: 'READY TO PICK', value: counts.ready_to_pick || 0 },

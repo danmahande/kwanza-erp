@@ -300,6 +300,8 @@ export default function AfterSalesModule() {
           <p className="text-sm text-gray-400 mt-1">Try a different filter or create a new RMA</p>
         </motion.div>
       ) : (
+        <div>
+        <div className="text-xs text-gray-400 italic mb-2">Tip: Click a row to view details and approve the RMA with disposition.</div>
         <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -402,6 +404,7 @@ export default function AfterSalesModule() {
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 
