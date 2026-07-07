@@ -687,393 +687,115 @@ export default function MerchantsModule() {
         title={selectedMerchant?.businessName || ''}
         subtitle={selectedMerchant ? `${selectedMerchant.merchantId}, ${(selectedMerchant.deliveryType || 'self-delivery').replace('-', ' ')}` : ''}
         width="lg"
+        footer={selectedMerchant ? (
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleEdit(selectedMerchant) }}><SettingsIcon size={13} className="mr-1" /> Edit</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleOpenRateCard(selectedMerchant) }}><FileText size={13} className="mr-1" /> Rate Card</Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleOpenStatement(selectedMerchant) }}><Calendar size={13} className="mr-1" /> Statement</Button>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className={`h-8 text-xs rounded-xl ${selectedMerchant.isOnHold ? 'text-red-600 border-red-200 hover:bg-red-50' : ''}`} onClick={() => handleHoldToggle(selectedMerchant)}>
+                {selectedMerchant.isOnHold ? <><Play size={13} className="mr-1" /> Release</> : <><Pause size={13} className="mr-1" /> Hold</>}
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => setProfileOpen(false)}>Close</Button>
+            </div>
+          </div>
+        ) : undefined}
       >
         {selectedMerchant && (() => {
           const m = selectedMerchant
-          const maxVal = Math.max(m.profitability.revenue, Math.abs(m.profitability.net), 1)
-          const barW = (v: number) => `${Math.max(2, (Math.abs(v) / maxVal) * 100)}%`
           return (
             <div className="space-y-3">
-              {/* Header: status + badges + activity pills + action icons */}
-              <div className="flex items-center gap-2 flex-wrap pb-3 border-b border-gray-100">
-                <span className={`w-3 h-3 rounded-full ${m.isOnHold ? 'bg-red-500' : m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                <Badge className="bg-gray-100 text-gray-600 border-0 text-[10px] font-mono">{m.merchantId}</Badge>
-                <span className="text-[10px] capitalize px-2 py-0.5 rounded-full bg-blue-50 text-blue-700">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{m.currency}</span>
-                {m.isOnHold && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-red-100 text-red-700 flex items-center gap-1"><Pause size={9} /> ON HOLD</span>}
-                {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
-                {m.pendingFollowUps > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full font-semibold bg-orange-100 text-orange-700">{m.pendingFollowUps} follow-up{m.pendingFollowUps > 1 ? 's' : ''} due</span>}
-                <div className="flex items-center gap-2 ml-auto text-[10px] text-gray-400">
-                  <span>In: <span className="font-medium text-gray-600">{timeAgo(m.lastInboundAt)}</span></span>
-                  <span>·</span>
-                  <span>Out: <span className="font-medium text-gray-600">{timeAgo(m.lastOutboundAt)}</span></span>
-                  <span>·</span>
-                  <span>Pay: <span className="font-medium text-gray-600">{timeAgo(m.lastPaymentAt)}</span></span>
-                </div>
-              </div>
-
-              {/* Action icon buttons */}
+              {/* Status row */}
               <div className="flex items-center gap-2 flex-wrap">
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleEdit(m) }}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenRateCard(m) }}><FileText size={12} className="mr-1" /> Rate Card</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { setProfileOpen(false); handleOpenStatement(m) }}><Calendar size={12} className="mr-1" /> Statement</Button>
-                <Button variant="outline" size="sm" className={`h-7 text-xs rounded-md ${m.isOnHold ? 'text-red-600 border-red-200 hover:bg-red-50' : ''}`} onClick={() => handleHoldToggle(m)}>
-                  {m.isOnHold ? <><Play size={12} className="mr-1" /> Release Hold</> : <><Pause size={12} className="mr-1" /> Place on Hold</>}
-                </Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleToggleActive(m)}>{m.isActive ? 'Deactivate' : 'Activate'}</Button>
-                <Button variant="outline" size="sm" className="h-7 text-xs rounded-md text-red-600 border-red-200 hover:bg-red-50 ml-auto" onClick={() => { setProfileOpen(false); setDeletingId(m.id); setDeleteOpen(true) }}><Trash2 size={12} className="mr-1" /> Delete</Button>
+                <span className={`w-2.5 h-2.5 rounded-full ${m.isOnHold ? 'bg-red-500' : m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                <span className="text-[11px] text-gray-600 font-medium">
+                  {m.isOnHold ? 'On hold' : m.isActive ? 'Active' : 'Inactive'}
+                </span>
+                {m.isOnHold && (
+                  <span className="text-[10px] text-red-600">{m.holdReason || 'No reason given'}</span>
+                )}
+                <span className="text-[10px] text-gray-400 ml-auto">
+                  Last inbound: {timeAgo(m.lastInboundAt)}, Last payment: {timeAgo(m.lastPaymentAt)}
+                </span>
               </div>
 
-              {/* On-hold banner when merchant is on hold */}
-              {m.isOnHold && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-start gap-2">
-                  <AlertOctagon size={14} className="text-red-600 shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <p className="font-semibold text-red-700">Service held. New inbounds and orders blocked.</p>
-                    <p className="text-red-600 mt-0.5">Reason: {m.holdReason || 'Not specified'}</p>
-                    {m.holdSetAt && <p className="text-red-500 text-[10px] mt-0.5">Set {timeAgo(m.holdSetAt)} by {m.holdSetBy || 'admin'}</p>}
-                  </div>
+              {/* Key stats */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">SKUs</p>
+                  <p className="text-lg font-bold text-gray-900 font-mono">{m.productCount}</p>
                 </div>
-              )}
-
-              {/* Tab bar */}
-              <div className="flex items-center gap-1 border-b border-gray-200">
-                {[
-                  { key: 'overview' as const, label: 'Overview', icon: Building2 },
-                  { key: 'performance' as const, label: 'Performance', icon: BarChart3 },
-                  { key: 'communication' as const, label: 'Communication', icon: MessageSquare, badge: m.pendingFollowUps },
-                ].map(t => {
-                  const isActive = activeTab === t.key
-                  const Icon = t.icon
-                  return (
-                    <button key={t.key} onClick={() => handleTabSwitch(t.key)}
-                      className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors ${isActive ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-                      <Icon size={12} /> {t.label}
-                      {t.badge && t.badge > 0 ? <span className="bg-orange-500 text-white text-[9px] px-1 py-0.5 rounded-full font-bold leading-none">{t.badge}</span> : null}
-                    </button>
-                  )
-                })}
-              </div>
-
-              {/* ===== OVERVIEW TAB ===== */}
-              {activeTab === 'overview' && (
-                <>
-              {/* KPI mini-ribbon */}
-              <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
-                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">SKUs</span><span className="font-mono font-bold text-sm block">{m.productCount}</span></div>
-                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Orders</span><span className="font-mono font-bold text-sm block">{m.orderCount}</span></div>
-                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Sales</span><span className="font-mono font-bold text-sm block">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</span></div>
-                <div className="flex-1 px-3 py-1.5 border-r border-white/10"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Pending</span><span className="font-mono font-bold text-sm block text-orange-300">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
-                <div className="flex-1 px-3 py-1.5"><span className="text-[8px] text-blue-200/60 uppercase tracking-wider">Storage</span><span className="font-mono font-bold text-sm block text-blue-300">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
-              </div>
-
-              {/* Two-column: Contact + Business */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1"><Phone size={10} /> Contact</p>
-                  <div className="space-y-1 text-xs">
-                    <p className="text-gray-900 font-medium">{m.contact}</p>
-                    <p className="text-gray-500">{m.email}</p>
-                    {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
-                    {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
-                    {m.address && <p className="text-gray-500">{m.address}</p>}
-                  </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Orders</p>
+                  <p className="text-lg font-bold text-gray-900 font-mono">{m.orderCount}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2 flex items-center gap-1"><Building2 size={10} /> Business</p>
-                  <div className="space-y-1 text-xs">
-                    {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
-                    <p className="text-gray-700">Delivery: <span className="capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span></p>
-                    {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
-                    {m.bankAccount && <p className="text-gray-500 font-mono">{m.bankAccount}</p>}
-                    {(m.contractStart || m.contractEnd) && <p className="text-gray-500 mt-1">Contract: {m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '—'} → {m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : 'Open'}</p>}
-                    {m.notes && <p className="text-gray-400 italic mt-1 text-[11px]">"{m.notes}"</p>}
-                  </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Sales</p>
+                  <p className="text-lg font-bold text-gray-900 font-mono">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</p>
                 </div>
               </div>
 
-              {/* Profitability waterfall */}
+              {/* Contact */}
               <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Profitability</p>
-                <div className="space-y-1.5">
-                  {[{l:'Revenue',v:m.profitability.revenue,c:'bg-green-500'},{l:'Commission',v:m.profitability.commission,c:'bg-orange-500'},{l:'Shrinkage',v:m.profitability.shrinkage,c:'bg-red-500'},{l:'Returns',v:m.profitability.returns,c:'bg-red-400'}].map((r,i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-[10px] text-gray-500 w-20">{r.l}</span>
-                      <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
-                        <div className={`${r.c} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(r.v) }}>
-                          <span className="text-[9px] text-white font-mono font-bold">{r.v < 0 ? '-' : ''}{formatCurrencyCompact(Math.abs(r.v), m.currency)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  <div className="flex items-center gap-2 pt-1 border-t border-gray-200">
-                    <span className={`text-[10px] font-semibold w-20 ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>Net</span>
-                    <div className="flex-1 bg-gray-200 rounded-full h-5 overflow-hidden">
-                      <div className={`${m.profitability.net >= 0 ? 'bg-green-600' : 'bg-red-600'} h-full rounded-full flex items-center justify-end pr-2`} style={{ width: barW(m.profitability.net) }}>
-                        <span className="text-[10px] text-white font-mono font-bold">{formatCurrencyCompact(m.profitability.net, m.currency)}</span>
-                      </div>
-                    </div>
-                  </div>
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Phone size={10} /> Contact</p>
+                <div className="space-y-1 text-xs">
+                  <p className="text-gray-900 font-medium">{m.contact}</p>
+                  <p className="text-gray-500">{m.email}</p>
+                  {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
+                  {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
+                  {m.address && <p className="text-gray-500">{m.address}</p>}
                 </div>
               </div>
 
-              {/* Two-column: Statements + Activity timeline */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Recent Statements</p>
-                  {m.statements && m.statements.length > 0 ? (
-                    <div className="space-y-1">
-                      {m.statements.map((s) => (
-                        <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-200 last:border-0">
-                          <span className="font-mono text-gray-500">{s.period}</span>
-                          <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
-                          <span className={`ml-auto inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="text-xs text-gray-400 text-center py-3">No statements yet</p>}
-                </div>
-                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Activity Timeline</p>
-                  {activityLoading ? <p className="text-xs text-gray-400 text-center py-3">Loading...</p> :
-                   activityData.length === 0 ? <p className="text-xs text-gray-400 text-center py-3">No recent activity</p> : (
-                    <div className="max-h-48 overflow-y-auto relative">
-                      <div className="absolute left-[6px] top-2 bottom-2 w-px bg-gray-300"></div>
-                      {activityData.map((event, i) => {
-                        const dC: Record<string,string> = { inbound:'bg-blue-500',outbound:'bg-orange-500',payment:'bg-green-500',statement:'bg-purple-500',shrinkage:'bg-red-500',rtv:'bg-red-400',rma:'bg-red-300' }
-                        const iC: Record<string,string> = { inbound:'text-blue-600',outbound:'text-orange-600',payment:'text-green-600',statement:'text-purple-600',shrinkage:'text-red-600',rtv:'text-red-500',rma:'text-red-400' }
-                        const iM: Record<string,typeof Clock> = { inbound:ArrowDownRight,outbound:ArrowUpRight,payment:DollarSign,statement:FileText,shrinkage:AlertTriangle,rtv:RotateCcw,rma:PackageX }
-                        const dc = dC[String(event.type)]||'bg-gray-400'
-                        const ic = iC[String(event.type)]||'text-gray-500'
-                        const Icon = iM[String(event.type)]||Clock
-                        const ts = new Date(String(event.timestamp))
-                        return (
-                          <div key={i} className="flex items-start gap-2.5 text-[11px] py-1.5 relative">
-                            <div className={`w-3.5 h-3.5 rounded-full ${dc} ring-2 ring-gray-50 shrink-0 z-10 flex items-center justify-center`}><Icon size={7} className="text-white" /></div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-gray-700 truncate leading-tight">{String(event.label)}</p>
-                              <div className="flex items-center gap-2 mt-0.5"><span className={`text-[9px] ${ic}`}>{String(event.description).slice(0, 40)}</span>{event.amount ? <span className="font-mono text-gray-500 text-[10px]">{formatCurrencyCompact(Number(event.amount))}</span> : null}</div>
-                            </div>
-                            <span className="text-gray-400 text-[9px] shrink-0 whitespace-nowrap">{ts.toLocaleString('en-UG', { hour: '2-digit', minute: '2-digit', month: 'short', day: 'numeric' })}</span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+              {/* Business */}
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Building2 size={10} /> Business</p>
+                <div className="space-y-1 text-xs">
+                  {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
+                  <p className="text-gray-700">Delivery: <span className="capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span></p>
+                  {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
+                  {m.bankAccount && <p className="text-gray-500 font-mono">{m.bankAccount}</p>}
+                  {(m.contractStart || m.contractEnd) && <p className="text-gray-500 mt-1">Contract: {m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '—'} to {m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : 'Open'}</p>}
                 </div>
               </div>
-                </>
-              )}
 
-              {/* ===== PERFORMANCE TAB ===== */}
-              {activeTab === 'performance' && (
-                <div className="space-y-3">
-                  {/* Window selector */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Performance window:</span>
-                    {[7, 30, 90].map(d => (
-                      <button key={d} onClick={() => handlePerfWindowChange(d)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium ${perfWindow === d ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                        {d}d
-                      </button>
+              {/* Financials */}
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Financials</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex justify-between"><span className="text-gray-500">Revenue</span><span className="font-mono font-medium text-gray-900">{formatCurrencyCompact(m.profitability.revenue, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Commission</span><span className="font-mono font-medium text-orange-700">{formatCurrencyCompact(m.profitability.commission, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Shrinkage</span><span className="font-mono font-medium text-red-600">{formatCurrencyCompact(m.profitability.shrinkage, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Returns</span><span className="font-mono font-medium text-red-500">{formatCurrencyCompact(m.profitability.returns, m.currency)}</span></div>
+                  <div className="flex justify-between col-span-2 pt-1.5 border-t border-gray-200"><span className="text-gray-700 font-semibold">Net</span><span className={`font-mono font-bold ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Pending</span><span className="font-mono font-medium text-orange-600">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Storage</span><span className="font-mono font-medium text-blue-600">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
+                </div>
+              </div>
+
+              {/* Recent statements */}
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Recent Statements</p>
+                {m.statements && m.statements.length > 0 ? (
+                  <div className="space-y-1">
+                    {m.statements.map((s) => (
+                      <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-200 last:border-0">
+                        <span className="font-mono text-gray-500">{s.period}</span>
+                        <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
+                        <span className={`ml-auto inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
+                      </div>
                     ))}
                   </div>
+                ) : <p className="text-xs text-gray-400 text-center py-2">No statements yet</p>}
+              </div>
 
-                  {performanceLoading ? (
-                    <div className="py-12 text-center text-xs text-gray-400">Computing performance metrics...</div>
-                  ) : performanceData ? (
-                    <>
-                      {/* Single dense card with all rates */}
-                      <div className="bg-white rounded-lg border border-gray-200 p-4">
-                        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Delivery Performance ({performanceData.window.days}d)</h3>
-                        <div className="space-y-3">
-                          {[
-                            { label: 'Success Rate', value: performanceData.rates.successRate, sub: `${performanceData.totals.delivered} of ${performanceData.totals.orders} delivered`, good: 85, ok: 60, invert: false },
-                            { label: 'First Attempt Success', value: performanceData.rates.firstAttemptRate, sub: 'delivered on first try', good: 70, ok: 50, invert: false },
-                            { label: 'Returns Rate', value: performanceData.rates.returnsRate, sub: `${performanceData.totals.returns} RTV records`, good: 5, ok: 15, invert: true },
-                            { label: 'Cancellation Rate', value: performanceData.rates.cancellationRate, sub: `${performanceData.totals.cancelled} cancelled`, good: 5, ok: 10, invert: true },
-                            { label: 'COD Collection Rate', value: performanceData.rates.codRate, sub: `${formatCurrencyCompact(performanceData.cod.totalCollected, performanceData.currency)} of ${formatCurrencyCompact(performanceData.cod.totalSale, performanceData.currency)}`, good: 90, ok: 70, invert: false },
-                          ].map((m, i) => {
-                            const color = m.invert
-                              ? (m.value <= m.good ? 'green' : m.value <= m.ok ? 'orange' : 'red')
-                              : (m.value >= m.good ? 'green' : m.value >= m.ok ? 'orange' : 'red')
-                            const barColor = color === 'green' ? 'bg-green-500' : color === 'orange' ? 'bg-orange-500' : 'bg-red-500'
-                            const textColor = color === 'green' ? 'text-green-700' : color === 'orange' ? 'text-orange-700' : 'text-red-700'
-                            return (
-                              <div key={i}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-gray-500">{m.label}</span>
-                                  <span className={`font-mono font-bold text-sm ${textColor}`}>{m.value}%</span>
-                                </div>
-                                <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${barColor}`} style={{ width: `${Math.min(m.value, 100)}%` }} />
-                                </div>
-                                <p className="text-[10px] text-gray-400 mt-0.5">{m.sub}</p>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Cycle time + 7-day volume */}
-                      <div className="grid grid-cols-2 gap-3">
-                        <div className="bg-white rounded-lg border border-gray-200 p-4">
-                          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Cycle Time</h3>
-                          <p className="text-2xl font-mono font-bold text-gray-900">{performanceData.cycleTime.avgDays}<span className="text-xs text-gray-400 ml-1">days</span></p>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{performanceData.cycleTime.avgHours}h avg, {performanceData.cycleTime.samples} samples</p>
-                          <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px]">
-                            <div><span className="text-gray-400">In Transit:</span> <span className="font-mono font-bold text-blue-600">{performanceData.totals.inTransit}</span></div>
-                            <div><span className="text-gray-400">Failed:</span> <span className="font-mono font-bold text-red-600">{performanceData.totals.failed}</span></div>
-                            <div><span className="text-gray-400">RMA:</span> <span className="font-mono font-bold text-red-500">{performanceData.totals.rma}</span></div>
-                            <div><span className="text-gray-400">Shrinkage:</span> <span className="font-mono font-bold text-red-600">{performanceData.totals.shrinkageQty}u</span></div>
-                          </div>
-                        </div>
-                        <div className="bg-white rounded-lg border border-gray-200 p-4">
-                          <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">7-Day Volume</h3>
-                          <div className="flex items-end gap-1 h-12 mt-1">
-                            {performanceData.sparkline.map((d, i) => {
-                              const maxVol = Math.max(...performanceData.sparkline.map(s => s.total), 1)
-                              const totalH = (d.total / maxVol) * 100
-                              const delivH = d.total > 0 ? (d.delivered / d.total) * totalH : 0
-                              return (
-                                <div key={i} className="flex-1 flex flex-col items-center gap-0.5" title={`${d.date}: ${d.delivered}/${d.total} delivered`}>
-                                  <div className="w-full flex flex-col justify-end h-10 relative">
-                                    <div className="w-full bg-orange-200 rounded-t" style={{ height: `${totalH}%` }} />
-                                    <div className="w-full bg-orange-500 absolute bottom-0" style={{ height: `${delivH}%` }} />
-                                  </div>
-                                  <span className="text-[8px] text-gray-400">{d.date.slice(-2)}</span>
-                                </div>
-                              )
-                            })}
-                          </div>
-                          <p className="text-[9px] text-gray-400 mt-1">Dark = delivered, light = total</p>
-                        </div>
-                      </div>
-
-                      {/* COD reconciliation */}
-                      <div className="bg-white rounded-lg border border-gray-200 p-4">
-                        <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Reconciliation ({performanceData.window.days}d)</h3>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                            <span className="text-gray-500">Total Sales Value</span>
-                            <span className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.cod.totalSale, performanceData.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                            <span className="text-gray-500">Cash Collected by Drivers</span>
-                            <span className="font-mono font-bold text-green-700">{formatCurrency(performanceData.cod.totalCollected, performanceData.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                            <span className="text-gray-500">Collection Shortfall</span>
-                            <span className={`font-mono font-bold ${performanceData.cod.shortfall > 0 ? 'text-red-600' : 'text-gray-400'}`}>{formatCurrency(performanceData.cod.shortfall, performanceData.currency)}</span>
-                          </div>
-                          <div className="flex items-center justify-between py-1">
-                            <span className="text-gray-500">Inbound Value Received</span>
-                            <span className="font-mono font-bold text-gray-900">{formatCurrency(performanceData.totals.inboundValue, performanceData.currency)} <span className="text-[10px] text-gray-400">({performanceData.totals.inboundQty}u)</span></span>
-                          </div>
-                        </div>
-                        {performanceData.cod.shortfall > 0 && (
-                          <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Cash collection shortfall. Check driver banking or undelivered orders.</p>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <div className="py-12 text-center text-xs text-gray-400">No performance data</div>
-                  )}
-                </div>
-              )}
-
-              {/* ===== COMMUNICATION TAB ===== */}
-              {activeTab === 'communication' && (
-                <div className="space-y-3">
-                  {/* Add new entry form */}
-                  <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 space-y-2">
-                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold flex items-center gap-1"><Plus size={10} /> Log New Communication</p>
-                    <div className="grid grid-cols-3 gap-2">
-                      <select value={commForm.type} onChange={e => setCommForm({ ...commForm, type: e.target.value })}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
-                        <option value="call">Call</option>
-                        <option value="whatsapp">WhatsApp</option>
-                        <option value="email">Email</option>
-                        <option value="visit">Visit</option>
-                        <option value="meeting">Meeting</option>
-                        <option value="other">Other</option>
-                      </select>
-                      <select value={commForm.direction} onChange={e => setCommForm({ ...commForm, direction: e.target.value })}
-                        className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
-                        <option value="outbound">Outbound (we reached out)</option>
-                        <option value="inbound">Inbound (they reached out)</option>
-                      </select>
-                      <Input type="datetime-local" value={commForm.followUpAt} onChange={e => setCommForm({ ...commForm, followUpAt: e.target.value })}
-                        className="rounded-md text-xs h-8" title="Schedule follow-up (optional)" />
-                    </div>
-                    <Input placeholder="Subject, e.g. Late COD remittance for June statement" value={commForm.subject}
-                      onChange={e => setCommForm({ ...commForm, subject: e.target.value })} className="rounded-md text-xs h-8" />
-                    <textarea placeholder="Notes: what was discussed, what was agreed" value={commForm.notes}
-                      onChange={e => setCommForm({ ...commForm, notes: e.target.value })} rows={2}
-                      className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs" />
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-1.5 text-[11px] text-gray-600 cursor-pointer">
-                        <input type="checkbox" checked={commForm.isResolved} onChange={e => setCommForm({ ...commForm, isResolved: e.target.checked })}
-                          className="rounded" />
-                        Resolved (no follow-up needed)
-                      </label>
-                      <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveComm}>
-                        <Plus size={11} className="mr-1" /> Log Entry
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* List of entries */}
-                  {commLoading ? (
-                    <div className="py-8 text-center text-xs text-gray-400">Loading communication log...</div>
-                  ) : commEntries.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-gray-400">No communication logged yet.<br />Use the form above to log the first call, WhatsApp, or visit.</div>
-                  ) : (
-                    <div className="space-y-1.5">
-                      {commEntries.map(e => {
-                        const isOverdue = !e.isResolved && e.followUpAt && new Date(e.followUpAt) < new Date()
-                        const typeColor: Record<string, string> = { call: 'bg-blue-500', whatsapp: 'bg-green-500', email: 'bg-purple-500', visit: 'bg-orange-500', meeting: 'bg-pink-500', other: 'bg-gray-400' }
-                        const typeIcon: Record<string, string> = { call: '📞', whatsapp: '💬', email: '✉', visit: '🚶', meeting: '👥', other: '•' }
-                        return (
-                          <div key={e.id} className={`bg-white border rounded-lg p-2.5 ${isOverdue ? 'border-orange-300 bg-orange-50/50' : 'border-gray-200'}`}>
-                            <div className="flex items-start gap-2">
-                              <span className={`w-6 h-6 rounded-full ${typeColor[e.type] || 'bg-gray-400'} text-white flex items-center justify-center text-xs shrink-0`}>{typeIcon[e.type] || '•'}</span>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span className="text-[9px] uppercase font-semibold text-gray-500">{e.type}</span>
-                                  <span className={`text-[9px] px-1 rounded ${e.direction === 'inbound' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>{e.direction === 'inbound' ? '← in' : '→ out'}</span>
-                                  {e.isResolved ? (
-                                    <span className="text-[9px] px-1 rounded bg-green-100 text-green-700">RESOLVED</span>
-                                  ) : (
-                                    <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ', OVERDUE' : ''}</span>
-                                  )}
-                                  <span className="text-[9px] text-gray-400 ml-auto">{new Date(e.createdAt).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                                </div>
-                                <p className="text-xs text-gray-900 font-medium mt-0.5">{e.subject}</p>
-                                {e.notes && <p className="text-[11px] text-gray-600 mt-0.5">{e.notes}</p>}
-                                {e.followUpAt && (
-                                  <p className={`text-[10px] mt-0.5 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                                    Follow-up: {new Date(e.followUpAt).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                                  </p>
-                                )}
-                                <p className="text-[9px] text-gray-400 mt-0.5">by {e.recordedBy}</p>
-                              </div>
-                              <div className="flex flex-col gap-1 shrink-0">
-                                <button onClick={() => handleToggleResolved(e)} title={e.isResolved ? 'Mark as open' : 'Mark as resolved'}
-                                  className={`p-1 rounded ${e.isResolved ? 'text-gray-400 hover:bg-gray-100' : 'text-green-600 hover:bg-green-100'}`}>
-                                  <CheckCircle2 size={12} />
-                                </button>
-                                <button onClick={() => handleDeleteComm(e.id)} title="Delete entry"
-                                  className="p-1 rounded text-gray-400 hover:bg-red-50 hover:text-red-500">
-                                  <Trash2 size={12} />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
+              {/* Notes */}
+              {m.notes && (
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Notes</p>
+                  <p className="text-xs text-gray-600">{m.notes}</p>
                 </div>
               )}
             </div>

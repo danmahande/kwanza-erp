@@ -598,76 +598,74 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
         title={selectedRecord?.productName || 'Record Details'}
         subtitle={selectedRecord?.inboundId}
-        width="xl"
+        width="lg"
         footer={selectedRecord ? (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between">
             <AlertDialog>
               <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"><Trash2 size={14} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
               <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this record?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
                 <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteRecord(selectedRecord.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            <Button size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="bg-[#1B2A4A] hover:bg-[#1B2A4A]/90 text-white rounded-xl">Close</Button>
+            <Button variant="outline" size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl ml-auto">Close</Button>
           </div>
         ) : undefined}
       >
         {selectedRecord && (
-          <div className="space-y-5">
-            {/* Status & Date */}
+          <div className="space-y-3">
+            {/* Status + Date */}
             <div className="flex items-center justify-between">
               <div>{statusBadge(selectedRecord.status)}</div>
-              <div className="text-xs text-gray-400">{new Date(selectedRecord.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+              <div className="text-xs text-gray-400">{new Date(selectedRecord.createdAt).toLocaleDateString('en-UG', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
             </div>
 
             {/* Merchant */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Merchant / Supplier</p>
-              <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><Building2 size={14} />{selectedRecord.merchantName}</p>
-              <p className="text-xs text-gray-400 mt-0.5">ID: {selectedRecord.merchantId}</p>
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Building2 size={10} /> Merchant</p>
+              <p className="text-sm font-medium text-gray-900">{selectedRecord.merchantName}</p>
+              <p className="text-xs text-gray-500 font-mono">{selectedRecord.merchantId}</p>
             </div>
 
-            {/* Product Details */}
-            <div className="bg-gray-50 rounded-xl p-4">
-              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Product Details</p>
-              <p className="text-sm font-semibold text-gray-800 mb-1">{selectedRecord.productName}</p>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><span className="text-gray-400 text-xs">Product ID:</span><p className="font-medium">{selectedRecord.productId}</p></div>
-                {selectedRecord.brand && <div><span className="text-gray-400 text-xs">Brand:</span><p className="font-medium">{selectedRecord.brand}</p></div>}
-                {selectedRecord.variant && <div><span className="text-gray-400 text-xs">Variant:</span><p className="font-medium">{selectedRecord.variant}</p></div>}
-              </div>
-            </div>
-
-            {/* Quantity & Value */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="bg-gradient-to-br from-green-50 to-green-100/50 border border-green-200/60 rounded-xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Quantity</p>
-                <p className="text-xl font-bold text-gray-900">{selectedRecord.qtyIn.toLocaleString()}</p>
-              </div>
-              <div className="bg-gradient-to-br from-orange-50 to-orange-100/50 border border-orange-200/60 rounded-xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Unit Price</p>
-                <p className="text-xl font-bold text-gray-900">{selectedRecord.unitPrice ? `UGX ${fmt(selectedRecord.unitPrice)}` : '—'}</p>
-              </div>
-              <div className="bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200/60 rounded-xl p-4 text-center">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Total Value</p>
-                <p className="text-xl font-bold text-gray-900">{selectedRecord.inboundValue ? `UGX ${fmt(selectedRecord.inboundValue)}` : '—'}</p>
+            {/* Product */}
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+              <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Product</p>
+              <p className="text-sm font-medium text-gray-900">{selectedRecord.productName}</p>
+              <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                <div><span className="text-gray-400">Product ID:</span> <span className="font-mono text-gray-600">{selectedRecord.productId}</span></div>
+                {selectedRecord.brand && <div><span className="text-gray-400">Brand:</span> <span className="text-gray-600">{selectedRecord.brand}</span></div>}
+                {selectedRecord.variant && <div><span className="text-gray-400">Variant:</span> <span className="text-gray-600">{selectedRecord.variant}</span></div>}
               </div>
             </div>
 
-            {/* Storage & Expiry */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Storage Location</p>
-                {selectedRecord.storageLocation ? (
-                  <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><MapPin size={14} className="text-[#FF6B35]" />{selectedRecord.storageLocation}</p>
-                ) : <p className="text-sm text-gray-400">Not assigned</p>}
+            {/* Quantity + Value */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Qty</p>
+                <p className="text-lg font-bold text-gray-900 font-mono">{selectedRecord.qtyIn.toLocaleString()}</p>
               </div>
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Expiry Date</p>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Unit Price</p>
+                <p className="text-lg font-bold text-gray-900 font-mono">{selectedRecord.unitPrice ? fmt(selectedRecord.unitPrice) : '—'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Total</p>
+                <p className="text-lg font-bold text-gray-900 font-mono">{selectedRecord.inboundValue ? fmt(selectedRecord.inboundValue) : '—'}</p>
+              </div>
+            </div>
+
+            {/* Storage + Expiry */}
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1 flex items-center gap-1"><MapPin size={10} /> Storage</p>
+                <p className="text-sm font-medium text-gray-900">{selectedRecord.storageLocation || 'Not assigned'}</p>
+              </div>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Expiry</p>
                 {selectedRecord.expiryDate ? (() => {
                   const expiry = getExpiryStatus(selectedRecord.expiryDate)
                   return (
                     <div>
-                      <p className="text-sm font-semibold text-gray-800">{selectedRecord.expiryDate}</p>
+                      <p className="text-sm font-medium text-gray-900">{selectedRecord.expiryDate}</p>
                       {expiry && <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${expiry.color}`}>{expiry.label}</span>}
                     </div>
                   )
@@ -676,21 +674,21 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
             </div>
 
             {/* People */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Received By</p>
-                <p className="text-sm font-semibold text-gray-800 flex items-center gap-1.5"><User size={14} />{selectedRecord.receivedBy}</p>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1 flex items-center gap-1"><User size={10} /> Received By</p>
+                <p className="text-sm font-medium text-gray-900">{selectedRecord.receivedBy}</p>
               </div>
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Stored By</p>
-                <p className="text-sm font-semibold text-gray-800">{selectedRecord.storedBy || <span className="text-gray-400">Not assigned</span>}</p>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Stored By</p>
+                <p className="text-sm font-medium text-gray-900">{selectedRecord.storedBy || 'Not assigned'}</p>
               </div>
             </div>
 
             {/* Comment */}
             {selectedRecord.userComment && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-1">Comment</p>
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Comment</p>
                 <p className="text-sm text-gray-700">{selectedRecord.userComment}</p>
               </div>
             )}
