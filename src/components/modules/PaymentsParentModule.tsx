@@ -22,7 +22,7 @@ const tabs: { key: Tab; label: string; icon: typeof CreditCard }[] = [
 ]
 
 /**
- * Payments parent module — composes the 6 finance submodules as tabs.
+ * Payments parent module. composes the 6 finance submodules as tabs.
  *
  * Reflects the financial workflow:
  *   COD (daily: cash comes IN from drivers)

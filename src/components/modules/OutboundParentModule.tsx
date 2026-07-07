@@ -16,7 +16,7 @@ const tabs: { key: Tab; label: string; icon: typeof ArrowUpRight }[] = [
 ]
 
 /**
- * Outbound parent module — composes Order Processing, Outbound Records, and Runsheets as tabs.
+ * Outbound parent module. composes Order Processing, Outbound Records, and Runsheets as tabs.
  * Reflects the forward-moving workflow: Order → Outbound → Runsheet → Delivery.
  */
 export default function OutboundParentModule() {

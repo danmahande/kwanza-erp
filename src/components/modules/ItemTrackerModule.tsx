@@ -248,7 +248,7 @@ export default function ItemTrackerModule() {
               <div>
                 <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium">Delivery Attempts</p>
                 <p className={`text-sm font-bold ${item.attemptCount >= 5 ? 'text-red-600' : item.attemptCount > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                  {item.attemptCount}{item.nextAttemptDate ? ` · Next: ${new Date(item.nextAttemptDate).toLocaleDateString()}` : ''}
+                  {item.attemptCount}{item.nextAttemptDate ? `, Next: ${new Date(item.nextAttemptDate).toLocaleDateString()}` : ''}
                 </p>
               </div>
             </div>
@@ -283,7 +283,7 @@ export default function ItemTrackerModule() {
             {events.length === 0 ? (
               <div className="text-center py-8">
                 <Clock size={32} className="mx-auto text-gray-200 mb-2" />
-                <p className="text-gray-400 text-sm">No events recorded yet</p>
+                <p className="text-gray-400 text-sm">No events recorded</p>
               </div>
             ) : (
               <div className="relative">
@@ -412,7 +412,7 @@ export default function ItemTrackerModule() {
       ) : !item && !listMode && (
         <div className="py-12 text-center text-gray-400 text-sm">
           <Search size={32} className="mx-auto mb-3 text-gray-300" />
-          Enter an Item ID above to see its complete journey — from receipt through storage, picking, dispatch, delivery, and any returns or failures.
+          Enter an Item ID above to see its complete journey, from receipt through storage, picking, dispatch, delivery, and any returns or failures.
         </div>
       )}
     </motion.div>

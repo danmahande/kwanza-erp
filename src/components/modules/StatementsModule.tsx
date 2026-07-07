@@ -308,7 +308,7 @@ export default function StatementsModule() {
       >
         {editing ? (
           <div className="space-y-3">
-            {/* Single dense card — statement details */}
+            {/* Single dense card, statement details */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Statement Details</h3>
               <div className="space-y-2 text-xs">
@@ -339,7 +339,7 @@ export default function StatementsModule() {
               </div>
             </div>
 
-            {/* Single dense card — fee breakdown (stacked rows, not card grid) */}
+            {/* Single dense card. fee breakdown (stacked rows, not card grid) */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Fee Breakdown</h3>
               <div className="space-y-2 text-xs">

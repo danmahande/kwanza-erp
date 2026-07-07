@@ -229,7 +229,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
         body: JSON.stringify(payload),
       })
       if (res.ok) {
-        toast.success('Order created — outbound record spawned automatically')
+        toast.success('Order created. outbound record spawned automatically')
         setOpen(false)
         setForm({
           merchantId: '', productId: '', customerName: '', customerContact: '',
@@ -239,7 +239,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
       } else if (res.status === 409) {
         const err = await res.json().catch(() => ({}))
         if (err.code === 'MERCHANT_ON_HOLD') {
-          toast.error(`${err.merchantName || 'Merchant'} is on hold — order blocked`, {
+          toast.error(`${err.merchantName || 'Merchant'} is on hold, order blocked`, {
             description: `Reason: ${err.reason || 'Overdue balance / dispute'}`,
             duration: 8000,
             action: onNavigate ? { label: 'Release Hold', onClick: () => onNavigate('merchants') } : undefined,
@@ -256,7 +256,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
     }
   }
 
-  // CSV import — parse and bulk create orders
+  // CSV import, parse and bulk create orders
   const handleImport = async () => {
     if (!importText.trim()) { toast.error('Paste CSV data first'); return }
     const lines = importText.trim().split('\n')
@@ -448,7 +448,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
                 ))
               ) : (
                 <span className="text-xs text-blue-700">
-                  Mixed statuses — select orders in the same stage to bulk-advance them
+                  Mixed statuses, select orders in the same stage to bulk-advance them
                 </span>
               )}
               <Button
@@ -628,7 +628,7 @@ export default function OrderProcessingModule({ onNavigate }: { onNavigate?: (mo
             >
               <option value="">Select product...</option>
               {filteredProducts.map(p => (
-                <option key={p.productId} value={p.productId}>{p.productLabel} — {formatCurrency(p.unitSellingPrice)}</option>
+                <option key={p.productId} value={p.productId}>{p.productLabel}, {formatCurrency(p.unitSellingPrice)}</option>
               ))}
             </select>
           </div>

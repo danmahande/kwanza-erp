@@ -161,7 +161,7 @@ export default function CODReconciliationModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       <OpsHeader
         title="COD Reconciliation"
-        description="Driver COD collections vs bankings — verify deposits, flag shortfalls"
+        description="Driver COD collections vs bankings. verify deposits, flag shortfalls"
         kpiCells={kpiCells}
         searchValue={search}
         onSearchChange={setSearch}
@@ -172,7 +172,7 @@ export default function CODReconciliationModule() {
 
       {/* Dense table */}
       {filteredDrivers.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm">No driver COD data yet.</div>
+        <div className="py-12 text-center text-gray-400 text-sm">No driver COD data.</div>
       ) : (
         <DenseTable>
           <thead>
@@ -292,7 +292,7 @@ export default function CODReconciliationModule() {
       <DetailSlideOver
         open={bankingsOpen}
         onClose={() => setBankingsOpen(false)}
-        title={selectedDriver ? `Bankings — ${selectedDriver.driverName}` : 'Bankings'}
+        title={selectedDriver ? `Bankings, ${selectedDriver.driverName}` : 'Bankings'}
         subtitle={selectedDriver ? `${selectedDriver.driverId}` : ''}
         width="lg"
         footer={
@@ -302,7 +302,7 @@ export default function CODReconciliationModule() {
         }
       >
         <div className="space-y-3">
-          {/* Single dense card — driver COD summary */}
+          {/* Single dense card, driver COD summary */}
           {selectedDriver && (
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">COD Summary</h3>
@@ -333,11 +333,11 @@ export default function CODReconciliationModule() {
             </div>
           )}
 
-          {/* Banking records — DenseTable */}
+          {/* Banking records, DenseTable */}
           <div className="space-y-1">
             <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Banking Records</span>
             {bankings.filter(b => !selectedDriver || b.driverId === selectedDriver.driverId).length === 0 ? (
-              <div className="py-8 text-center text-gray-400 text-sm">No bankings recorded for this driver yet.</div>
+              <div className="py-8 text-center text-gray-400 text-sm">No bankings recorded for this driver.</div>
             ) : (
               <DenseTable>
                 <thead>
@@ -357,7 +357,7 @@ export default function CODReconciliationModule() {
                         <DenseTd mono className="text-gray-500 text-[10px]">{b.bankingId}</DenseTd>
                         <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(b.amount)}</DenseTd>
                         <DenseTd className="text-gray-600 text-[10px] truncate max-w-[100px]">
-                          {b.bankName || '—'}{b.bankReference ? ` · ${b.bankReference}` : ''}
+                          {b.bankName || '—'}{b.bankReference ? `, ${b.bankReference}` : ''}
                           {b.shortfallAmount > 0 && <span className="text-red-600 block">SF: {formatCurrencyCompact(b.shortfallAmount)}</span>}
                         </DenseTd>
                         <DenseTd className="text-center">

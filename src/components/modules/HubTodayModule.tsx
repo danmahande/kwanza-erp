@@ -160,17 +160,17 @@ interface HubData {
 type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
 const STATIONS: { key: StationKey; label: string; shortLabel: string; description: string; icon: typeof Package; pillClass: string }[] = [
-  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock that arrived — needs to be put away on shelves (received → put away → stored)', icon: Package,       pillClass: 'text-blue-600' },
-  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Orders being prepared — picking from shelves, then packing into boxes (pending → picking → picked → packing → packed)', icon: Boxes,        pillClass: 'text-orange-600' },
-  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed and ready — waiting for a rider to be assigned',   icon: ClipboardList, pillClass: 'text-purple-600' },
-  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to a rider — ready to leave the warehouse', icon: Truck,     pillClass: 'text-yellow-700' },
-  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery — rider is on the road',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
+  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock that arrived. needs to be put away on shelves (received → put away → stored)', icon: Package,       pillClass: 'text-blue-600' },
+  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Orders being prepared. picking from shelves, then packing into boxes (pending → picking → picked → packing → packed)', icon: Boxes,        pillClass: 'text-orange-600' },
+  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed and ready. waiting for a rider to be assigned',   icon: ClipboardList, pillClass: 'text-purple-600' },
+  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to a rider. ready to leave the warehouse', icon: Truck,     pillClass: 'text-yellow-700' },
+  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery. rider is on the road',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
   { key: 'delivered', label: 'DELIVERED',      shortLabel: 'Delivered',       description: 'Successfully delivered to the customer today', icon: CheckCircle2, pillClass: 'text-green-700' },
-  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received — needs inspection and disposition',   icon: RotateCcw,     pillClass: 'text-red-600' },
+  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received. needs inspection and disposition',   icon: RotateCcw,     pillClass: 'text-red-600' },
 ]
 
 // ── Workflow progress stages (for the Order Status visualizer) ──
-// Only the outbound flow is shown — Intake and Returns are separate flows.
+// Only the outbound flow is shown. Intake and Returns are separate flows.
 const STAGES_FLOW: { key: StationKey; shortLabel: string; color: string }[] = [
   { key: 'sort',      shortLabel: 'Sort',     color: 'bg-orange-400' },
   { key: 'stage',     shortLabel: 'Stage',    color: 'bg-purple-400' },
@@ -224,7 +224,7 @@ const STAGE_BAR_COLOR: Record<string, string> = {
   returns:   'bg-red-400',
 }
 
-// Same thresholds as backend STALE_THRESHOLDS — keep in sync.
+// Same thresholds as backend STALE_THRESHOLDS, keep in sync.
 // Used to highlight a station tab when its avg dwell exceeds the threshold.
 const STALE_THRESHOLD_MINUTES: Record<string, number> = {
   sort: 120,
@@ -280,7 +280,7 @@ function rowTint(status: string): string {
   return ''
 }
 
-// ── KPI Ribbon ── (replaces the 4-card totals strip — single dense bar, no icons, no gradients)
+// ── KPI Ribbon ── (replaces the 4-card totals strip, single dense bar, no icons, no gradients)
 function KpiRibbon({ totals, exceptionsCount, ridersCount, codPending, deliveredCount }: {
   totals: HubData['totals']
   exceptionsCount: number
@@ -597,7 +597,7 @@ function FollowUpsPanel({ followUps, onNavigate }: {
       {followUps.count > 8 && (
         <div className="px-3 py-1.5 border-t border-orange-100 bg-orange-50/50 text-center">
           <button onClick={() => onNavigate?.('merchants')} className="text-[10px] text-orange-700 hover:text-orange-900 font-medium">
-            + {followUps.count - 8} more — view all in Merchants
+            + {followUps.count - 8} more, view all in Merchants
           </button>
         </div>
       )}
@@ -666,16 +666,16 @@ function TodayHeadline({ data }: { data: HubData }) {
     if (data.stations.stage.count > 0) bits.push(`${data.stations.stage.count} in staging`)
     if (data.stations.dispatch.count > 0) bits.push(`${data.stations.dispatch.count} ready to dispatch`)
     if (data.stations.inTransit.count > 0) bits.push(`${data.stations.inTransit.count} in transit`)
-    parts.push(`${inMotion} parcel${inMotion !== 1 ? 's' : ''} in motion — ${bits.join(', ')}`)
+    parts.push(`${inMotion} parcel${inMotion !== 1 ? 's' : ''} in motion, ${bits.join(', ')}`)
   } else {
-    parts.push('No parcels in motion right now')
+    parts.push('No parcels in motion')
   }
 
   // Deliveries
   if (data.stations.delivered.count > 0) {
     parts.push(`${data.stations.delivered.count} delivered today`)
   } else if (inMotion > 0) {
-    parts.push('nothing delivered yet today')
+    parts.push('nothing delivered ')
   }
 
   // Returns
@@ -706,10 +706,10 @@ function TodayHeadline({ data }: { data: HubData }) {
     parts.push(`${data.pendingBankings.count} pending COD banking${data.pendingBankings.count !== 1 ? 's' : ''} to verify`)
   }
 
-  // Compose — join with periods, max 3 sentences
+  // Compose, join with periods, max 3 sentences
   let text: string
   if (parts.length === 0) {
-    text = 'Nothing happening yet today.'
+    text = 'Nothing happening .'
   } else if (parts.length === 1) {
     text = parts[0] + '.'
   } else {
@@ -740,7 +740,7 @@ function TodayHeadline({ data }: { data: HubData }) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
-            Today · {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'long', month: 'short', day: 'numeric' })}
+            Today, {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'long', month: 'short', day: 'numeric' })}
           </p>
           <p className={`text-sm font-medium ${
             hasProblems ? 'text-red-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
@@ -776,13 +776,13 @@ function StatusStrip({
       <div className="bg-white rounded-lg border border-green-200 px-3 py-2.5 flex items-center gap-2">
         <CheckCircle2 size={14} className="text-green-600 shrink-0" />
         <span className="text-[11px] text-green-700 font-medium">
-          All clear — no exceptions, no pending COD, all bankings verified.
+          All clear, no exceptions, no pending COD, all bankings verified.
         </span>
       </div>
     )
   }
 
-  // Has issues — show a consolidated red-bordered card with detail sections
+  // Has issues. show a consolidated red-bordered card with detail sections
   return (
     <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
       <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center gap-2">
@@ -831,7 +831,7 @@ function StatusStrip({
         <div>
           <div className="px-3 py-1.5 bg-orange-50/30 flex items-center justify-between">
             <span className="text-[10px] font-semibold text-orange-700 uppercase tracking-wider">
-              {bankings.count} Pending COD · {formatCurrencyCompact(bankings.totalAmount)}
+              {bankings.count} Pending COD, {formatCurrencyCompact(bankings.totalAmount)}
             </span>
             <button onClick={() => onNavigate?.('payments')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
           </div>
@@ -855,13 +855,13 @@ function StatusStrip({
 }
 
 // ── Active station summary ──
-// Replaces the static "Orders being prepared — picking from shelves..."
+// Replaces the static "Orders being prepared, picking from shelves..."
 // tutorial text with a real status summary of what's in THIS station right now.
 function ActiveStationSummary({ station, stationKey }: { station: Station; stationKey: StationKey }) {
   if (station.count === 0) {
     return (
       <p className="text-[11px] text-gray-400 italic">
-        Nothing in this station right now.
+        Nothing in this station.
       </p>
     )
   }
@@ -894,9 +894,9 @@ function ActiveStationSummary({ station, stationKey }: { station: Station; stati
   let dwellText = ''
   if (dwell != null) {
     if (isStale) {
-      dwellText = ` — avg ${formatDwell(dwell)} in stage, over the ${formatDwell(threshold)} threshold`
+      dwellText = `, avg ${formatDwell(dwell)} in stage, over the ${formatDwell(threshold)} threshold`
     } else {
-      dwellText = ` — avg ${formatDwell(dwell)} in stage`
+      dwellText = `, avg ${formatDwell(dwell)} in stage`
     }
   }
 
@@ -1028,7 +1028,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         const d = await res.json()
         setSearchResults(d)
       } catch {
-        toast.error('Search failed — network error')
+        toast.error('Search failed. network error')
       } finally {
         setIsSearching(false)
       }
@@ -1056,7 +1056,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
     }
   }, [])
 
-  // Focus search input on mount only — NOT on every re-render
+  // Focus search input on mount only, NOT on every re-render
   useEffect(() => {
     searchInputRef.current?.focus()
   }, [])
@@ -1096,7 +1096,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         setDayCloseOpen(false)
         fetchData()
       } else {
-        toast.error(result.error || 'Cannot close day — blockers exist')
+        toast.error(result.error || 'Cannot close day, blockers exist')
       }
     } catch {
       toast.error('Failed to close day')
@@ -1143,7 +1143,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       </div>
 
       {/* ════════════════════════════════════════════════════════════ */}
-      {/* LAYER 1: THE WORK LAYER — what a worker sees and uses          */}
+      {/* LAYER 1: THE WORK LAYER, what a worker sees and uses          */}
       {/* ════════════════════════════════════════════════════════════ */}
 
       {/* ── HERO: Product search bar (big, obvious, can't miss it) ── */}
@@ -1152,7 +1152,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <div className="flex items-center gap-3 mb-2">
             <Search size={20} className="text-blue-300" />
             <label className="text-white font-semibold text-sm">
-              Search for any order — by product, customer, merchant, or order ID
+              Search for any order. by product, customer, merchant, or order ID
             </label>
           </div>
           <div className="flex items-center gap-2">
@@ -1182,7 +1182,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             )}
           </div>
           <p className="text-blue-200/50 text-[11px] mt-2">
-            Type anything you remember about an order — a product name, the customer's name, the merchant, or the order ID. The system shows only active orders, with their current stage.
+            Type anything you remember about an order. a product name, the customer's name, the merchant, or the order ID. The system shows only active orders, with their current stage.
           </p>
         </div>
 
@@ -1206,7 +1206,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             )}
             {!isSearching && searchResults && searchResults.results.length > 0 && (
               <div className="py-1">
-                {/* Stage distribution chart — answers "where are all my matching orders right now?" at a glance */}
+                {/* Stage distribution chart. answers "where are all my matching orders right now?" at a glance */}
                 {(() => {
                   const allOrders = searchResults.results.flatMap(p => p.orders)
                   const stageCounts: Record<string, number> = {}
@@ -1255,7 +1255,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                   )
                 })()}
                 <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold border-b border-gray-100 sticky top-0 bg-white">
-                  {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''} · {searchResults.totalOrders} active order{searchResults.totalOrders !== 1 ? 's' : ''}
+                  {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''}, {searchResults.totalOrders} active order{searchResults.totalOrders !== 1 ? 's' : ''}
                 </div>
                 {searchResults.results.map(product => (
                   <div key={product.productId} className="border-b border-gray-50 last:border-0">
@@ -1283,7 +1283,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                         <span className="text-[10px] text-gray-500 shrink-0 w-24 text-right flex items-center justify-end gap-1">
                           {order.isStale && (
                             <span
-                              title={`Stuck here for ${formatDwell(order.entryMinutes)} — over threshold`}
+                              title={`Stuck here for ${formatDwell(order.entryMinutes)}, over threshold`}
                               className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"
                             />
                           )}
@@ -1351,11 +1351,11 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         </div>
       )}
 
-      {/* ── Order Status — shows the stage of the order selected from search ── */}
+      {/* ── Order Status, shows the stage of the order selected from search ── */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-sm font-semibold text-gray-700">
-            {selectedOrder ? `Order Status · ${selectedOrder.id}` : 'Order Status'}
+            {selectedOrder ? `Order Status, ${selectedOrder.id}` : 'Order Status'}
           </h2>
           {selectedOrder && (
             <button
@@ -1372,7 +1372,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             <Search size={28} className="text-gray-300 mx-auto mb-2" />
             <p className="text-sm text-gray-500 font-medium">Search for an order above</p>
             <p className="text-[11px] text-gray-400 mt-1 max-w-md mx-auto">
-              Type a product name, customer, merchant, or order ID (like "bread", "akinyi", or "DS-014") — click an order to see its current stage here.
+              Type a product name, customer, merchant, or order ID (like "bread", "akinyi", or "DS-014"), click an order to see its current stage here.
             </p>
           </div>
         ) : (
@@ -1401,7 +1401,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                     {selectedOrder.stage}
                     {selectedOrder.isStale && (
                       <span
-                        title={`Stuck here for ${formatDwell(selectedOrder.entryMinutes)} — past threshold`}
+                        title={`Stuck here for ${formatDwell(selectedOrder.entryMinutes)}, past threshold`}
                         className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold"
                       >
                         <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
@@ -1437,7 +1437,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
               )}
             </div>
 
-            {/* Stage progress bar — shows where this order is in the outbound flow */}
+            {/* Stage progress bar, shows where this order is in the outbound flow */}
             {selectedOrder.stageKey !== 'returns' && (
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Workflow progress</p>
@@ -1497,10 +1497,10 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       </div>
 
       {/* ════════════════════════════════════════════════════════════ */}
-      {/* LAYER 2: THE SUPERVISOR LAYER — overview for the hub manager   */}
+      {/* LAYER 2: THE SUPERVISOR LAYER, overview for the hub manager   */}
       {/* ════════════════════════════════════════════════════════════ */}
 
-      {/* ── KPI Ribbon (supervisor overview — view only) ── */}
+      {/* ── KPI Ribbon (supervisor overview. view only) ── */}
       <div className="flex items-center gap-2 pt-2">
         <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview (view only)</span>
         <div className="flex-1 h-px bg-gray-100"></div>
@@ -1514,7 +1514,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         deliveredCount={data.stations.delivered.count}
       />
 
-      {/* ── Daily Flow Funnel — how today's parcels have moved through stages ── */}
+      {/* ── Daily Flow Funnel. how today's parcels have moved through stages ── */}
       {(() => {
         const stations = [
           { key: 'intake',    label: 'Intake',    count: data.stations.intake.count,    color: 'bg-blue-500' },
@@ -1531,7 +1531,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
             <div className="flex items-center justify-between mb-2">
               <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Today's flow · {totalAll} parcel{totalAll !== 1 ? 's' : ''} in motion
+                Today's flow, {totalAll} parcel{totalAll !== 1 ? 's' : ''} in motion
               </span>
               <span className="text-[10px] text-gray-400 font-mono">
                 {data.stations.delivered.count} of {totalAll} delivered
@@ -1605,7 +1605,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         })}
       </div>
 
-      {/* Active station summary — plain-English status of what's in this station right now */}
+      {/* Active station summary, plain-English status of what's in this station right now */}
       <ActiveStationSummary station={data.stations[activeStation]} stationKey={activeStation} />
 
       {/* ── Main: Station Table + Right Rail ── */}
@@ -1670,7 +1670,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             <div className="space-y-2">
             <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
               <p className="text-xs text-blue-800">
-                <strong>The search bar at the top</strong> finds any order by what you remember about it — a product name like "bread", a customer like "akinyi", a merchant like "farmers", or an order ID like "DS-014". The dropdown shows only active orders, with their stage inline. Orders that match your search are highlighted in light blue; other orders from the same product show as context.
+                <strong>The search bar at the top</strong> finds any order by what you remember about it. a product name like "bread", a customer like "akinyi", a merchant like "farmers", or an order ID like "DS-014". The dropdown shows only active orders, with their stage inline. Orders that match your search are highlighted in light blue; other orders from the same product show as context.
               </p>
             </div>
             <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
@@ -1680,7 +1680,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
             </div>
             <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
               <p className="text-xs text-gray-600">
-                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash — but you can't take actions from here. To act, use the "Order Status" panel or the sidebar.
+                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash. but you can't take actions from here. To act, use the "Order Status" panel or the sidebar.
               </p>
             </div>
           </div>
@@ -1699,15 +1699,13 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Lock size={18} />
-              Close Day — {new Date().toLocaleDateString('en-UG')}
+              Close Day. {new Date().toLocaleDateString('en-UG')}
             </AlertDialogTitle>
             <AlertDialogDescription>
               Closing the day finalizes today's operations. All parcels must be delivered, returned, or staged. All driver COD must be banked.
               <br />
               <span className="text-[11px] text-gray-400 mt-1 block">
-                Current time: {new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })} ·
-                {' '}{data.totals.outboundToday} orders processed today ·
-                {' '}{data.stations.delivered.count} delivered
+                Current time: {new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}, {' '}{data.totals.outboundToday} orders processed today, {' '}{data.stations.delivered.count} delivered
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1729,7 +1727,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                       const status = String(p.status || '')
                       return (
                         <p key={idx} className="text-[11px] text-red-700 font-mono">
-                          {id} — {customer} ({status})
+                          {id}. {customer} ({status})
                         </p>
                       )
                     })}
@@ -1779,7 +1777,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
               disabled={!dayCloseData?.canClose}
               className={`rounded-xl ${dayCloseData?.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300'}`}
             >
-              {dayCloseData?.canClose ? 'Confirm Day Close' : 'Cannot Close — Blockers Exist'}
+              {dayCloseData?.canClose ? 'Confirm Day Close' : 'Cannot Close, Blockers Exist'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

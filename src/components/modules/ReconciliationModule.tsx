@@ -143,7 +143,7 @@ export default function ReconciliationModule() {
         </DenseTable>
       )}
 
-      {/* Detail slide-over — single dense card */}
+      {/* Detail slide-over, single dense card */}
       <DetailSlideOver
         open={detailOpen}
         onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}

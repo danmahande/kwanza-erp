@@ -417,7 +417,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
       const payload = { ...form, qtyIn, unitPrice, inboundValue, productName: fullName, status: 'received' }
       const res = await fetch('/api/inbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (res.ok) {
-        toast.success(`Inventory received successfully — ${qtyIn} units (IN record created)`)
+        toast.success(`Inventory received successfully, ${qtyIn} units (IN record created)`)
         setOpen(false); resetForm(); fetchData()
       } else if (res.status === 409) {
         const err = await res.json().catch(() => ({}))

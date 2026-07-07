@@ -788,7 +788,7 @@ export default function MerchantsModule() {
                       </div>
                     ))}
                   </div>
-                ) : <p className="text-xs text-gray-400 text-center py-2">No statements yet</p>}
+                ) : <p className="text-xs text-gray-400 text-center py-2">No statements</p>}
               </div>
 
               {/* Notes */}

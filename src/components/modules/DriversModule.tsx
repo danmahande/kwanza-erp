@@ -791,7 +791,7 @@ export default function DriversModule() {
               </div>
             </div>
 
-            {/* Performance — single dense card with stacked progress bars */}
+            {/* Performance, single dense card with stacked progress bars */}
             {selectedRecord.ordersReceived > 0 && (
               <div className="space-y-3">
                 {/* Window selector */}
@@ -806,7 +806,7 @@ export default function DriversModule() {
                   {driverPerfLoading && <span className="text-[10px] text-gray-400 ml-1">Loading…</span>}
                 </div>
 
-                {/* Single dense card — all rates stacked with thin progress bars */}
+                {/* Single dense card, all rates stacked with thin progress bars */}
                 <div className="bg-white rounded-xl border border-gray-200 p-4">
                   <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">
                     Delivery Performance ({(driverPerf as Record<string, { days?: number }>)?.window?.days || driverPerfWindow}d)
@@ -866,7 +866,7 @@ export default function DriversModule() {
                       <div className="bg-white rounded-xl border border-gray-200 p-4">
                         <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Cycle Time & Trips</h4>
                         <p className="text-2xl font-mono font-bold text-gray-900">{p.cycleTime.avgHours}<span className="text-xs text-gray-400 ml-1">h</span></p>
-                        <p className="text-[10px] text-gray-500 mt-0.5">{p.cycleTime.avgMins} min avg · {p.cycleTime.samples} samples</p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">{p.cycleTime.avgMins} min avg, {p.cycleTime.samples} samples</p>
                         <div className="mt-2 pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-[10px]">
                           <div><span className="text-gray-400">Trips:</span> <span className="font-mono font-bold text-blue-600">{p.totals.trips}</span></div>
                           <div><span className="text-gray-400">Distance:</span> <span className="font-mono font-bold text-gray-700">{p.totals.distance}km</span></div>
@@ -898,7 +898,7 @@ export default function DriversModule() {
                   )
                 })()}
 
-                {/* COD + damages reconciliation — single card with stacked rows */}
+                {/* COD + damages reconciliation, single card with stacked rows */}
                 {driverPerf && !driverPerfLoading && (() => {
                   const p = driverPerf as {
                     cod: { totalSale: number; totalCollected: number; totalBanked: number; unbanked: number; bankingShortfall: number }
@@ -935,10 +935,10 @@ export default function DriversModule() {
                         </div>
                       </div>
                       {p.cod.bankingShortfall > 0 && (
-                        <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Banking shortfall — investigate missing cash from driver's bankings.</p>
+                        <p className="text-[10px] text-orange-600 mt-2 pt-2 border-t border-gray-100">⚠ Banking shortfall, investigate missing cash from driver's bankings.</p>
                       )}
                       {p.damages.total > 0 && (
-                        <p className="text-[10px] text-red-600 mt-1">⚠ {fmtMoney(p.damages.total)} in damages/loss — risk score: {p.rates.riskPercent}%</p>
+                        <p className="text-[10px] text-red-600 mt-1">⚠ {fmtMoney(p.damages.total)} in damages/loss. risk score: {p.rates.riskPercent}%</p>
                       )}
                     </div>
                   )
@@ -980,7 +980,7 @@ export default function DriversModule() {
               {/* Add new entry form */}
               <div className="bg-white rounded-lg border border-gray-100 p-3 space-y-2 mb-3">
                 <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold flex items-center gap-1"><Plus size={10} /> Log Customer Communication</p>
-                <p className="text-[10px] text-gray-500">Record calls/SMS with customers during delivery attempts — e.g. "customer not at home", "rescheduled", "refused delivery".</p>
+                <p className="text-[10px] text-gray-500">Record calls/SMS with customers during delivery attempts, e.g. "customer not at home", "rescheduled", "refused delivery".</p>
                 <div className="grid grid-cols-3 gap-2">
                   <select value={driverCommForm.type} onChange={e => setDriverCommForm({ ...driverCommForm, type: e.target.value })}
                     className="rounded-md border border-gray-200 bg-white px-2 py-1.5 text-xs">
@@ -1006,9 +1006,9 @@ export default function DriversModule() {
                 </div>
                 <Input placeholder="Order # (optional, e.g. DS-001)" value={driverCommForm.orderNumber}
                   onChange={e => setDriverCommForm({ ...driverCommForm, orderNumber: e.target.value })} className="rounded-md text-xs h-8" />
-                <Input placeholder="Subject — e.g. 'Customer not at home, rescheduled to tomorrow'" value={driverCommForm.subject}
+                <Input placeholder="Subject, e.g. 'Customer not at home, rescheduled to tomorrow'" value={driverCommForm.subject}
                   onChange={e => setDriverCommForm({ ...driverCommForm, subject: e.target.value })} className="rounded-md text-xs h-8" />
-                <textarea placeholder="Notes — what was discussed, what was agreed..." value={driverCommForm.notes}
+                <textarea placeholder="Notes, what was discussed, what was agreed..." value={driverCommForm.notes}
                   onChange={e => setDriverCommForm({ ...driverCommForm, notes: e.target.value })} rows={2}
                   className="w-full rounded-md border border-gray-200 px-2 py-1.5 text-xs" />
                 <div className="flex items-center justify-between">
@@ -1027,7 +1027,7 @@ export default function DriversModule() {
               {driverCommLoading ? (
                 <p className="text-xs text-gray-400 text-center py-4">Loading communication log...</p>
               ) : driverCommEntries.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-4">No communication logged yet.<br />Use the form above to log the first call or WhatsApp with a customer.</p>
+                <p className="text-xs text-gray-400 text-center py-4">No communication logged.<br />Use the form above to log the first call or WhatsApp with a customer.</p>
               ) : (
                 <div className="space-y-1.5 max-h-64 overflow-y-auto">
                   {driverCommEntries.map((rawEntry) => {
@@ -1047,14 +1047,14 @@ export default function DriversModule() {
                               {entry.isResolved ? (
                                 <span className="text-[9px] px-1 rounded bg-green-100 text-green-700">RESOLVED</span>
                               ) : (
-                                <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ' · OVERDUE' : ''}</span>
+                                <span className={`text-[9px] px-1 rounded ${isOverdue ? 'bg-red-100 text-red-700' : 'bg-orange-100 text-orange-700'}`}>OPEN{isOverdue ? ', OVERDUE' : ''}</span>
                               )}
                               {entry.orderNumber ? <span className="text-[9px] px-1 rounded bg-gray-200 text-gray-700 font-mono">{String(entry.orderNumber)}</span> : null}
                               <span className="text-[9px] text-gray-400 ml-auto">{new Date(String(entry.createdAt)).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
                             </div>
                             <p className="text-xs text-gray-900 font-medium mt-0.5">{String(entry.subject || '')}</p>
                             {entry.notes ? <p className="text-[11px] text-gray-600 mt-0.5">{String(entry.notes)}</p> : null}
-                            {entry.customerName ? <p className="text-[10px] text-gray-500 mt-0.5">Customer: {String(entry.customerName)}{entry.customerContact ? ` · ${String(entry.customerContact)}` : ''}</p> : null}
+                            {entry.customerName ? <p className="text-[10px] text-gray-500 mt-0.5">Customer: {String(entry.customerName)}{entry.customerContact ? `, ${String(entry.customerContact)}` : ''}</p> : null}
                             {entry.followUpAt ? (
                               <p className={`text-[10px] mt-0.5 ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
                                 Follow-up: {new Date(String(entry.followUpAt)).toLocaleString('en-UG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}

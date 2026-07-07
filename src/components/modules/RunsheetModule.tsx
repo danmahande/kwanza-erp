@@ -460,7 +460,7 @@ export default function RunsheetModule() {
                 {rs.status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </span>
             </div>
-            <p className="text-sm text-gray-400 mt-0.5">{rs.driver} {rs.vehicleNumber ? `· ${rs.vehicleNumber}` : ''} · {new Date(rs.date).toLocaleDateString()}</p>
+            <p className="text-sm text-gray-400 mt-0.5">{rs.driver} {rs.vehicleNumber ? `· ${rs.vehicleNumber}` : ''}, {new Date(rs.date).toLocaleDateString()}</p>
           </div>
         </div>
 
@@ -593,7 +593,7 @@ export default function RunsheetModule() {
               <div className="space-y-4">
                 <div className="p-3 rounded-xl bg-red-50 border border-red-100">
                   <p className="text-sm font-semibold text-red-800">Stop #{cancellingStop.stopSequence} -- {cancellingStop.customerName}</p>
-                  <p className="text-xs text-red-600 mt-0.5">{cancellingStop.outboundId} · {cancellingStop.productName} x{cancellingStop.qty}</p>
+                  <p className="text-xs text-red-600 mt-0.5">{cancellingStop.outboundId}, {cancellingStop.productName} x{cancellingStop.qty}</p>
                 </div>
                 <div>
                   <Label className="text-gray-700">Reason for Cancellation *</Label>
@@ -642,7 +642,7 @@ export default function RunsheetModule() {
               <div className="space-y-4">
                 <div className="p-3 rounded-xl bg-amber-50 border border-amber-100">
                   <p className="text-sm font-semibold text-gray-900">Stop #{reschedulingStop.stopSequence} -- {reschedulingStop.customerName}</p>
-                  <p className="text-xs text-gray-500 mt-0.5">{reschedulingStop.outboundId} · {reschedulingStop.productName} x{reschedulingStop.qty}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{reschedulingStop.outboundId}, {reschedulingStop.productName} x{reschedulingStop.qty}</p>
                   <div className="mt-2">
                     <AttemptTracker attempts={(reschedulingStop.deliveryAttempts ?? 0) + 1} max={reschedulingStop.maxAttempts ?? 5} />
                   </div>
@@ -1069,7 +1069,7 @@ export default function RunsheetModule() {
             <div className="space-y-4">
               <div className="p-3 rounded-xl bg-gray-50 text-sm">
                 <p className="font-semibold text-gray-900">{updatingStop.customerName}</p>
-                <p className="text-gray-500">{updatingStop.productName} · Expected: {updatingStop.qty}</p>
+                <p className="text-gray-500">{updatingStop.productName}, Expected: {updatingStop.qty}</p>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

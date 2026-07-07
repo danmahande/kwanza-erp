@@ -156,7 +156,7 @@ export default function PaymentsModule() {
     setForm({ ...form, merchantId, merchantName: m?.businessName || '', vendorId: merchantId })
   }
 
-  // CSV import — parse and bulk create payments
+  // CSV import, parse and bulk create payments
   const handleImport = async () => {
     if (!importText.trim()) { toast.error('Paste CSV data first'); return }
     const lines = importText.trim().split('\n')

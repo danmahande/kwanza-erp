@@ -52,7 +52,7 @@ export default function AuditLogModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
       <OpsHeader
         title="Audit Log"
-        description="Every state change recorded — for compliance and dispute resolution"
+        description="Every state change recorded. for compliance and dispute resolution"
         kpiCells={[
           { label: 'TOTAL EVENTS', value: data.length },
           { label: 'LAST 24H', value: data.filter(l => Date.now() - new Date(l.createdAt).getTime() < 86400000).length },
@@ -81,7 +81,7 @@ export default function AuditLogModule() {
           <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
             <ClipboardList size={32} className="text-gray-300" />
           </div>
-          <p className="text-gray-500 font-medium">No audit log entries yet</p>
+          <p className="text-gray-500 font-medium">No audit log entries</p>
           <p className="text-sm text-gray-400 mt-1">Audit entries appear here as users perform actions across the system</p>
         </motion.div>
       ) : (

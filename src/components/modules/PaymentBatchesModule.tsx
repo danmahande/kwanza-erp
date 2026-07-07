@@ -181,7 +181,7 @@ export default function PaymentBatchesModule() {
         onAction={() => selectedIds.size > 0 ? setCreateOpen(true) : toast.error('Select statements first')}
       />
 
-      {/* Unpaid Statements — DenseTable */}
+      {/* Unpaid Statements, DenseTable */}
       <div className="space-y-1">
         <div className="flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Unpaid Statements</span>
@@ -227,11 +227,11 @@ export default function PaymentBatchesModule() {
         )}
       </div>
 
-      {/* Payment Batches — DenseTable */}
+      {/* Payment Batches. DenseTable */}
       <div className="space-y-1">
         <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Payment Batches</span>
         {filteredBatches.length === 0 ? (
-          <div className="py-8 text-center text-gray-400 text-sm">No payment batches yet. Create one from unpaid statements above.</div>
+          <div className="py-8 text-center text-gray-400 text-sm">No payment batches. Create one from unpaid statements above.</div>
         ) : (
           <DenseTable>
             <thead>
@@ -271,7 +271,7 @@ export default function PaymentBatchesModule() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="Create Payment Batch"
-        subtitle={`${selectedIds.size} statements selected · Total: ${formatCurrency(selectedTotal)}`}
+        subtitle={`${selectedIds.size} statements selected, Total: ${formatCurrency(selectedTotal)}`}
         width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
@@ -358,7 +358,7 @@ export default function PaymentBatchesModule() {
       >
         {viewBatch && (
           <div className="space-y-3">
-            {/* Single dense card — batch details */}
+            {/* Single dense card, batch details */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Batch Details</h3>
               <div className="space-y-2 text-xs">

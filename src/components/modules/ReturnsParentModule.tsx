@@ -16,7 +16,7 @@ const tabs: { key: Tab; label: string; icon: typeof PackageX }[] = [
 ]
 
 /**
- * Returns parent module — composes After-Sales (RMA), RTV, and Shrinkage as tabs.
+ * Returns parent module. composes After-Sales (RMA), RTV, and Shrinkage as tabs.
  *
  * RMA = customer return (Return Merchandise Authorization)
  * RTV = return to vendor (warehouse sends stock back)

@@ -125,7 +125,7 @@ function ModuleStatusBoard({
 }) {
   const p = data.pulse
 
-  // Build module rows — each computes its own status from live data
+  // Build module rows. each computes its own status from live data
   type ModuleRow = {
     key: string
     name: string
@@ -270,7 +270,7 @@ function ModuleStatusBoard({
     rows.push({
       key: 'merchants', name: 'Merchants', module: 'merchants',
       status: 'warning', statusLabel: `${lossMakers} at a loss`,
-      metrics: `${data.stats.totalMerchants} active · ${lossMakers} operating at a loss`,
+      metrics: `${data.stats.totalMerchants} active, ${lossMakers} operating at a loss`,
       action: `Review ${lossMakers} loss-maker${lossMakers !== 1 ? 's' : ''}`,
     })
   } else {
@@ -283,7 +283,7 @@ function ModuleStatusBoard({
   }
 
   // Inbound
-  const intakeCount = p?.stakes.customersWaitingCount !== undefined ? 0 : 0 // placeholder — we don't have a direct intake count in pulse
+  const intakeCount = p?.stakes.customersWaitingCount !== undefined ? 0 : 0 // placeholder, we don't have a direct intake count in pulse
   rows.push({
     key: 'inbound', name: 'Inbound', module: 'inventory',
     status: 'quiet', statusLabel: '—',
@@ -420,7 +420,7 @@ function Pulse({
         <div className="flex items-center gap-3 flex-wrap mb-2">
           <Activity size={16} className={hasHighStakes ? 'text-red-600' : 'text-blue-300'} />
           <span className={`text-[10px] uppercase tracking-wider font-semibold ${hasHighStakes ? 'text-red-700' : 'text-blue-200/70'}`}>
-            Right now · {timeStr}
+            Right now, {timeStr}
           </span>
           {hasHighStakes ? (
             <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold ml-auto">
@@ -433,7 +433,7 @@ function Pulse({
           )}
         </div>
 
-        {/* Each stake is its own labeled, auditable row — no overlapping totals */}
+        {/* Each stake is its own labeled, auditable row, no overlapping totals */}
         <div className={`space-y-1.5 ${hasHighStakes ? 'text-red-900' : 'text-white'}`}>
           {hasOverdue && (
             <div className="flex items-center gap-2 flex-wrap">
@@ -587,7 +587,7 @@ function Pulse({
 
       {/* ── Streaks + overdue details row ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {/* Streaks — what's going well */}
+        {/* Streaks, what's going well */}
         <div className="bg-white rounded-lg border border-green-200 p-3">
           <div className="flex items-center gap-1.5 mb-1.5">
             <Flame size={12} className="text-orange-500" />
@@ -611,7 +611,7 @@ function Pulse({
               </span>
             )}
             {p.streaks.daysWithoutStockout === 0 && p.streaks.hoursSinceLastFailure === 0 && !p.streaks.isBestWeekThisQuarter && (
-              <span className="text-gray-400 italic">No active streaks yet today.</span>
+              <span className="text-gray-400 italic">No active streaks today.</span>
             )}
           </div>
         </div>
@@ -676,7 +676,7 @@ function DashboardStory({
     }
     headlineParts.push(revPhrase)
   } else if (data.orders.total === 0) {
-    headlineParts.push('No revenue or orders this period yet')
+    headlineParts.push('No revenue or orders this period')
   }
   if (data.orders.total > 0) {
     const deliveredPct = data.orders.total > 0 ? Math.round((data.orders.delivered / data.orders.total) * 100) : 0
@@ -786,7 +786,7 @@ function DashboardStory({
           )}
           <div className="flex-1 min-w-0">
             <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
-              {period} · {new Date().toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })}
+              {period}, {new Date().toLocaleDateString('en-UG', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
             <p className={`text-sm font-medium ${headlineTextColor}`}>{headline}</p>
           </div>
@@ -848,9 +848,9 @@ function ChartTakeaway({ text, tone = 'neutral' }: { text: string; tone?: 'neutr
 
 function revenueTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' | 'critical' } {
   const months = data.revenueByMonth
-  if (!months || months.length === 0) return { text: 'No revenue recorded yet.', tone: 'neutral' }
+  if (!months || months.length === 0) return { text: 'No revenue recorded.', tone: 'neutral' }
   const withRevenue = months.filter(m => (m.revenue || 0) > 0)
-  if (withRevenue.length === 0) return { text: 'No revenue recorded yet.', tone: 'neutral' }
+  if (withRevenue.length === 0) return { text: 'No revenue recorded.', tone: 'neutral' }
   const last = withRevenue[withRevenue.length - 1]
   const previous = withRevenue.slice(0, -1)
   if (previous.length === 0) return { text: `Revenue at ${formatCurrencyCompact(last.revenue)} this month. First data point.`, tone: 'neutral' }
@@ -881,7 +881,7 @@ function orderStatusTakeaway(data: DashboardData): { text: string; tone: 'neutra
 
 function throughputTakeaway(data: DashboardData): { text: string; tone: 'neutral' | 'good' | 'warning' } {
   const days = data.throughputData
-  if (!days || days.length === 0) return { text: 'No throughput data yet.', tone: 'neutral' }
+  if (!days || days.length === 0) return { text: 'No throughput data.', tone: 'neutral' }
   const totalIn = days.reduce((s, d) => s + (d.inbound || 0), 0)
   const totalOut = days.reduce((s, d) => s + (d.outbound || 0), 0)
   if (totalIn === 0 && totalOut === 0) return { text: 'No inbound or outbound recorded this week.', tone: 'neutral' }
@@ -996,7 +996,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
     try {
       // Build a CSV from the dashboard data
       const rows: string[] = []
-      rows.push('Kwanza Logistics — Dashboard Export')
+      rows.push('Kwanza Logistics, Dashboard Export')
       rows.push(`Period: ${period}`)
       rows.push(`Generated: ${new Date().toLocaleString('en-UG')}`)
       rows.push('')
@@ -1156,7 +1156,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
           <div className="rounded-lg px-4 py-2.5 bg-red-50 flex items-center gap-3 flex-wrap">
             <AlertTriangle size={14} className="text-red-600 shrink-0" />
             <span className="text-[10px] uppercase tracking-wider text-red-700 font-bold">
-              Emergency · {timeStr}
+              Emergency, {timeStr}
             </span>
             <span className="text-sm text-red-900 font-medium">
               {emergencies.join(', ')}

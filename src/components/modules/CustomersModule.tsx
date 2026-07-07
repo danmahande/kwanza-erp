@@ -58,7 +58,7 @@ export default function CustomersModule() {
     setViewing(null)
   }
 
-  // CSV import — bulk create customers (for pre-loading before orders exist)
+  // CSV import, bulk create customers (for pre-loading before orders exist)
   const handleImport = async () => {
     if (!importText.trim()) { toast.error('Paste CSV data first'); return }
     const lines = importText.trim().split('\n')
@@ -92,7 +92,7 @@ export default function CustomersModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       <OpsHeader
         title="Customers"
-        description="Auto-created from Order Processing — no manual entry"
+        description="Auto-created from Order Processing. no manual entry"
         kpiCells={kpiCells}
         searchValue={search}
         onSearchChange={setSearch}
@@ -107,7 +107,7 @@ export default function CustomersModule() {
       {data.length === 0 ? (
         <div className="py-12 text-center text-gray-400 text-sm">
           <User size={32} className="mx-auto mb-3 text-gray-300" />
-          No customers yet. Customers are created automatically when orders are placed.
+          No customers. Customers are created automatically when orders are placed.
         </div>
       ) : (
         <DenseTable>
@@ -140,7 +140,7 @@ export default function CustomersModule() {
         </DenseTable>
       )}
 
-      {/* View-only detail slide-over — single dense card pattern */}
+      {/* View-only detail slide-over, single dense card pattern */}
       <DetailSlideOver
         open={open}
         onClose={handleClose}
@@ -155,7 +155,7 @@ export default function CustomersModule() {
       >
         {viewing && (
           <div className="space-y-3">
-            {/* Single dense card — customer details */}
+            {/* Single dense card, customer details */}
             <div className="bg-white rounded-lg border border-gray-200 p-4">
               <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Customer Details</h3>
               <div className="space-y-2 text-xs">

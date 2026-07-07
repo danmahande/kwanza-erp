@@ -203,7 +203,7 @@ export default function DisputesModule() {
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
       <OpsHeader
         title="Disputes & Credit Memos"
-        description="Merchant challenges to statement charges — issue credit memos with audit trail"
+        description="Merchant challenges to statement charges. issue credit memos with audit trail"
         kpiCells={kpiCells}
         searchValue={search}
         onSearchChange={setSearch}
@@ -274,7 +274,7 @@ export default function DisputesModule() {
         </DenseTable>
       )}
 
-      {/* Profile slide-over — single dense card pattern */}
+      {/* Profile slide-over, single dense card pattern */}
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
@@ -313,7 +313,7 @@ export default function DisputesModule() {
                 )}
               </div>
 
-              {/* Single dense card — dispute details */}
+              {/* Single dense card, dispute details */}
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Dispute Details</h3>
                 <div className="space-y-2 text-xs">
@@ -405,7 +405,7 @@ export default function DisputesModule() {
               <select value={createForm.statementId} onChange={e => handleStatementSelect(e.target.value)}
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
                 <option value="">Select statement...</option>
-                {statements.slice(0, 100).map(s => <option key={s.id} value={s.statementId}>{s.statementId} — {s.merchantName} ({s.period})</option>)}
+                {statements.slice(0, 100).map(s => <option key={s.id} value={s.statementId}>{s.statementId}, {s.merchantName} ({s.period})</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -466,7 +466,7 @@ export default function DisputesModule() {
             <div>
               <Label className="text-xs font-medium mb-1 block">Resolution Notes</Label>
               <textarea value={resolveForm.resolutionNotes} onChange={e => setResolveForm({ ...resolveForm, resolutionNotes: e.target.value })}
-                placeholder={resolveAction === 'credit' ? 'e.g. Verified overcharge — credit issued' : 'e.g. Charge verified as correct — no credit due'}
+                placeholder={resolveAction === 'credit' ? 'e.g. Verified overcharge, credit issued' : 'e.g. Charge verified as correct. no credit due'}
                 rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
             </div>
           </div>

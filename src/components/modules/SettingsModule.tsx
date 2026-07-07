@@ -121,7 +121,7 @@ function SettingsSection({
             })}
             {items.length === 0 && (
               <div className="flex items-center justify-center w-full py-3">
-                <p className="text-xs text-gray-400">No items yet. Add one above.</p>
+                <p className="text-xs text-gray-400">No items. Add one above.</p>
               </div>
             )}
           </div>

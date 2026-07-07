@@ -595,7 +595,7 @@ export default function InventoryModule() {
     <div className="space-y-3">
       <OpsHeader
         title="Stock"
-        description="What's on the shelves right now"
+        description="What's on the shelves"
         kpiCells={[
           { label: 'STOCK VALUE', value: `UGX ${fmt(totalStockValue)}` },
           { label: 'LOW STOCK', value: lowStockCount, highlight: lowStockCount > 0, highlightColor: 'orange' as const },
@@ -747,7 +747,7 @@ export default function InventoryModule() {
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-500">Brand / Variant</span>
-                  <span className="text-gray-700">{selectedRecord.brand || '—'}{selectedRecord.variant ? ` · ${selectedRecord.variant}` : ''}</span>
+                  <span className="text-gray-700">{selectedRecord.brand || '—'}{selectedRecord.variant ? `, ${selectedRecord.variant}` : ''}</span>
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-500">Category</span>
@@ -759,7 +759,7 @@ export default function InventoryModule() {
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-500">Unit / Weight</span>
-                  <span className="text-gray-700">{selectedRecord.unit}{selectedRecord.weight ? ` · ${selectedRecord.weight}` : ''}</span>
+                  <span className="text-gray-700">{selectedRecord.unit}{selectedRecord.weight ? `, ${selectedRecord.weight}` : ''}</span>
                 </div>
                 <div className="flex items-center justify-between py-1 border-b border-gray-100">
                   <span className="text-gray-500">Status</span>

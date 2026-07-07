@@ -300,7 +300,7 @@ export default function ChargesModule() {
         </DenseTable>
       )}
 
-      {/* Profile slide-over — single dense card pattern */}
+      {/* Profile slide-over, single dense card pattern */}
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
@@ -348,7 +348,7 @@ export default function ChargesModule() {
                 </Button>
               </div>
 
-              {/* Single dense card — all details stacked */}
+              {/* Single dense card, all details stacked */}
               <div className="bg-white rounded-lg border border-gray-200 p-4">
                 <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Charge Details</h3>
                 <div className="space-y-2 text-xs">
@@ -370,7 +370,7 @@ export default function ChargesModule() {
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-gray-100">
                     <span className="text-gray-500">Source</span>
-                    <span className="font-medium text-gray-700 capitalize">{selected.sourceType}{selected.sourceId ? ` · ${selected.sourceId}` : ''}</span>
+                    <span className="font-medium text-gray-700 capitalize">{selected.sourceType}{selected.sourceId ? `, ${selected.sourceId}` : ''}</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-gray-100">
                     <span className="text-gray-500">Recorded By</span>
