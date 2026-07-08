@@ -58,8 +58,10 @@ const LANES = [
     title: 'TO PICK',
     icon: Package,
     color: 'text-orange-600',
-    bg: 'bg-orange-50',
+    bg: 'bg-orange-50/40',
     border: 'border-orange-200',
+    accent: 'border-l-orange-400',
+    headerBg: 'bg-white/70',
     statuses: ['pending', 'picking'] as string[],
     actions: [
       { status: 'pending', label: 'Start Picking', toStatus: 'picking', color: 'bg-orange-500 hover:bg-orange-600' },
@@ -71,8 +73,10 @@ const LANES = [
     title: 'TO PACK',
     icon: Boxes,
     color: 'text-purple-600',
-    bg: 'bg-purple-50',
+    bg: 'bg-purple-50/40',
     border: 'border-purple-200',
+    accent: 'border-l-purple-400',
+    headerBg: 'bg-white/70',
     statuses: ['picked', 'packing'] as string[],
     actions: [
       { status: 'picked', label: 'Start Packing', toStatus: 'packing', color: 'bg-purple-500 hover:bg-purple-600' },
@@ -84,8 +88,10 @@ const LANES = [
     title: 'TO DISPATCH',
     icon: Truck,
     color: 'text-yellow-700',
-    bg: 'bg-yellow-50',
+    bg: 'bg-yellow-50/40',
     border: 'border-yellow-200',
+    accent: 'border-l-yellow-400',
+    headerBg: 'bg-white/70',
     statuses: ['packed'] as string[],
     actions: [
       { status: 'packed', label: 'Assign Rider', toStatus: null as string | null, color: 'bg-yellow-600 hover:bg-yellow-700' },
@@ -232,73 +238,86 @@ export default function OutboundParentModule() {
 
       {/* Three lanes */}
       {!loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {laneData.map(lane => {
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr_auto_1fr] gap-2 items-start">
+          {laneData.map((lane, laneIndex) => {
             const Icon = lane.icon
             return (
-              <div key={lane.key} className={`rounded-lg border ${lane.border} ${lane.bg} overflow-hidden`}>
-                {/* Lane header */}
-                <div className="px-3 py-2 border-b ${lane.border} bg-white/60">
-                  <div className="flex items-center gap-2">
-                    <Icon size={14} className={lane.color} />
-                    <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">{lane.title}</span>
-                    <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-mono font-bold ${lane.color} bg-white`}>
-                      {lane.items.length}
-                    </span>
+              <>
+                <div key={lane.key} className={`rounded-xl border ${lane.border} ${lane.bg} overflow-hidden`}>
+                  {/* Lane header */}
+                  <div className={`px-4 py-3 border-b ${lane.border} ${lane.headerBg}`}>
+                    <div className="flex items-center gap-2">
+                      <Icon size={16} className={lane.color} />
+                      <span className="text-sm font-bold text-gray-800 uppercase tracking-wider">{lane.title}</span>
+                      <span className={`ml-auto w-6 h-6 flex items-center justify-center rounded-full text-[11px] font-mono font-bold ${lane.color} bg-white border ${lane.border}`}>
+                        {lane.items.length}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Lane items */}
+                  <div className="p-2.5 space-y-2.5 max-h-[60vh] overflow-y-auto">
+                    {lane.items.length === 0 ? (
+                      <div className="py-12 text-center">
+                        <Icon size={28} className="mx-auto mb-2 opacity-20" />
+                        <p className="text-xs text-gray-400">Nothing to {lane.key}</p>
+                      </div>
+                    ) : (
+                      lane.items.map(item => (
+                        <div
+                          key={item.id}
+                          className={`bg-white rounded-lg shadow-sm p-3 cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all border-l-4 ${lane.accent}`}
+                          onClick={() => openDetail(item)}
+                        >
+                          {/* Order number + time */}
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <span className="font-mono text-sm font-bold text-gray-900">
+                              {item.orderNumber || item.outboundId}
+                            </span>
+                            <span className="text-[10px] text-gray-400 shrink-0">
+                              {new Date(item.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          {/* Customer */}
+                          <p className="text-xs text-gray-700 font-medium truncate mb-0.5">{item.customerName}</p>
+                          {/* Product + qty */}
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="text-[11px] text-gray-500 truncate flex-1">{item.productName} ×{item.qty}</p>
+                            {item.saleAmount != null && item.saleAmount > 0 && (
+                              <p className="text-[10px] text-gray-600 font-mono font-semibold shrink-0">{formatCurrencyCompact(item.saleAmount)}</p>
+                            )}
+                          </div>
+                          {/* Action button */}
+                          {(() => {
+                            const action = lane.actions.find(a => a.status === item.status)
+                            if (!action) return null
+                            return (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (action.toStatus === null) {
+                                    toast.info('Use the Runsheets module to assign a rider.')
+                                  } else {
+                                    handleTransition(item, action.toStatus)
+                                  }
+                                }}
+                                className={`mt-2.5 w-full text-white text-[11px] font-semibold py-1.5 rounded-lg transition-all ${action.color}`}
+                              >
+                                {action.label}
+                              </button>
+                            )
+                          })()}
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
-                {/* Lane items */}
-                <div className="p-2 space-y-2 max-h-[60vh] overflow-y-auto">
-                  {lane.items.length === 0 ? (
-                    <div className="py-8 text-center text-xs text-gray-400">
-                      <Icon size={24} className="mx-auto mb-1 opacity-30" />
-                      Nothing to {lane.key} right now
-                    </div>
-                  ) : (
-                    lane.items.map(item => (
-                      <div
-                        key={item.id}
-                        className="bg-white rounded-lg border border-gray-200 p-3 cursor-pointer hover:shadow-sm transition-shadow"
-                        onClick={() => openDetail(item)}
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <span className="font-mono text-xs font-bold text-gray-900">
-                            {item.orderNumber || item.outboundId}
-                          </span>
-                          <span className="text-[10px] text-gray-400">
-                            {new Date(item.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-700 font-medium truncate">{item.customerName}</p>
-                        <p className="text-[11px] text-gray-500 truncate">{item.productName} x{item.qty}</p>
-                        {item.saleAmount != null && item.saleAmount > 0 && (
-                          <p className="text-[10px] text-gray-400 font-mono mt-0.5">{formatCurrencyCompact(item.saleAmount)}</p>
-                        )}
-                        {/* Action button — shows different button based on exact status */}
-                        {(() => {
-                          const action = lane.actions.find(a => a.status === item.status)
-                          if (!action) return null
-                          return (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (action.toStatus === null) {
-                                  toast.info('Runsheet creation from dispatch lane coming soon. Use the Runsheets module for now.')
-                                } else {
-                                  handleTransition(item, action.toStatus)
-                                }
-                              }}
-                              className={`mt-2 w-full text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors ${action.color}`}
-                            >
-                              {action.label}
-                            </button>
-                          )
-                        })()}
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                {/* Flow arrow between lanes */}
+                {laneIndex < laneData.length - 1 && (
+                  <div className="hidden lg:flex items-center justify-center pt-12">
+                    <ChevronRight size={20} className="text-gray-300" />
+                  </div>
+                )}
+              </>
             )
           })}
         </div>
