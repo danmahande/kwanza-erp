@@ -61,9 +61,10 @@ const LANES = [
     bg: 'bg-orange-50',
     border: 'border-orange-200',
     statuses: ['pending', 'picking'] as string[],
-    action: 'Start Pick',
-    actionStatus: 'picked',
-    actionColor: 'bg-orange-500 hover:bg-orange-600',
+    actions: [
+      { status: 'pending', label: 'Start Picking', toStatus: 'picking', color: 'bg-orange-500 hover:bg-orange-600' },
+      { status: 'picking', label: 'Mark Picked', toStatus: 'picked', color: 'bg-blue-500 hover:bg-blue-600' },
+    ],
   },
   {
     key: 'pack',
@@ -73,9 +74,10 @@ const LANES = [
     bg: 'bg-purple-50',
     border: 'border-purple-200',
     statuses: ['picked', 'packing'] as string[],
-    action: 'Start Pack',
-    actionStatus: 'packed',
-    actionColor: 'bg-purple-500 hover:bg-purple-600',
+    actions: [
+      { status: 'picked', label: 'Start Packing', toStatus: 'packing', color: 'bg-purple-500 hover:bg-purple-600' },
+      { status: 'packing', label: 'Mark Packed', toStatus: 'packed', color: 'bg-indigo-500 hover:bg-indigo-600' },
+    ],
   },
   {
     key: 'dispatch',
@@ -85,9 +87,9 @@ const LANES = [
     bg: 'bg-yellow-50',
     border: 'border-yellow-200',
     statuses: ['packed'] as string[],
-    action: 'Assign Rider',
-    actionStatus: null as string | null, // handled differently — opens runsheet
-    actionColor: 'bg-yellow-600 hover:bg-yellow-700',
+    actions: [
+      { status: 'packed', label: 'Assign Rider', toStatus: null as string | null, color: 'bg-yellow-600 hover:bg-yellow-700' },
+    ],
   },
 ] as const
 
@@ -272,20 +274,26 @@ export default function OutboundParentModule() {
                         {item.saleAmount != null && item.saleAmount > 0 && (
                           <p className="text-[10px] text-gray-400 font-mono mt-0.5">{formatCurrencyCompact(item.saleAmount)}</p>
                         )}
-                        {/* Action button */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (lane.key === 'dispatch') {
-                              toast.info('Runsheet creation from dispatch lane coming soon. Use the Runsheets module for now.')
-                            } else {
-                              handleTransition(item, lane.actionStatus as string)
-                            }
-                          }}
-                          className={`mt-2 w-full text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors ${lane.actionColor}`}
-                        >
-                          {lane.action}
-                        </button>
+                        {/* Action button — shows different button based on exact status */}
+                        {(() => {
+                          const action = lane.actions.find(a => a.status === item.status)
+                          if (!action) return null
+                          return (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                if (action.toStatus === null) {
+                                  toast.info('Runsheet creation from dispatch lane coming soon. Use the Runsheets module for now.')
+                                } else {
+                                  handleTransition(item, action.toStatus)
+                                }
+                              }}
+                              className={`mt-2 w-full text-white text-[11px] font-semibold py-1.5 rounded-md transition-colors ${action.color}`}
+                            >
+                              {action.label}
+                            </button>
+                          )
+                        })()}
                       </div>
                     ))
                   )}
