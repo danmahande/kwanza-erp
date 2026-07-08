@@ -200,8 +200,10 @@ export async function POST(req: NextRequest) {
     if (module === 'outbound' && record.orderNumber) {
       try {
         const orderStatusMap: Record<string, string> = {
-          pending: 'new_order', picking: 'processing', picked: 'processing',
-          packing: 'processing', packed: 'processing',
+          pending: 'new_order',
+          released: 'processing',
+          picking: 'processing', picked: 'processing',
+          packing: 'processing', packed: 'processing', staged: 'processing',
           dispatched: 'shipped', delivered: 'delivered',
           failed: 'returned', returned: 'returned', cancelled: 'cancelled',
         }

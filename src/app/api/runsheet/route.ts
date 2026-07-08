@@ -338,18 +338,30 @@ export async function DELETE(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Unassign all orders: clear runsheetId, driver, sequence, restore to 'packed'
-    await db.outboundRecord.updateMany({
+    // Unassign all orders: clear runsheetId, driver, sequence, restore to 'staged'.
+    // 'staged' (not 'packed') because the order is already physically at the dock —
+    // it just needs a new rider. Forcing a re-stage would waste dock crew's time.
+    // For backward-compat with pre-staged-workflow records, 'packed' orders that
+    // were on this runsheet stay in 'packed' (they were never staged to begin with).
+    const ordersOnRunsheet = await db.outboundRecord.findMany({
       where: { runsheetId },
-      data: {
-        runsheetId: null,
-        stopSequence: null,
-        assignedDriver: null,
-        vehicleNumber: null,
-        status: 'packed',
-        deliveryNotes: null,
-      },
+      select: { id: true, status: true },
     })
+    await Promise.all(ordersOnRunsheet.map(o =>
+      db.outboundRecord.update({
+        where: { id: o.id },
+        data: {
+          runsheetId: null,
+          stopSequence: null,
+          assignedDriver: null,
+          vehicleNumber: null,
+          // Only promote 'staged' or 'dispatched' (failed mid-route) back to 'staged'.
+          // 'packed' orders stay 'packed' so the dock crew re-stages them.
+          status: ['staged', 'dispatched', 'failed'].includes(o.status) ? 'staged' : o.status,
+          deliveryNotes: null,
+        },
+      })
+    ))
 
     return NextResponse.json({ success: true, unassigned: stops.length })
   } catch (error) {

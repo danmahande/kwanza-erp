@@ -73,9 +73,11 @@ export async function GET(req: NextRequest) {
       take: 100,
     })
 
-    // ── 3. STAGE: packed parcels, no rider yet ──
+    // ── 3. STAGE: packed or staged parcels, no rider yet ──
+    // Includes both 'packed' (just boxed, not yet at dock) and 'staged' (at dock, awaiting rider).
+    // Backward-compat: pre-staged-workflow records are in 'packed'.
     const stageRecords = await db.outboundRecord.findMany({
-      where: { status: 'packed', runsheetId: null },
+      where: { status: { in: ['packed', 'staged'] }, runsheetId: null },
       select: {
         id: true, outboundId: true, orderNumber: true, customerName: true,
         customerAddress: true, productName: true, qty: true,
@@ -85,9 +87,10 @@ export async function GET(req: NextRequest) {
       take: 100,
     })
 
-    // ── 4. DISPATCH: packed parcels assigned to a rider, about to leave ──
+    // ── 4. DISPATCH: staged parcels assigned to a rider, about to leave ──
+    // Includes 'packed' for backward-compat with records created before the 'staged' workflow.
     const dispatchRecords = await db.outboundRecord.findMany({
-      where: { status: 'packed', runsheetId: { not: null } },
+      where: { status: { in: ['packed', 'staged'] }, runsheetId: { not: null } },
       select: {
         id: true, outboundId: true, orderNumber: true, customerName: true,
         productName: true, qty: true, runsheetId: true, assignedDriver: true,

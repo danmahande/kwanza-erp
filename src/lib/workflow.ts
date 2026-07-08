@@ -29,17 +29,31 @@ export interface WorkflowDefinition {
 }
 
 // ── OUTBOUND workflow ──
-// Sarah's morning: pending → picking → picked → packing → packed → dispatched → delivered
+// Real-world fulfillment: NEW (intake) → RELEASED (validated, on floor) →
+// PICKING → PICKED → PACKING → PACKED → STAGED (at dock) → DISPATCHED → DELIVERED
 // Exceptions: cancelled, returned, failed
+//
+// Why "released" exists: it's the moment a NEW order passes intake validation
+// (address, payment, stock, fraud checks) and gets hard-allocated to inventory.
+// Before release, two orders can both "see" the same stock. After release,
+// those units are locked to that order — no other order can claim them.
+//
+// Why "staged" exists: separates "boxed and sealed" (packed) from "physically
+// at the outbound dock waiting for the rider" (staged). Pack capacity and
+// dispatch capacity are different bottlenecks — splitting them lets the ops
+// manager see each clearly and lets the rider manifest match what's actually
+// at the dock, not what's still being taped shut.
 export const OUTBOUND_WORKFLOW: WorkflowDefinition = {
   module: 'outbound',
   initialStatus: 'pending',
   stages: [
-    { status: 'pending',     label: 'Pending',     description: 'Order received, waiting to be picked' },
-    { status: 'picking',     label: 'Picking',     action: 'Start Picking', description: 'Warehouse clerk is collecting items from shelves' },
-    { status: 'picked',      label: 'Picked',      action: 'Mark Picked',   description: 'All items collected, ready to pack' },
+    { status: 'pending',     label: 'New',         description: 'Order received, awaiting intake validation (address / payment / stock / fraud)' },
+    { status: 'released',    label: 'Released',    action: 'Release to Floor', description: 'Validated and released to pick floor — inventory hard-allocated, SLA clock starts' },
+    { status: 'picking',     label: 'Picking',     action: 'Start Picking', description: 'Picker has claimed the order, collecting items from shelves' },
+    { status: 'picked',      label: 'Picked',      action: 'Mark Picked',   description: 'All items collected, tote moving to pack station' },
     { status: 'packing',     label: 'Packing',     action: 'Start Packing', description: 'Packer is boxing the order' },
-    { status: 'packed',      label: 'Packed',      action: 'Mark Packed',   description: 'Boxed and labeled, ready to dispatch' },
+    { status: 'packed',      label: 'Packed',      action: 'Mark Packed',   description: 'Boxed, sealed, labeled — ready to stage at dock' },
+    { status: 'staged',      label: 'Staged',      action: 'Stage at Dock', description: 'Staged at outbound dock by carrier/route, awaiting rider pickup' },
     { status: 'dispatched',  label: 'Dispatched',  action: 'Dispatch',      description: 'Handed to driver, on the road' },
     { status: 'delivered',   label: 'Delivered',   action: 'Mark Delivered', description: 'Customer received the order' },
     { status: 'cancelled',   label: 'Cancelled',   isException: true, description: 'Order was cancelled before dispatch' },
@@ -47,11 +61,13 @@ export const OUTBOUND_WORKFLOW: WorkflowDefinition = {
     { status: 'failed',      label: 'Failed',      isException: true, description: 'Delivery attempted but failed' },
   ],
   transitions: {
-    pending:    ['picking', 'cancelled'],
-    picking:    ['picked', 'pending', 'cancelled'],
+    pending:    ['released', 'cancelled'],         // intake validation → release to floor
+    released:   ['picking', 'cancelled'],          // picker claims the order
+    picking:    ['picked', 'released', 'cancelled'], // can release back if wrong pick
     picked:     ['packing', 'cancelled'],
     packing:    ['packed', 'picked'],
-    packed:     ['dispatched', 'packing'],
+    packed:     ['staged', 'packing'],             // stage at dock, or revert to re-pack
+    staged:     ['dispatched', 'packed'],          // rider picks up, or pull back if manifest mismatch
     dispatched: ['delivered', 'failed', 'returned'],
     delivered:  ['returned'],
     failed:     ['dispatched', 'cancelled'],

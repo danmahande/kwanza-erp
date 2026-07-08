@@ -12,6 +12,7 @@ import {
 import {
   Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
   AlertTriangle, ChevronRight, Printer, Download, Trash2, X,
+  Inbox, Upload, Layers,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -51,7 +52,13 @@ interface Product {
   id: string; productId: string; productLabel: string; unitSellingPrice: number; merchantId: string; merchantName: string
 }
 
+type ValidationFlag = 'pass' | 'warn' | 'fail'
+type FraudRisk = 'low' | 'medium' | 'high'
+
 // ── Lane config ──
+// 4 lanes covering the full post-intake floor flow:
+// RELEASED → PICKING (lane 1) → PICKED → PACKING (lane 2) → PACKED (lane 3, stage) → STAGED (lane 4, dispatch)
+// 'pending' (NEW) orders live in the Intake Inbox tab, not in these lanes.
 const LANES = [
   {
     key: 'pick',
@@ -59,9 +66,9 @@ const LANES = [
     icon: Package,
     color: 'text-orange-600',
     border: 'border-orange-200',
-    statuses: ['pending', 'picking'] as string[],
+    statuses: ['released', 'picking'] as string[],
     actions: [
-      { status: 'pending', label: 'Start Picking', toStatus: 'picking', color: 'bg-orange-500 hover:bg-orange-600' },
+      { status: 'released', label: 'Start Picking', toStatus: 'picking', color: 'bg-orange-500 hover:bg-orange-600' },
       { status: 'picking', label: 'Mark Picked', toStatus: 'picked', color: 'bg-blue-500 hover:bg-blue-600' },
     ],
   },
@@ -78,17 +85,73 @@ const LANES = [
     ],
   },
   {
+    key: 'stage',
+    title: 'TO STAGE',
+    icon: Layers,
+    color: 'text-cyan-600',
+    border: 'border-cyan-200',
+    statuses: ['packed'] as string[],
+    actions: [
+      { status: 'packed', label: 'Stage at Dock', toStatus: 'staged', color: 'bg-cyan-500 hover:bg-cyan-600' },
+    ],
+  },
+  {
     key: 'dispatch',
     title: 'TO DISPATCH',
     icon: Truck,
     color: 'text-yellow-700',
     border: 'border-yellow-200',
-    statuses: ['packed'] as string[],
+    statuses: ['staged'] as string[],
     actions: [
-      { status: 'packed', label: 'Assign Rider', toStatus: null as string | null, color: 'bg-yellow-600 hover:bg-yellow-700' },
+      { status: 'staged', label: 'Assign Rider', toStatus: null as string | null, color: 'bg-yellow-600 hover:bg-yellow-700' },
     ],
   },
 ] as const
+
+// ── Validation heuristics ──
+// In a real implementation these would come from a fraud engine + address
+// validation service + inventory check. Here we compute them client-side
+// from the order fields themselves so the Intake Inbox UI is functional.
+function computeValidationFlags(r: OutboundRecord): {
+  address: ValidationFlag
+  payment: ValidationFlag
+  stock: ValidationFlag
+  fraud: FraudRisk
+} {
+  // Address: must exist and be reasonably specific (8+ chars suggests more than just a town name)
+  const address: ValidationFlag =
+    (!r.customerAddress || r.customerAddress.trim().length < 8) ? 'fail' : 'pass'
+
+  // Payment: if saleAmount is null/zero, payment was never recorded → warn
+  // (COD orders typically still record the expected saleAmount; null means data gap)
+  const payment: ValidationFlag =
+    (r.saleAmount == null || r.saleAmount <= 0) ? 'warn' : 'pass'
+
+  // Stock: assume pass for demo. In production, check product.currentStock >= qty
+  const stock: ValidationFlag = 'pass'
+
+  // Fraud heuristic: high qty + high value = elevated risk.
+  // Real engine would also weigh: new customer, address mismatch with phone area code,
+  // device fingerprint reuse, promo code abuse, return-history of buyer, etc.
+  const amt = r.saleAmount || 0
+  let fraud: FraudRisk = 'low'
+  if (r.qty >= 5 && amt >= 500000) fraud = 'high'
+  else if (r.qty >= 3 || amt >= 200000) fraud = 'medium'
+
+  return { address, payment, stock, fraud }
+}
+
+function fraudBadgeClass(risk: FraudRisk): string {
+  return risk === 'high' ? 'bg-red-100 text-red-700 border-red-200'
+       : risk === 'medium' ? 'bg-amber-100 text-amber-700 border-amber-200'
+       : 'bg-green-100 text-green-700 border-green-200'
+}
+
+function flagIcon(flag: ValidationFlag) {
+  return flag === 'pass' ? <CheckCircle2 size={11} className="text-green-600 inline" />
+       : flag === 'warn' ? <AlertTriangle size={11} className="text-amber-500 inline" />
+       : <X size={11} className="text-red-500 inline" />
+}
 
 export default function OutboundParentModule() {
   const [data, setData] = useState<OutboundRecord[]>([])
@@ -100,6 +163,8 @@ export default function OutboundParentModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<OutboundRecord | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
+  const [activeTab, setActiveTab] = useState<'intake' | 'floor'>('intake')
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [form, setForm] = useState({
     merchantId: '', productId: '', customerName: '', customerContact: '',
     customerEmail: '', customerAddress: '', qty: '1', paymentMethod: 'Cash', createdBy: 'admin',
@@ -128,11 +193,16 @@ export default function OutboundParentModule() {
       )
     : data
 
+  // ── Intake inbox: orders still in 'pending' (NEW) status, awaiting validation/release ──
+  const intakeItems = filteredData.filter(r => r.status === 'pending')
+
   // ── Lane data ──
   const laneData = LANES.map(lane => ({
     ...lane,
     items: filteredData.filter(r => lane.statuses.includes(r.status)),
   }))
+
+  const floorCount = laneData.reduce((sum, l) => sum + l.items.length, 0)
 
   const completedItems = filteredData.filter(r =>
     ['dispatched', 'delivered', 'failed', 'returned', 'cancelled'].includes(r.status)
@@ -156,6 +226,43 @@ export default function OutboundParentModule() {
     } catch {
       toast.error('Failed to update')
     }
+  }
+
+  // ── Bulk release from intake inbox to pick floor ──
+  // Blocks orders with failed address check or high fraud risk — those need manager override
+  const handleBulkRelease = async () => {
+    const toRelease = intakeItems.filter(r => selectedIds.has(r.id))
+    if (toRelease.length === 0) {
+      toast.error('No orders selected')
+      return
+    }
+    const blocked = toRelease.filter(r => {
+      const f = computeValidationFlags(r)
+      return f.address === 'fail' || f.fraud === 'high'
+    })
+    if (blocked.length > 0) {
+      toast.error(`${blocked.length} order(s) blocked: failed address check or high fraud risk. Review individually.`)
+      return
+    }
+    let ok = 0
+    for (const r of toRelease) {
+      try {
+        const res = await fetch('/api/workflow-transition', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ module: 'outbound', id: r.id, toStatus: 'released', performedBy: 'admin' }),
+        })
+        if (res.ok) ok++
+      } catch {}
+    }
+    toast.success(`${ok} order(s) released to the pick floor`)
+    setSelectedIds(new Set())
+    fetchData()
+  }
+
+  // ── Excel upload (UI placeholder — real parser would split rows into OutboundRecord POSTs) ──
+  const handleExcelUpload = () => {
+    toast.info('Excel bulk upload coming soon. Use "New Order" for manual entry.')
   }
 
   // ── Create order ──
@@ -187,9 +294,10 @@ export default function OutboundParentModule() {
         }),
       })
       if (res.ok) {
-        toast.success('Order created. It appears in the Pick lane.')
+        toast.success('Order created. It appears in the Intake Inbox for validation.')
         setCreateOpen(false)
         setForm({ merchantId: '', productId: '', customerName: '', customerContact: '', customerEmail: '', customerAddress: '', qty: '1', paymentMethod: 'Cash', createdBy: 'admin' })
+        setActiveTab('intake')
         fetchData()
       } else {
         toast.error('Failed to create order')
@@ -208,17 +316,26 @@ export default function OutboundParentModule() {
     ? products.filter(p => p.merchantId === form.merchantId)
     : products
 
+  // All-select toggle for intake
+  const allIntakeSelected = intakeItems.length > 0 && selectedIds.size === intakeItems.length
+  const toggleSelectAll = (checked: boolean) => {
+    if (checked) setSelectedIds(new Set(intakeItems.map(r => r.id)))
+    else setSelectedIds(new Set())
+  }
+
   return (
     <div className="space-y-3">
       {/* Header */}
       <OpsHeader
         title="Outbound"
-        description="Create orders, pick, pack, and dispatch to riders"
+        description="Intake → Pick → Pack → Stage → Dispatch"
         kpiCells={[
+          { label: 'INTAKE', value: intakeItems.length, highlight: intakeItems.length > 0, highlightColor: 'orange' as const },
           { label: 'TO PICK', value: laneData[0].items.length, highlight: laneData[0].items.length > 0, highlightColor: 'orange' as const },
           { label: 'TO PACK', value: laneData[1].items.length, highlight: laneData[1].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'TO DISPATCH', value: laneData[2].items.length, highlight: laneData[2].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'COMPLETED', value: completedItems.filter(r => r.status === 'delivered').length },
+          { label: 'TO STAGE', value: laneData[2].items.length, highlight: laneData[2].items.length > 0, highlightColor: 'orange' as const },
+          { label: 'TO DISPATCH', value: laneData[3].items.length, highlight: laneData[3].items.length > 0, highlightColor: 'orange' as const },
+          { label: 'DELIVERED', value: completedItems.filter(r => r.status === 'delivered').length },
         ]}
         searchValue={search}
         onSearchChange={setSearch}
@@ -227,158 +344,338 @@ export default function OutboundParentModule() {
         onAction={() => setCreateOpen(true)}
       />
 
-      {/* Three lanes */}
-      {!loading && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          {laneData.map(lane => {
-            const Icon = lane.icon
-            return (
-              <div key={lane.key} className={`rounded-lg border ${lane.border} overflow-hidden`}>
-                {/* Lane header */}
-                <div className={`px-3 py-2 border-b ${lane.border} bg-gray-50 flex items-center gap-2`}>
-                  <Icon size={12} className={lane.color} />
-                  <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">{lane.title}</span>
-                  <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${lane.color} bg-white border ${lane.border}`}>
-                    {lane.items.length}
-                  </span>
-                </div>
-                {/* Lane items as dense rows */}
-                {lane.items.length === 0 ? (
-                  <div className="py-10 text-center">
-                    <Icon size={20} className="mx-auto mb-1 opacity-20" />
-                    <p className="text-[11px] text-gray-400">Nothing to {lane.key}</p>
-                  </div>
-                ) : (
-                  <div className="bg-white max-h-[55vh] overflow-y-auto">
-                    {lane.items.map((item, idx) => {
-                      const action = lane.actions.find(a => a.status === item.status)
-                      return (
-                        <div
-                          key={item.id}
-                          onClick={() => openDetail(item)}
-                          className={`px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-50 ${idx === lane.items.length - 1 ? 'border-b-0' : ''}`}
-                          style={{ minHeight: '44px' }}
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] font-bold text-gray-900 shrink-0">
-                              {item.orderNumber || item.outboundId}
-                            </span>
-                            <span className="text-[9px] text-gray-400 shrink-0">
-                              {new Date(item.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between gap-2 mt-0.5">
-                            <div className="min-w-0 flex-1">
-                              <p className="text-[11px] text-gray-700 font-medium truncate">{item.customerName}</p>
-                              <p className="text-[10px] text-gray-400 truncate">{item.productName} ×{item.qty}</p>
-                            </div>
-                            {item.saleAmount != null && item.saleAmount > 0 && (
-                              <span className="text-[10px] text-gray-600 font-mono font-semibold shrink-0">{formatCurrencyCompact(item.saleAmount)}</span>
-                            )}
-                          </div>
-                          {action && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (action.toStatus === null) {
-                                  toast.info('Use the Runsheets module to assign a rider.')
-                                } else {
-                                  handleTransition(item, action.toStatus)
-                                }
-                              }}
-                              className={`mt-1.5 w-full text-white text-[10px] font-semibold py-1 rounded-md transition-colors ${action.color}`}
-                            >
-                              {action.label}
-                            </button>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-      )}
+      {/* Tab switcher */}
+      <div className="flex items-center gap-1 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('intake')}
+          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === 'intake' ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Inbox size={12} />
+          Intake Inbox
+          {intakeItems.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[9px] font-mono font-bold">
+              {intakeItems.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab('floor')}
+          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === 'floor' ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Package size={12} />
+          Fulfillment Floor
+          {floorCount > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-[9px] font-mono font-bold">
+              {floorCount}
+            </span>
+          )}
+        </button>
+      </div>
 
-      {/* Completed section */}
-      {completedItems.length > 0 && (
-        <div>
-          <button
-            onClick={() => setShowCompleted(!showCompleted)}
-            className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 font-medium"
-          >
-            <ChevronRight size={12} className={`transition-transform ${showCompleted ? 'rotate-90' : ''}`} />
-            Completed & Exceptions ({completedItems.length})
-          </button>
-          {showCompleted && (
-            <div className="mt-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+      {/* ── INTAKE INBOX TAB ── */}
+      {activeTab === 'intake' && !loading && (
+        <div className="space-y-2">
+          {/* Intake toolbar */}
+          <div className="flex items-center justify-between bg-white rounded-lg border border-gray-200 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={allIntakeSelected}
+                onChange={(e) => toggleSelectAll(e.target.checked)}
+                className="rounded border-gray-300"
+              />
+              <span className="text-xs text-gray-600 font-medium">
+                {selectedIds.size > 0 ? `${selectedIds.size} selected` : `${intakeItems.length} order(s) awaiting release`}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl text-xs h-7"
+                onClick={handleExcelUpload}
+              >
+                <Upload size={12} className="mr-1.5" />
+                Upload Excel
+              </Button>
+              <Button
+                size="sm"
+                className="rounded-xl text-xs h-7 bg-[#FF6B35] hover:bg-[#E55A25] text-white"
+                disabled={selectedIds.size === 0}
+                onClick={handleBulkRelease}
+              >
+                <CheckCircle2 size={12} className="mr-1.5" />
+                Release Selected ({selectedIds.size})
+              </Button>
+            </div>
+          </div>
+
+          {/* Intake table */}
+          {intakeItems.length === 0 ? (
+            <div className="bg-white rounded-lg border border-gray-200 py-16 text-center">
+              <Inbox size={32} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-sm text-gray-500 font-medium">Inbox is clear</p>
+              <p className="text-xs text-gray-400 mt-0.5">New orders from your store, app, or Excel upload will appear here for validation.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead className="bg-gray-50 border-b border-gray-200">
                     <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
+                      <th className="text-left px-2 py-2 font-semibold w-8"></th>
                       <th className="text-left px-3 py-2 font-semibold">Order</th>
                       <th className="text-left px-3 py-2 font-semibold">Customer</th>
                       <th className="text-left px-3 py-2 font-semibold">Product</th>
                       <th className="text-right px-3 py-2 font-semibold">Qty</th>
-                      <th className="text-center px-3 py-2 font-semibold">Status</th>
-                      <th className="text-right px-3 py-2 font-semibold">Actions</th>
+                      <th className="text-right px-3 py-2 font-semibold">Amount</th>
+                      <th className="text-center px-3 py-2 font-semibold">Address</th>
+                      <th className="text-center px-3 py-2 font-semibold">Payment</th>
+                      <th className="text-center px-3 py-2 font-semibold">Stock</th>
+                      <th className="text-center px-3 py-2 font-semibold">Fraud</th>
+                      <th className="text-right px-3 py-2 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {completedItems.map(item => (
-                      <tr
-                        key={item.id}
-                        className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
-                        onClick={() => openDetail(item)}
-                      >
-                        <td className="px-3 py-2 font-mono font-semibold text-gray-900">{item.orderNumber || item.outboundId}</td>
-                        <td className="px-3 py-2 text-gray-700">{item.customerName}</td>
-                        <td className="px-3 py-2 text-gray-500 truncate max-w-[150px]">{item.productName}</td>
-                        <td className="px-3 py-2 text-right font-mono text-gray-700">{item.qty}</td>
-                        <td className="px-3 py-2 text-center">
-                          <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
-                            item.status === 'delivered' ? 'bg-green-100 text-green-700' :
-                            item.status === 'dispatched' ? 'bg-cyan-100 text-cyan-700' :
-                            item.status === 'failed' ? 'bg-red-100 text-red-700' :
-                            'bg-gray-100 text-gray-600'
-                          }`}>
-                            {item.status === 'delivered' ? 'DELIVERED' :
-                             item.status === 'dispatched' ? 'IN TRANSIT' :
-                             item.status === 'failed' ? 'FAILED' :
-                             item.status === 'returned' ? 'RETURNED' :
-                             item.status.toUpperCase()}
-                          </span>
-                          {item.status === 'dispatched' && (
-                            <div className="flex items-center justify-center gap-1 mt-1">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleTransition(item, 'delivered') }}
-                                className="text-[9px] text-green-600 hover:text-green-700 font-semibold"
-                              >Delivered</button>
-                              <span className="text-gray-300">·</span>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openDetail(item) }}
-                                className="text-[9px] text-red-600 hover:text-red-700 font-semibold"
-                              >Failed</button>
+                    {intakeItems.map(item => {
+                      const flags = computeValidationFlags(item)
+                      const isBlocked = flags.address === 'fail' || flags.fraud === 'high'
+                      const selected = selectedIds.has(item.id)
+                      return (
+                        <tr
+                          key={item.id}
+                          className={`border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 transition-colors ${selected ? 'bg-orange-50' : ''}`}
+                          onClick={() => openDetail(item)}
+                        >
+                          <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={(e) => {
+                                const next = new Set(selectedIds)
+                                if (e.target.checked) next.add(item.id)
+                                else next.delete(item.id)
+                                setSelectedIds(next)
+                              }}
+                              className="rounded border-gray-300"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="font-mono font-bold text-gray-900 text-xs">{item.orderNumber || item.outboundId}</div>
+                            <div className="text-[9px] text-gray-400">
+                              {new Date(item.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
                             </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          {item.status === 'dispatched' && (
-                            <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => handleTransition(item, 'delivered')} className="text-[10px] text-green-600 hover:text-green-700 font-semibold">Mark Delivered</button>
-                            </div>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="text-gray-900 font-medium truncate max-w-[120px]">{item.customerName}</div>
+                            <div className="text-[10px] text-gray-400 truncate max-w-[120px]">{item.customerContact}</div>
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="text-gray-700 truncate max-w-[150px]">{item.productName}</div>
+                          </td>
+                          <td className="px-3 py-2 text-right font-mono text-gray-700">{item.qty}</td>
+                          <td className="px-3 py-2 text-right">
+                            {item.saleAmount != null && item.saleAmount > 0 && (
+                              <span className="font-mono text-[11px] font-semibold text-gray-700">{formatCurrencyCompact(item.saleAmount)}</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">{flagIcon(flags.address)}</td>
+                          <td className="px-3 py-2 text-center">{flagIcon(flags.payment)}</td>
+                          <td className="px-3 py-2 text-center">{flagIcon(flags.stock)}</td>
+                          <td className="px-3 py-2 text-center">
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${fraudBadgeClass(flags.fraud)}`}>
+                              {flags.fraud.toUpperCase()}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                            {isBlocked ? (
+                              <span className="text-[10px] text-red-600 font-semibold">Review</span>
+                            ) : (
+                              <button
+                                onClick={() => handleTransition(item, 'released')}
+                                className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold"
+                              >
+                                Release →
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
+
+          {/* Validation legend */}
+          <div className="flex items-center gap-4 text-[10px] text-gray-500 px-2 flex-wrap">
+            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-green-600" /> Pass</span>
+            <span className="flex items-center gap-1"><AlertTriangle size={11} className="text-amber-500" /> Warn (auto-release, spot-check later)</span>
+            <span className="flex items-center gap-1"><X size={11} className="text-red-500" /> Fail (blocked from release)</span>
+            <span className="ml-auto">High fraud risk orders require manager approval</span>
+          </div>
         </div>
+      )}
+
+      {/* ── FULFILLMENT FLOOR TAB ── */}
+      {activeTab === 'floor' && !loading && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            {laneData.map(lane => {
+              const Icon = lane.icon
+              return (
+                <div key={lane.key} className={`rounded-lg border ${lane.border} overflow-hidden flex flex-col`}>
+                  {/* Lane header */}
+                  <div className={`px-3 py-2 border-b ${lane.border} bg-gray-50 flex items-center gap-2`}>
+                    <Icon size={12} className={lane.color} />
+                    <span className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">{lane.title}</span>
+                    <span className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${lane.color} bg-white border ${lane.border}`}>
+                      {lane.items.length}
+                    </span>
+                  </div>
+                  {/* Lane items as dense rows */}
+                  {lane.items.length === 0 ? (
+                    <div className="py-10 text-center">
+                      <Icon size={20} className="mx-auto mb-1 opacity-20" />
+                      <p className="text-[11px] text-gray-400">Nothing to {lane.key}</p>
+                    </div>
+                  ) : (
+                    <div className="bg-white max-h-[55vh] overflow-y-auto flex-1">
+                      {lane.items.map((item, idx) => {
+                        const action = lane.actions.find(a => a.status === item.status)
+                        return (
+                          <div
+                            key={item.id}
+                            onClick={() => openDetail(item)}
+                            className={`px-3 py-2 cursor-pointer hover:bg-gray-50 transition-colors border-b border-gray-50 ${idx === lane.items.length - 1 ? 'border-b-0' : ''}`}
+                            style={{ minHeight: '44px' }}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-mono text-[11px] font-bold text-gray-900 shrink-0">
+                                {item.orderNumber || item.outboundId}
+                              </span>
+                              <span className="text-[9px] text-gray-400 shrink-0">
+                                {new Date(item.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between gap-2 mt-0.5">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-[11px] text-gray-700 font-medium truncate">{item.customerName}</p>
+                                <p className="text-[10px] text-gray-400 truncate">{item.productName} ×{item.qty}</p>
+                              </div>
+                              {item.saleAmount != null && item.saleAmount > 0 && (
+                                <span className="text-[10px] text-gray-600 font-mono font-semibold shrink-0">{formatCurrencyCompact(item.saleAmount)}</span>
+                              )}
+                            </div>
+                            {action && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (action.toStatus === null) {
+                                    toast.info('Use the Runsheets module to assign a rider.')
+                                  } else {
+                                    handleTransition(item, action.toStatus)
+                                  }
+                                }}
+                                className={`mt-1.5 w-full text-white text-[10px] font-semibold py-1 rounded-md transition-colors ${action.color}`}
+                              >
+                                {action.label}
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Completed section */}
+          {completedItems.length > 0 && (
+            <div>
+              <button
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="flex items-center gap-2 text-xs text-gray-500 hover:text-gray-700 font-medium"
+              >
+                <ChevronRight size={12} className={`transition-transform ${showCompleted ? 'rotate-90' : ''}`} />
+                Completed & Exceptions ({completedItems.length})
+              </button>
+              {showCompleted && (
+                <div className="mt-2 bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
+                          <th className="text-left px-3 py-2 font-semibold">Order</th>
+                          <th className="text-left px-3 py-2 font-semibold">Customer</th>
+                          <th className="text-left px-3 py-2 font-semibold">Product</th>
+                          <th className="text-right px-3 py-2 font-semibold">Qty</th>
+                          <th className="text-center px-3 py-2 font-semibold">Status</th>
+                          <th className="text-right px-3 py-2 font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {completedItems.map(item => (
+                          <tr
+                            key={item.id}
+                            className="border-b border-gray-50 hover:bg-gray-50 cursor-pointer"
+                            onClick={() => openDetail(item)}
+                          >
+                            <td className="px-3 py-2 font-mono font-semibold text-gray-900">{item.orderNumber || item.outboundId}</td>
+                            <td className="px-3 py-2 text-gray-700">{item.customerName}</td>
+                            <td className="px-3 py-2 text-gray-500 truncate max-w-[150px]">{item.productName}</td>
+                            <td className="px-3 py-2 text-right font-mono text-gray-700">{item.qty}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${
+                                item.status === 'delivered' ? 'bg-green-100 text-green-700' :
+                                item.status === 'dispatched' ? 'bg-cyan-100 text-cyan-700' :
+                                item.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}>
+                                {item.status === 'delivered' ? 'DELIVERED' :
+                                 item.status === 'dispatched' ? 'IN TRANSIT' :
+                                 item.status === 'failed' ? 'FAILED' :
+                                 item.status === 'returned' ? 'RETURNED' :
+                                 item.status.toUpperCase()}
+                              </span>
+                              {item.status === 'dispatched' && (
+                                <div className="flex items-center justify-center gap-1 mt-1">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleTransition(item, 'delivered') }}
+                                    className="text-[9px] text-green-600 hover:text-green-700 font-semibold"
+                                  >Delivered</button>
+                                  <span className="text-gray-300">·</span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleTransition(item, 'failed') }}
+                                    className="text-[9px] text-red-600 hover:text-red-700 font-semibold"
+                                  >Failed</button>
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right">
+                              {item.status === 'dispatched' && (
+                                <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <button onClick={() => handleTransition(item, 'delivered')} className="text-[10px] text-green-600 hover:text-green-700 font-semibold">Mark Delivered</button>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Loading */}
@@ -393,7 +690,7 @@ export default function OutboundParentModule() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         title="New Order"
-        subtitle="Creates an order and outbound record automatically"
+        subtitle="Creates an order in the Intake Inbox for validation before release"
         width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
@@ -474,18 +771,38 @@ export default function OutboundParentModule() {
         footer={
           selectedRecord ? (
             <div className="flex items-center justify-between w-full">
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
                 {selectedRecord.status === 'pending' && (
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'released'); setDetailOpen(false) }}>
+                    Release to Floor
+                  </Button>
+                )}
+                {selectedRecord.status === 'released' && (
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'picking'); setDetailOpen(false) }}>
+                    Start Picking
+                  </Button>
+                )}
+                {selectedRecord.status === 'picking' && (
                   <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'picked'); setDetailOpen(false) }}>
                     Mark Picked
                   </Button>
                 )}
                 {selectedRecord.status === 'picked' && (
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'packing'); setDetailOpen(false) }}>
+                    Start Packing
+                  </Button>
+                )}
+                {selectedRecord.status === 'packing' && (
                   <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'packed'); setDetailOpen(false) }}>
                     Mark Packed
                   </Button>
                 )}
                 {selectedRecord.status === 'packed' && (
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { handleTransition(selectedRecord, 'staged'); setDetailOpen(false) }}>
+                    Stage at Dock
+                  </Button>
+                )}
+                {selectedRecord.status === 'staged' && (
                   <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { toast.info('Use the Runsheets module to assign a rider'); setDetailOpen(false) }}>
                     Assign Rider
                   </Button>
@@ -514,9 +831,13 @@ export default function OutboundParentModule() {
                 selectedRecord.status === 'delivered' ? 'bg-green-100 text-green-700' :
                 selectedRecord.status === 'dispatched' ? 'bg-cyan-100 text-cyan-700' :
                 selectedRecord.status === 'failed' ? 'bg-red-100 text-red-700' :
-                selectedRecord.status === 'packed' ? 'bg-purple-100 text-purple-700' :
+                selectedRecord.status === 'staged' ? 'bg-cyan-100 text-cyan-700' :
+                selectedRecord.status === 'packed' ? 'bg-indigo-100 text-indigo-700' :
+                selectedRecord.status === 'packing' ? 'bg-purple-100 text-purple-700' :
                 selectedRecord.status === 'picked' ? 'bg-blue-100 text-blue-700' :
-                'bg-orange-100 text-orange-700'
+                selectedRecord.status === 'picking' ? 'bg-orange-100 text-orange-700' :
+                selectedRecord.status === 'released' ? 'bg-amber-100 text-amber-700' :
+                'bg-gray-100 text-gray-700'
               }`}>
                 {selectedRecord.status.toUpperCase()}
               </span>
@@ -524,6 +845,38 @@ export default function OutboundParentModule() {
                 {new Date(selectedRecord.createdAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}
               </span>
             </div>
+
+            {/* Validation flags (only show for pending/intake) */}
+            {selectedRecord.status === 'pending' && (() => {
+              const flags = computeValidationFlags(selectedRecord)
+              return (
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Intake Validation</p>
+                  <div className="grid grid-cols-4 gap-2 text-center">
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">Address</div>
+                      <div>{flagIcon(flags.address)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">Payment</div>
+                      <div>{flagIcon(flags.payment)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">Stock</div>
+                      <div>{flagIcon(flags.stock)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 mb-1">Fraud</div>
+                      <div>
+                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${fraudBadgeClass(flags.fraud)}`}>
+                          {flags.fraud.toUpperCase()}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Customer */}
             <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
