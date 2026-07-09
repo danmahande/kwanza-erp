@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth-api'
+import { logAudit } from '@/lib/audit'
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,10 +47,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const count = await db.outboundRecord.count()
-    const outboundId = `OUT-${String(count + 1).padStart(3, '0')}`
-    
-    // Update product stock — check sufficient stock first
+    // Generate ID — use timestamp + random suffix to avoid race condition
+    // (the old count+1 approach caused duplicate IDs on concurrent POSTs)
+    const outboundId = `OUT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+
+    // Check sufficient stock BEFORE creating the record (fail fast, don't leave phantom records)
     if (body.productId && body.qty) {
       const product = await db.product.findUnique({
         where: { productId: body.productId },
@@ -61,15 +63,63 @@ export async function POST(req: NextRequest) {
           details: `${product.productLabel}: only ${product.currentStock} units available, but outbound requires ${body.qty}`,
         }, { status: 409 })
       }
-      await db.product.update({
-        where: { productId: body.productId },
-        data: { currentStock: { decrement: body.qty } },
-      })
     }
-    
+
+    // Create the outbound record
     const record = await db.outboundRecord.create({
       data: { ...body, outboundId },
     })
+
+    // Decrement product stock (non-blocking — record already exists)
+    if (body.productId && body.qty) {
+      try {
+        await db.product.update({
+          where: { productId: body.productId },
+          data: { currentStock: { decrement: body.qty } },
+        })
+      } catch (stockErr) {
+        console.error('Stock decrement failed (non-blocking):', stockErr)
+      }
+    }
+
+    // Decrement storage liability (same as order-processing POST)
+    if (body.vendorId && body.productId && body.qty && body.status !== 'self_delivery') {
+      try {
+        const { decrementStorageLiability } = await import('@/lib/storage-liability')
+        await decrementStorageLiability({
+          merchantId: body.vendorId,
+          productId: body.productId,
+          qtyToRemove: body.qty,
+        })
+      } catch (liabilityErr) {
+        console.error('Storage liability decrement failed (non-blocking):', liabilityErr)
+      }
+    }
+
+    // Risk Module hook: score the order on creation (same as order-processing POST)
+    if (body.status !== 'self_delivery') {
+      const paymentPath = (body.paymentMethod === 'Cash' || !body.paymentMethod) ? 'cod' : 'prepaid'
+      try {
+        const { updateCustomerProfile } = await import('@/lib/risk-db')
+        await updateCustomerProfile(body.customerContact || '', 'order_created', body.saleAmount || null)
+        const origin = new URL(req.url).origin
+        fetch(`${origin}/api/risk/score`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Cookie': req.headers.get('cookie') || '' },
+          body: JSON.stringify({ outboundId: record.id, paymentPath }),
+        }).catch(err => console.error('Risk score trigger failed (non-blocking):', err))
+      } catch (riskErr) {
+        console.error('Risk profile update failed (non-blocking):', riskErr)
+      }
+    }
+
+    await logAudit({
+      action: 'OUTBOUND_CREATED',
+      module: 'outbound',
+      entityId: outboundId,
+      details: `Created outbound record for ${body.customerName || 'unknown customer'}`,
+    })
+
     return NextResponse.json(record, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create outbound record' }, { status: 500 })
@@ -86,5 +136,66 @@ export async function PUT(req: NextRequest) {
     return NextResponse.json(record)
   } catch {
     return NextResponse.json({ error: 'Failed to update outbound record' }, { status: 500 })
+  }
+}
+
+// DELETE — only allowed for orders that haven't been dispatched yet.
+// Restores product stock and reverses storage liability.
+export async function DELETE(req: NextRequest) {
+  try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as import('@/lib/auth-api').AuthUser
+    const id = req.nextUrl.searchParams.get('id')
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
+
+    const record = await db.outboundRecord.findUnique({ where: { id } })
+    if (!record) {
+      return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+    }
+
+    // Can't delete orders that have been dispatched or delivered
+    if (['dispatched', 'delivered', 'returned', 'failed'].includes(record.status)) {
+      return NextResponse.json({
+        error: `Cannot delete order in status '${record.status}'`,
+        hint: 'Cancel the order instead — use the workflow transition to move it to cancelled.',
+      }, { status: 409 })
+    }
+
+    // Restore product stock
+    if (record.productId && record.qty) {
+      try {
+        await db.product.update({
+          where: { productId: record.productId },
+          data: { currentStock: { increment: record.qty } },
+        })
+      } catch (stockErr) {
+        console.error('Stock restore failed (non-blocking):', stockErr)
+      }
+    }
+
+    // Reverse storage liability — note: storage-liability reversal is complex
+    // (FIFO decrement touched multiple batches). For now we log a warning and
+    // skip the reversal. The stock restore above is the critical one.
+    // TODO: implement proper storage-liability reversal when the feature is needed.
+    if (record.vendorId && record.productId && record.qty) {
+      console.warn(`Storage liability reversal skipped for deleted outbound ${record.outboundId} — manual review needed`)
+    }
+
+    await db.outboundRecord.delete({ where: { id } })
+
+    await logAudit({
+      action: 'OUTBOUND_DELETED',
+      module: 'outbound',
+      entityId: record.outboundId,
+      details: `Deleted outbound record (status was ${record.status})`,
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Outbound delete error:', error)
+    return NextResponse.json({ error: 'Failed to delete outbound record' }, { status: 500 })
   }
 }

@@ -11,11 +11,13 @@ export async function GET(req: NextRequest) {
     const search = req.nextUrl.searchParams.get('search') || ''
     const statusFilter = req.nextUrl.searchParams.get('status') || ''
 
-    // Get all outbound records that belong to a runsheet
-    const allWithRunsheet = await db.outboundRecord.findMany({
+    // P13: Only fetch records that actually belong to a runsheet (runsheetId is not null).
+    // Previously fetched ALL outbound records then filtered in JS — slow at scale.
+    const runsheetRecords = await db.outboundRecord.findMany({
+      where: { runsheetId: { not: null } },
       orderBy: { createdAt: 'desc' },
+      take: 500,  // safety cap
     })
-    const runsheetRecords = allWithRunsheet.filter(r => r.runsheetId !== null)
 
     // Apply search filter if provided
     const filtered = search
@@ -81,11 +83,17 @@ export async function GET(req: NextRequest) {
 
     runsheets.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
 
-    // Get unassigned orders (no runsheetId, not cancelled)
-    const allUnassigned = await db.outboundRecord.findMany({
+    // Get unassigned orders (no runsheetId, packed or staged, not cancelled)
+    // P13: Filter in the query instead of fetching all and filtering in JS.
+    const unassigned = await db.outboundRecord.findMany({
+      where: {
+        runsheetId: null,
+        status: { in: ['packed', 'staged'] },
+        cancellationReason: null,
+      },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     })
-    const unassigned = allUnassigned.filter(r => r.runsheetId === null && r.status === 'packed' && !r.cancellationReason)
 
     return NextResponse.json({ runsheets, unassigned })
   } catch (error) {
@@ -141,12 +149,14 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // P6: Check that all orders are in 'packed' status (ready for dispatch)
-    const notPacked = orders.filter(o => o.status !== 'packed')
-    if (notPacked.length > 0) {
+    // P6: Check that all orders are ready for dispatch (packed or staged)
+    // 'staged' = at the dock, ready for rider. 'packed' = sealed but not yet at dock
+    // (backward-compat with orders created before the 'staged' workflow state).
+    const notReady = orders.filter(o => o.status !== 'packed' && o.status !== 'staged')
+    if (notReady.length > 0) {
       return NextResponse.json({
-        error: `${notPacked.length} order(s) are not packed yet — must be 'packed' before assigning to a runsheet`,
-        details: notPacked.map(o => `${o.outboundId} (status: ${o.status})`),
+        error: `${notReady.length} order(s) are not ready for dispatch — must be 'packed' or 'staged' before assigning to a runsheet`,
+        details: notReady.map(o => `${o.outboundId} (status: ${o.status})`),
       }, { status: 400 })
     }
 

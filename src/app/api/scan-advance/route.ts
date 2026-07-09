@@ -162,6 +162,22 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy: str
     await notifyOrderFailed(custName, custContact, orderNum)
   }
 
+  // Risk Module hook: update CustomerRiskProfile on delivery outcome.
+  // Same logic as workflow-transition — keeps the customer's COD refusal/delivery
+  // counters in sync so future orders from this customer are scored correctly.
+  // Non-blocking — failure here doesn't roll back the scan-advance.
+  if (['delivered', 'failed', 'returned'].includes(next.status)) {
+    try {
+      const { updateCustomerProfile } = await import('@/lib/risk-db')
+      const event = next.status === 'delivered' ? 'order_delivered'
+                  : next.status === 'failed' ? 'order_failed'
+                  : 'order_returned'
+      await updateCustomerProfile(custContact, event, Number(record.saleAmount) || null)
+    } catch (profileErr) {
+      console.error('CustomerRiskProfile update failed (non-blocking):', profileErr)
+    }
+  }
+
   await logAudit({
     action: 'SCAN_ADVANCE',
     module,
@@ -181,8 +197,11 @@ async function advanceOutbound(record: Record<string, unknown>, performedBy: str
 function mapOutboundToOrderStatus(outboundStatus: string): string {
   const map: Record<string, string> = {
     pending: 'new_order',
-    picking: 'processing', picked: 'processing', packing: 'processing', packed: 'processing',
+    released: 'processing',
+    picking: 'processing', picked: 'processing',
+    packing: 'processing', packed: 'processing', staged: 'processing',
     dispatched: 'shipped', delivered: 'delivered',
+    self_delivery: 'shipped',
     returned: 'returned', failed: 'returned', cancelled: 'cancelled',
   }
   return map[outboundStatus] || 'processing'

@@ -59,6 +59,9 @@ export const OUTBOUND_WORKFLOW: WorkflowDefinition = {
     { status: 'cancelled',   label: 'Cancelled',   isException: true, description: 'Order was cancelled before dispatch' },
     { status: 'returned',    label: 'Returned',    isException: true, description: 'Customer returned the order after delivery' },
     { status: 'failed',      label: 'Failed',      isException: true, description: 'Delivery attempted but failed' },
+    // Self-delivery: merchant fulfils directly, no warehouse picking/packing.
+    // Can be marked delivered when merchant confirms, or cancelled if not fulfilled.
+    { status: 'self_delivery', label: 'Self-Delivery', description: 'Merchant fulfils directly — no warehouse action. Mark delivered when merchant confirms.' },
   ],
   transitions: {
     pending:    ['released', 'cancelled'],         // intake validation → release to floor
@@ -71,6 +74,8 @@ export const OUTBOUND_WORKFLOW: WorkflowDefinition = {
     dispatched: ['delivered', 'failed', 'returned'],
     delivered:  ['returned'],
     failed:     ['dispatched', 'cancelled'],
+    // Self-delivery can be completed or cancelled — no intermediate warehouse steps
+    self_delivery: ['delivered', 'cancelled'],
     // exception states are terminal (or can be re-dispatched from failed)
     cancelled:  [],
     returned:   [],

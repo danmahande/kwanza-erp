@@ -77,6 +77,47 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // ── Risk Module enforcement (outbound only) ──
+    // When transitioning an outbound order FROM 'pending' TO 'released',
+    // check the latest RiskScore. Hard-block 'blocked' decisions (score 100,
+    // blocklist match). Soft-block 'review' decisions (score 70-99) — require
+    // a manager override via the Risk module first.
+    // This prevents server-side bypass of the Risk module (e.g. direct API calls).
+    if (module === 'outbound' && currentStatus === 'pending' && toStatus === 'released') {
+      const latestScore = await db.riskScore.findFirst({
+        where: { outboundId: id },
+        orderBy: { scoredAt: 'desc' },
+        select: { decision: true, score: true },
+      })
+      if (latestScore) {
+        if (latestScore.decision === 'blocked') {
+          return NextResponse.json({
+            error: 'Order is hard-blocked by the Risk module',
+            detail: `Risk score ${latestScore.score} (decision: blocked). This order matched the fraud blocklist and cannot be released without a manager override.`,
+            code: 'RISK_BLOCKED',
+            riskScore: latestScore.score,
+            hint: 'Approve this order in the Risk & Fraud module to override the block.',
+          }, { status: 403 })
+        }
+        if (latestScore.decision === 'review') {
+          // Check if a manager has approved this order via the Risk module
+          const override = await db.riskOverride.findFirst({
+            where: { outboundId: id, action: 'approve' },
+          })
+          if (!override) {
+            return NextResponse.json({
+              error: 'Order is held for risk review',
+              detail: `Risk score ${latestScore.score} (decision: review). A manager must approve this order in the Risk & Fraud module before it can be released.`,
+              code: 'RISK_REVIEW_REQUIRED',
+              riskScore: latestScore.score,
+              hint: 'Approve this order in the Risk & Fraud module to override the review hold.',
+            }, { status: 403 })
+          }
+          // Override exists — allow the transition (manager approved)
+        }
+      }
+    }
+
     // Build the update data
     const updateData: Record<string, unknown> = { [statusField]: toStatus }
 
@@ -222,6 +263,7 @@ export async function POST(req: NextRequest) {
           picking: 'processing', picked: 'processing',
           packing: 'processing', packed: 'processing', staged: 'processing',
           dispatched: 'shipped', delivered: 'delivered',
+          self_delivery: 'shipped',
           failed: 'returned', returned: 'returned', cancelled: 'cancelled',
         }
         const mappedStatus = orderStatusMap[toStatus]

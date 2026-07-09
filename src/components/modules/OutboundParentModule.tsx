@@ -7,11 +7,17 @@ import { Label } from '@/components/ui/label'
 import {
   Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
   AlertTriangle, ChevronRight, X, Inbox, Upload, Layers, ShieldAlert,
+  HelpCircle, ClipboardList,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import RunsheetModule from '@/components/modules/RunsheetModule'
 
 // ── Types ──
 interface OutboundRecord {
@@ -144,8 +150,9 @@ export default function OutboundParentModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<OutboundRecord | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
-  const [activeTab, setActiveTab] = useState<'intake' | 'floor'>('intake')
+  const [activeTab, setActiveTab] = useState<'intake' | 'floor' | 'runsheets'>('intake')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [helpOpen, setHelpOpen] = useState(false)
   // Risk scores for pending orders — fetched from /api/risk/intake-scores
   const [riskScores, setRiskScores] = useState<Map<string, IntakeRiskScore>>(new Map())
   const [form, setForm] = useState({
@@ -306,6 +313,31 @@ export default function OutboundParentModule() {
     setDetailOpen(true)
   }
 
+  // ── Generate document (pick list / pack slip / invoice) ──
+  // Opens the PDF in a new tab. The API generates the PDF and returns a download URL.
+  const handleGenerateDoc = async (docType: 'pick-list' | 'pack-slip' | 'invoice', orderId: string) => {
+    try {
+      const url = `/api/order-processing/${docType}?ids=${orderId}`
+      const res = await fetch(url)
+      if (res.ok) {
+        const d = await res.json()
+        if (d.filePath || d.downloadUrl) {
+          // Open the PDF in a new tab
+          const pdfUrl = d.downloadUrl || d.filePath
+          window.open(pdfUrl, '_blank')
+          toast.success(`${docType === 'pick-list' ? 'Pick list' : docType === 'pack-slip' ? 'Pack slip' : 'Invoice'} generated`)
+        } else {
+          toast.success(`${docType} generated (check downloads folder)`)
+        }
+      } else {
+        const err = await res.json()
+        toast.error(err.error || `Failed to generate ${docType}`)
+      }
+    } catch {
+      toast.error(`Failed to generate ${docType}`)
+    }
+  }
+
   const filteredProducts = form.merchantId
     ? products.filter(p => p.merchantId === form.merchantId)
     : products
@@ -367,6 +399,27 @@ export default function OutboundParentModule() {
               {floorCount}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setActiveTab('runsheets')}
+          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
+            activeTab === 'runsheets' ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <ClipboardList size={12} />
+          Runsheets
+          {laneData[3].items.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-[9px] font-mono font-bold">
+              {laneData[3].items.length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setHelpOpen(true)}
+          className="ml-auto px-3 py-2 text-xs font-medium text-gray-400 hover:text-gray-600 flex items-center gap-1"
+        >
+          <HelpCircle size={12} />
+          How does this work?
         </button>
       </div>
 
@@ -590,7 +643,7 @@ export default function OutboundParentModule() {
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   if (action.toStatus === null) {
-                                    toast.info('Use the Runsheets module to assign a rider.')
+                                    setActiveTab('runsheets')
                                   } else {
                                     handleTransition(item, action.toStatus)
                                   }
@@ -689,6 +742,11 @@ export default function OutboundParentModule() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── RUNSHEETS TAB ── */}
+      {activeTab === 'runsheets' && (
+        <RunsheetModule />
       )}
 
       {/* Loading */}
@@ -816,7 +874,7 @@ export default function OutboundParentModule() {
                   </Button>
                 )}
                 {selectedRecord.status === 'staged' && (
-                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { toast.info('Use the Runsheets module to assign a rider'); setDetailOpen(false) }}>
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setDetailOpen(false); setActiveTab('runsheets') }}>
                     Assign Rider
                   </Button>
                 )}
@@ -829,6 +887,39 @@ export default function OutboundParentModule() {
                       Failed
                     </Button>
                   </>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {/* Document generation buttons — visible once order is past intake */}
+                {['released', 'picking', 'picked', 'packing', 'packed', 'staged', 'dispatched', 'delivered'].includes(selectedRecord.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-[10px] h-7"
+                    onClick={() => handleGenerateDoc('pick-list', selectedRecord.id)}
+                  >
+                    Pick List
+                  </Button>
+                )}
+                {['picked', 'packing', 'packed', 'staged', 'dispatched', 'delivered'].includes(selectedRecord.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-[10px] h-7"
+                    onClick={() => handleGenerateDoc('pack-slip', selectedRecord.id)}
+                  >
+                    Pack Slip
+                  </Button>
+                )}
+                {['packed', 'staged', 'dispatched', 'delivered'].includes(selectedRecord.status) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-[10px] h-7"
+                    onClick={() => handleGenerateDoc('invoice', selectedRecord.id)}
+                  >
+                    Invoice
+                  </Button>
                 )}
               </div>
               <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setDetailOpen(false)}>Close</Button>
@@ -943,6 +1034,97 @@ export default function OutboundParentModule() {
           </div>
         )}
       </DetailSlideOver>
+
+      {/* ── Help Dialog ── */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Outbound Module Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Outbound module is where every order lives from the moment it enters your system to the moment it reaches the customer. It has three tabs that mirror the three phases of fulfillment: validating incoming orders, doing the warehouse work, and dispatching to riders. Here is how to use each one.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            {/* What this is */}
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> Every order your business receives — from your online store, your mobile app, an Excel upload, or manual entry — lands here. The Outbound module validates each order for fraud risk, guides it through picking and packing, stages it at the dock, and hands it off to a rider with a runsheet. You do the actual work here; the Operations Desk is for watching the whole warehouse, but this is where orders get fulfilled.
+              </p>
+            </div>
+
+            {/* The 3 tabs */}
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Three Tabs</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                  <p className="text-xs text-orange-900 leading-relaxed">
+                    <strong>1. Intake Inbox.</strong> This is where new orders land first. Every order appears here with a fraud risk score (0–100) and a decision badge: PASS (green, auto-release), SPOT (amber, release but spot-check later), REVIEW (red, held for manager approval), or BLOCKED (black, hard block from blocklist). Select multiple orders and click "Release Selected" to move them to the Fulfillment Floor. Orders with REVIEW or BLOCKED decisions cannot be released here — a manager must approve or reject them in the Risk &amp; Fraud module first.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>2. Fulfillment Floor.</strong> This shows four lanes that orders move through: TO PICK (released, waiting for a picker → picking → picked), TO PACK (picked → packing → packed), TO STAGE (packed → staged at the dock), and TO DISPATCH (staged, waiting for a rider). Click any order to see its details. Each lane has an action button that advances the order to the next stage. When an order reaches TO DISPATCH, the button says "Assign Rider" and switches you to the Runsheets tab.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-100">
+                  <p className="text-xs text-yellow-900 leading-relaxed">
+                    <strong>3. Runsheets.</strong> This is where you assign riders to staged orders and track deliveries. Create a runsheet by selecting staged orders, choosing a rider, and assigning a vehicle number. You can scan order barcodes to add them quickly. Once a runsheet is created, the rider takes their list and leaves. When they return, you mark each stop as delivered (with COD amount collected) or failed (with a reason and reschedule date). Failed stops track attempt counts automatically — after 5 attempts, the order is permanently failed.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* How to use */}
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Step 1 — Create orders.</strong> Click "New Order" at the top right. Select a merchant, then a product, fill in the customer's name, phone number, and address, set the quantity and payment method. The order is created in "pending" status and appears in the Intake Inbox with a risk score within seconds.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Step 2 — Validate and release.</strong> Open the Intake Inbox tab. Review the risk scores. Select the orders that passed (PASS or SPOT) and click "Release Selected". They move to the Fulfillment Floor as "released" and are ready for picking. Orders held for review must be approved in the Risk &amp; Fraud module first.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Step 3 — Pick, pack, stage.</strong> Open the Fulfillment Floor tab. Work through the four lanes left to right. A picker clicks "Start Picking" on a released order, collects the items, then clicks "Mark Picked". A packer clicks "Start Packing", boxes the order, then clicks "Mark Packed". Dock crew clicks "Stage at Dock" to move it to the dispatch lane.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Step 4 — Assign riders.</strong> When orders are staged, click "Assign Rider" to switch to the Runsheets tab. Create a runsheet, select the staged orders, choose a rider, and save. The rider now has their delivery list.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Step 5 — Track deliveries.</strong> In the Runsheets tab, open the active runsheet. As the rider delivers, mark each stop as "Delivered" (enter the COD amount collected) or "Failed" (enter a reason and reschedule date). The runsheet summary at the top shows progress: how many delivered, failed, pending, and the total COD collected.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* The differentiator */}
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most ERP systems treat order intake, warehouse fulfillment, and dispatch as three separate modules with no shared visibility. An order created in one screen disappears until someone manually checks another screen. This module puts the entire order lifecycle in one place — you see the fraud score at intake, the pick/pack progress on the floor, and the rider assignment in runsheets, all without leaving the tab. The risk score travels with the order, so a manager never has to wonder "should we have shipped this?"
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
