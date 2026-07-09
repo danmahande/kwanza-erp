@@ -111,8 +111,9 @@ interface Station {
 
 interface HubData {
   date: string
+  range: string
   stations: {
-    intake: Station
+    intake: Station & { stockArrivals?: StationItem[]; orderIntake?: StationItem[] }
     sort: Station
     stage: Station
     dispatch: Station
@@ -144,10 +145,24 @@ interface HubData {
       createdAt: string
     }>
   }
+  lateBankings: {
+    count: number
+    items: Array<{
+      driverId: string
+      driverName: string
+      phone: string
+      unbankedAmount: number
+      daysSinceBanking: number
+      isLate: boolean
+    }>
+    totalUnbanked: number
+  }
   dayClose: {
     canClose: boolean
     unaccountedParcels: number
     pendingBankingsCount: number
+    pipelineOrders: number
+    pendingShrinkageCount: number
   }
   totals: {
     inboundToday: number
@@ -160,7 +175,7 @@ interface HubData {
 type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
 const STATIONS: { key: StationKey; label: string; shortLabel: string; description: string; icon: typeof Package; pillClass: string }[] = [
-  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock that arrived. needs to be put away on shelves (received → put away → stored)', icon: Package,       pillClass: 'text-blue-600' },
+  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock arrivals needing put-away (received → put away → stored) + new orders awaiting risk validation (pending → released)', icon: Package,       pillClass: 'text-blue-600' },
   { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Orders being prepared. picking from shelves, then packing into boxes (pending → picking → picked → packing → packed)', icon: Boxes,        pillClass: 'text-orange-600' },
   { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed and ready. waiting for a rider to be assigned',   icon: ClipboardList, pillClass: 'text-purple-600' },
   { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to a rider. ready to leave the warehouse', icon: Truck,     pillClass: 'text-yellow-700' },
@@ -239,11 +254,13 @@ const STALE_THRESHOLD_MINUTES: Record<string, number> = {
 function StatusPill({ status, station }: { status: string; station: StationKey }) {
   const map: Record<string, { dot: string; code: string; label: string }> = {
     // outbound statuses
-    pending:    { dot: 'bg-gray-400',   code: 'PD', label: 'Pending' },
+    pending:    { dot: 'bg-gray-400',   code: 'PN', label: 'Pending' },
+    released:   { dot: 'bg-amber-500',  code: 'RL', label: 'Released' },
     picking:    { dot: 'bg-blue-500',   code: 'PK', label: 'Picking' },
-    picked:     { dot: 'bg-blue-600',   code: 'PD', label: 'Picked' },
+    picked:     { dot: 'bg-blue-600',   code: 'PC', label: 'Picked' },
     packing:    { dot: 'bg-orange-500', code: 'PG', label: 'Packing' },
-    packed:     { dot: 'bg-orange-600', code: 'PC', label: 'Packed' },
+    packed:     { dot: 'bg-orange-600', code: 'PD', label: 'Packed' },
+    staged:     { dot: 'bg-cyan-600',   code: 'SG', label: 'Staged' },
     dispatched: { dot: 'bg-cyan-500',   code: 'DP', label: 'Dispatched' },
     delivered:  { dot: 'bg-green-600',  code: 'DL', label: 'Delivered' },
     failed:     { dot: 'bg-red-500',    code: 'FL', label: 'Failed' },
@@ -273,10 +290,11 @@ function StatusPill({ status, station }: { status: string; station: StationKey }
 // ── Row tint based on status ──
 function rowTint(status: string): string {
   if (['delivered', 'stored', 'processed'].includes(status)) return 'bg-green-50/40'
-  if (['dispatched'].includes(status)) return 'bg-cyan-50/40'
+  if (['dispatched', 'staged'].includes(status)) return 'bg-cyan-50/40'
   if (['failed', 'returned', 'rejected', 'cancelled'].includes(status)) return 'bg-red-50/40'
   if (['packed', 'put_away', 'in_review'].includes(status)) return 'bg-orange-50/40'
-  if (['picking', 'packing', 'received', 'initiated'].includes(status)) return 'bg-blue-50/40'
+  if (['released', 'picking', 'packing', 'received', 'initiated'].includes(status)) return 'bg-amber-50/40'
+  if (['pending', 'picked'].includes(status)) return 'bg-blue-50/40'
   return ''
 }
 
@@ -511,6 +529,63 @@ function StationTable({
 }
 
 // ── Right-rail mini-tables ──
+
+// Late Banking Panel — shows drivers with unbanked COD cash > 24h old.
+// Each row has a "Remind" button that creates a DriverCommunication record
+// so the office team has a visible action + audit trail.
+function LateBankingsPanel({
+  lateBankings,
+  onRemind,
+}: {
+  lateBankings: HubData['lateBankings']
+  onRemind: (driverId: string, driverName: string, phone: string, unbankedAmount: number) => void
+}) {
+  if (lateBankings.count === 0) {
+    return null  // don't render anything if no late bankings — keeps the rail clean
+  }
+  return (
+    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center justify-between">
+        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider flex items-center gap-1">
+          <AlertTriangle size={12} /> Late COD Bankings
+        </span>
+        <span className="text-[11px] text-red-700 font-mono font-bold">
+          {formatCurrencyCompact(lateBankings.totalUnbanked)}
+        </span>
+      </div>
+      <table className="w-full text-[11px]">
+        <tbody>
+          {lateBankings.items.slice(0, 8).map((d, i) => (
+            <tr key={i} className="border-t border-red-50 bg-red-50/20 hover:bg-red-50/40" style={{ height: '32px' }}>
+              <td className="px-3 py-1">
+                <p className="text-gray-900 font-medium truncate max-w-[100px]">{d.driverName}</p>
+                <p className="text-[9px] text-red-600 font-semibold">
+                  {d.daysSinceBanking}d · {formatCurrencyCompact(d.unbankedAmount)}
+                </p>
+              </td>
+              <td className="px-2 py-1 text-right">
+                <button
+                  onClick={() => onRemind(d.driverId, d.driverName, d.phone, d.unbankedAmount)}
+                  className="text-[9px] text-red-700 hover:text-red-900 font-semibold uppercase tracking-wider bg-red-100 hover:bg-red-200 px-2 py-0.5 rounded"
+                >
+                  Remind
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {lateBankings.count > 8 && (
+        <div className="px-3 py-1.5 border-t border-red-100 bg-red-50/50 text-center">
+          <span className="text-[10px] text-red-700 font-medium">
+            + {lateBankings.count - 8} more late driver{lateBankings.count - 8 !== 1 ? 's' : ''}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function RidersPanel({ riders }: { riders: StationItem[] }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -967,8 +1042,11 @@ interface HubTodayModuleProps {
 export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {}) {
   const [data, setData] = useState<HubData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeStation, setActiveStation] = useState<StationKey>('sort')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('today')
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
 
   // ── Product search state ──
   const [searchQuery, setSearchQuery] = useState('')
@@ -988,27 +1066,36 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
       unaccountedParcels: Array<Record<string, unknown>>
       pendingBankings: Array<Record<string, unknown>>
       pendingShrinkage: Array<Record<string, unknown>>
+      pipelineOrders: Array<Record<string, unknown>>
     }
     summary: Record<string, unknown>
   } | null>(null)
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/hub-today')
+      setError(null)
+      const res = await fetch(`/api/hub-today?range=${dateRange}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const d = await res.json()
       setData(d)
-      // Only auto-pick station on FIRST load (when data was null), not on every refresh
-      // This prevents the station from jumping around while the user is working
-    } catch {
+      setLastRefreshed(new Date())
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load hub data')
       toast.error('Failed to load hub data')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [dateRange])
 
   useEffect(() => {
     fetchData()
-    const interval = setInterval(fetchData, 30000)
+    // Auto-refresh every 30s, but ONLY when the tab is visible.
+    // Saves bandwidth and server resources when the user is on another tab.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchData()
+      }
+    }, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
 
@@ -1083,6 +1170,31 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
     }
   }
 
+  // ── Remind Driver: creates a DriverCommunication record so the office team ──
+  // has a visible action and audit trail when a driver has unbanked COD cash.
+  const handleRemindDriver = async (driverId: string, driverName: string, phone: string, unbankedAmount: number) => {
+    try {
+      const res = await fetch('/api/driver-communication', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          driverId,
+          type: 'call',
+          subject: `Late COD banking reminder — ${formatCurrency(unbankedAmount)} unbanked`,
+          notes: `Driver ${driverName} (${phone}) has ${formatCurrency(unbankedAmount)} in unbanked COD cash. Call ${phone} to remind them to bank.`,
+          createdBy: 'operations-desk',
+        }),
+      })
+      if (res.ok) {
+        toast.success(`Reminder logged for ${driverName}. Call ${phone} to follow up.`)
+      } else {
+        toast.error('Failed to log reminder')
+      }
+    } catch {
+      toast.error('Failed to log reminder')
+    }
+  }
+
   const handleDayCloseConfirm = async () => {
     try {
       const res = await fetch('/api/day-close', {
@@ -1101,6 +1213,19 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
     } catch {
       toast.error('Failed to close day')
     }
+  }
+
+  if (error && !data) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <AlertTriangle size={32} className="text-red-500" />
+        <p className="text-sm text-gray-700 font-medium">Failed to load operations console</p>
+        <p className="text-xs text-gray-400">{error}</p>
+        <Button variant="outline" size="sm" onClick={fetchData} className="rounded-xl">
+          <RefreshCw size={12} className="mr-1.5" /> Retry
+        </Button>
+      </div>
+    )
   }
 
   if (loading || !data) {
@@ -1122,15 +1247,40 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           <h1 className="text-lg font-bold text-gray-900">Operations Desk</h1>
           <p className="text-[11px] text-gray-500">
             {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-            <span className="ml-2 text-gray-400">· Auto-refresh 30s</span>
+            {lastRefreshed && (
+              <span className="ml-2 text-gray-400">
+                · Updated {lastRefreshed.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+              </span>
+            )}
+            <span className="ml-2 text-gray-400">· Auto-refresh 30s (when tab is visible)</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Date range filter */}
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-md p-0.5">
+            {(['today', '7d', '30d', 'all'] as const).map(r => (
+              <button
+                key={r}
+                onClick={() => setDateRange(r)}
+                className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
+                  dateRange === r ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'
+                }`}
+                title={
+                  r === 'today' ? "Today's activity + all in-flight items (default)" :
+                  r === '7d' ? 'Last 7 days' :
+                  r === '30d' ? 'Last 30 days' :
+                  'Full history (no date filter)'
+                }
+              >
+                {r === 'today' ? 'Today + In-flight' : r === '7d' ? '7 days' : r === '30d' ? '30 days' : 'All history'}
+              </button>
+            ))}
+          </div>
           <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
             <HelpCircle size={12} className="mr-1" /> How does this work?
           </Button>
           <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
-            <RefreshCw size={12} className="mr-1" /> Refresh
+            <RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
           <Button
             size="sm"
@@ -1620,12 +1770,16 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
           />
         </div>
 
-        {/* Right: rail with consolidated Status Strip + Follow-ups + Riders */}
+        {/* Right: rail with consolidated Status Strip + Late Bankings + Follow-ups + Riders */}
         <div className="space-y-3">
           <StatusStrip
             exceptions={data.exceptions}
             bankings={data.pendingBankings}
             onNavigate={onNavigate}
+          />
+          <LateBankingsPanel
+            lateBankings={data.lateBankings}
+            onRemind={handleRemindDriver}
           />
           <FollowUpsPanel followUps={data.followUps} onNavigate={onNavigate} />
           <RidersPanel riders={data.riders} />
@@ -1634,53 +1788,97 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
 
       {/* ── Help Dialog (plain-English workflow explanation) ── */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-lg">
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <HelpCircle size={18} />
-              How does this work?
+              How the Operations Desk Works
             </AlertDialogTitle>
             <AlertDialogDescription>
-              This is your starting point. It shows what needs doing and takes you to the right screen to do it. Here's the workflow, step by step:
+              The Operations Desk is your single starting point for everything that happens in the warehouse. Instead of jumping between twelve different screens to find out what needs doing, this one view shows you the entire journey of every parcel — from the moment stock arrives to the moment cash is banked. Here is how to use it.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
-          <div className="space-y-3 py-2">
-            {[
-              { num: 1, title: 'Parcels arrive', desc: 'Stock comes in from merchants. It needs to be received and put away on shelves. → Go to Inventory → Inbound tab.' },
-              { num: 2, title: 'We sort and pack', desc: 'Orders are picked from shelves, packed into boxes, and labeled with tracking numbers. → Go to Outbound → Order Processing tab.' },
-              { num: 3, title: 'Parcels wait for riders', desc: 'Packed parcels sit in Staging until a driver is assigned. → Go to Outbound → Runsheets tab to assign riders.' },
-              { num: 4, title: 'Riders pick up', desc: 'A rider gets their list of parcels for the day and leaves the warehouse. → Go to Outbound → Runsheets tab to dispatch.' },
-              { num: 5, title: 'Riders deliver', desc: 'The rider drives to each customer. If the customer pays cash, the rider collects it. → Track in Outbound → Outbound Records tab.' },
-              { num: 6, title: 'Riders bring back cash', desc: 'At the end of the day, riders deposit the cash they collected. We verify it matches. → Go to Payments → COD Reconciliation tab.' },
-              { num: 7, title: 'We close the day', desc: 'When every parcel is accounted for and all cash is verified, the supervisor closes the day. → Click "Close Day" at the top of this screen.' },
-            ].map(step => (
-              <div key={step.num} className="flex items-start gap-3 p-2 rounded-lg bg-gray-50">
-                <div className="w-7 h-7 rounded-full bg-[#FF6B35] text-white flex items-center justify-center font-bold text-sm shrink-0">
-                  {step.num}
+          <div className="space-y-4 py-2">
+            {/* What this is */}
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this screen is for:</strong> Every parcel in your warehouse moves through seven stages. This screen shows you, in real time, exactly how many parcels are in each stage, how long they have been there, and what needs to happen next. You cannot do the actual work here — you do that in the specialized modules (Inventory, Outbound, Returns, Payments). What you do here is <strong>see the whole picture at once</strong>, find stuck parcels, and jump straight to where you need to act.
+              </p>
+            </div>
+
+            {/* The 7 stages */}
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Seven Stages a Parcel Moves Through</p>
+              <div className="space-y-2">
+                {[
+                  { num: 1, title: 'Intake', color: 'bg-blue-500', desc: 'Two things happen here. First, stock arrives from merchants and needs to be put away on shelves (received → put away → stored). Second, new orders come in from your store or app and need to pass risk validation before they can be picked (pending → released). Both show in the Intake tab.' },
+                  { num: 2, title: 'Sort & Pack', color: 'bg-orange-500', desc: 'Orders that passed intake validation are released to the pick floor. A picker collects the items from shelves (released → picking → picked). Then a packer boxes them and seals the package (packing → packed).' },
+                  { num: 3, title: 'Staging', color: 'bg-purple-500', desc: 'Packed parcels sit at the outbound dock, waiting for a rider to be assigned. Once assigned, they move to Dispatch. If no rider is assigned, they stay here.' },
+                  { num: 4, title: 'Dispatch', color: 'bg-yellow-500', desc: 'A rider has been assigned their list of parcels (a runsheet). They are about to leave the warehouse. This is the handoff point between warehouse and delivery.' },
+                  { num: 5, title: 'In Transit', color: 'bg-cyan-500', desc: 'The rider is on the road, driving to each customer. You can track which parcels are out and which driver has them.' },
+                  { num: 6, title: 'Delivered', color: 'bg-green-600', desc: 'The customer received the parcel. If it was a Cash on Delivery order, the rider collected the cash. That cash needs to be banked (see Payments).' },
+                  { num: 7, title: 'Returns', color: 'bg-red-500', desc: 'A customer returned a parcel, or a delivery failed. These need inspection and a decision: restock, return to vendor, or dispose.' },
+                ].map(step => (
+                  <div key={step.num} className="flex items-start gap-3 p-2.5 rounded-lg bg-gray-50">
+                    <div className={`w-7 h-7 rounded-full ${step.color} text-white flex items-center justify-center font-bold text-sm shrink-0`}>
+                      {step.num}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900">{step.title}</p>
+                      <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{step.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* How to use this screen */}
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Screen</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>1. The big search bar at the top.</strong> Type anything you remember about an order — a product name like "bread", a customer name like "akinyi", a merchant name, or an order ID like "DS-014". The dropdown shows only active orders (not delivered or cancelled), with their current stage shown inline. Orders that match your search are highlighted in light blue. Click any order to see its full status in the panel below the search bar.
+                  </p>
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{step.title}</p>
-                  <p className="text-xs text-gray-500">{step.desc}</p>
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                  <p className="text-xs text-orange-900 leading-relaxed">
+                    <strong>2. The "Order Status" panel.</strong> After you pick an order from search, this panel shows exactly where that order is right now — the stage, how long it has been there, whether it is stuck past the threshold, who the driver is, and the money involved. Use the "Open in →" link to jump straight to the module where the actual work happens.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>3. The station tabs (Intake, Sort & Pack, Staging, Dispatch, In Transit, Delivered, Returns).</strong> Click any tab to see every parcel currently in that stage. Each tab shows a count and the average time parcels have been sitting there. If a station has an orange "bottleneck" badge, parcels have been stuck too long — that stage needs attention.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>4. The date range filter (top right).</strong> "Today + In-flight" is the default — it shows today's activity plus anything still stuck in a stage from previous days. Switch to "7 days", "30 days", or "All history" to look further back. Use "All history" if you are hunting for an order that was never delivered and has gone missing.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                  <p className="text-xs text-red-900 leading-relaxed">
+                    <strong>5. The right rail (red and orange panels).</strong> This is where problems surface. Red panels mean something needs attention now: failed deliveries, unresolved shrinkage, pending COD cash, or late bankings (drivers with unbanked cash older than 24 hours). Click "Remind" on a late banking to log a call reminder for the office team. Click "Fix →" or "Verify →" to jump to the module where you can resolve it.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>6. The supervisor overview (bottom section).</strong> A read-only summary of the day's flow: KPIs, a funnel chart showing how parcels moved through stages, and the "Today" headline in plain English. You cannot take action from here — it is for understanding the state of the warehouse at a glance.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>7. Close Day (top right).</strong> At the end of the day, the supervisor clicks this to finalize. The system checks that no parcels are unaccounted for, no cash is unbanked, and no orders are stuck in the pipeline. If everything is clear, it stamps a snapshot of the day's summary into the audit log for historical comparison. Closing does not freeze records — late activity continues and carries over naturally.
+                  </p>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
 
-            <div className="space-y-2">
-            <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-              <p className="text-xs text-blue-800">
-                <strong>The search bar at the top</strong> finds any order by what you remember about it. a product name like "bread", a customer like "akinyi", a merchant like "farmers", or an order ID like "DS-014". The dropdown shows only active orders, with their stage inline. Orders that match your search are highlighted in light blue; other orders from the same product show as context.
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
-              <p className="text-xs text-orange-800">
-                <strong>The "Order Status" panel</strong> shows the stage of whichever order you picked from the search. Use the "Open in →" link to jump to the module where the actual work happens (sorting, dispatching, etc.).
-              </p>
-            </div>
-            <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-              <p className="text-xs text-gray-600">
-                <strong>The supervisor overview below</strong> is for viewing the state of the warehouse. It shows KPIs, station queues, riders, and pending cash. but you can't take actions from here. To act, use the "Order Status" panel or the sidebar.
+            {/* The differentiator */}
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most warehouse systems make you open five different screens to find out what is happening today — one for inbound, one for orders, one for dispatch, one for drivers, one for cash. By the time you have checked all five, the situation has changed. This screen brings every stage into one view, updates every 30 seconds, and surfaces problems automatically. You spend your time acting, not searching.
               </p>
             </div>
           </div>
@@ -1702,7 +1900,7 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
               Close Day. {new Date().toLocaleDateString('en-UG')}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Closing the day finalizes today's operations. All parcels must be delivered, returned, or staged. All driver COD must be banked.
+              Closing the day finalizes today's operations. All parcels must be delivered, returned, or staged. All driver COD must be banked. No orders can be stuck in the pick/pack pipeline. No unresolved shrinkage.
               <br />
               <span className="text-[11px] text-gray-400 mt-1 block">
                 Current time: {new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}, {' '}{data.totals.outboundToday} orders processed today, {' '}{data.stations.delivered.count} delivered
@@ -1741,6 +1939,42 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
                   </p>
                   <p className="text-xs text-orange-700 mt-1">
                     Verify them in COD Reconciliation before closing.
+                  </p>
+                </div>
+              )}
+              {dayCloseData.blockers.pipelineOrders && dayCloseData.blockers.pipelineOrders.length > 0 && (
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
+                  <p className="text-sm font-medium text-amber-900 mb-1">
+                    ⚠ {dayCloseData.blockers.pipelineOrders.length} orders still in the pipeline
+                  </p>
+                  <p className="text-xs text-amber-700 mb-2">
+                    Orders still being picked, packed, or staged. These will carry over to the next day if you close now.
+                  </p>
+                  <div className="max-h-24 overflow-y-auto">
+                    {dayCloseData.blockers.pipelineOrders.slice(0, 10).map((p, idx) => {
+                      const id = String(p.orderNumber || p.outboundId || '')
+                      const status = String(p.status || '')
+                      return (
+                        <p key={idx} className="text-[11px] text-amber-700 font-mono">
+                          {id} ({status})
+                        </p>
+                      )
+                    })}
+                    {dayCloseData.blockers.pipelineOrders.length > 10 && (
+                      <p className="text-[10px] text-amber-600 italic mt-1">
+                        + {dayCloseData.blockers.pipelineOrders.length - 10} more
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+              {dayCloseData.blockers.pendingShrinkage && dayCloseData.blockers.pendingShrinkage.length > 0 && (
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+                  <p className="text-sm font-medium text-orange-900">
+                    ⚠ {dayCloseData.blockers.pendingShrinkage.length} unresolved shrinkage records
+                  </p>
+                  <p className="text-xs text-orange-700 mt-1">
+                    Resolve or acknowledge them in Returns → Shrinkage before closing.
                   </p>
                 </div>
               )}

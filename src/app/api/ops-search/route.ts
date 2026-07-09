@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { requireAuth } from '@/lib/auth-api'
 
 /**
  * Ops Search API
@@ -68,13 +69,16 @@ const STALE_THRESHOLDS: Record<string, number> = {
 // Map an outbound status to a station key + human label.
 function statusToStage(status: string): { stageKey: string; stageLabel: string } {
   switch (status) {
-    case 'pending':
+    case 'released':
+      return { stageKey: 'sort', stageLabel: 'Released to Floor' }
     case 'picking':
     case 'picked':
     case 'packing':
       return { stageKey: 'sort', stageLabel: 'Sort & Pack' }
     case 'packed':
       return { stageKey: 'stage', stageLabel: 'Staging' }
+    case 'staged':
+      return { stageKey: 'stage', stageLabel: 'Staged at Dock' }
     case 'dispatched':
       return { stageKey: 'dispatch', stageLabel: 'Dispatch' }
     case 'delivered':
@@ -230,6 +234,11 @@ function activeOrderClause(todayStart: Date) {
 
 export async function GET(req: NextRequest) {
   try {
+    // Auth check — ops-search exposes customer names, contacts, and addresses.
+    // Must not be accessible without authentication.
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
+
     const { searchParams } = new URL(req.url)
     const q = (searchParams.get('q') || '').trim().toLowerCase()
 
