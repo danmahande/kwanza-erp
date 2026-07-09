@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Store, CreditCard, Users, Package, ArrowUpRight,
   RotateCcw, UserCog, Truck, Settings, LogOut, Menu, X,
-  ChevronRight, ClipboardList, ShieldAlert,
+  ChevronRight, ClipboardList, ShieldAlert, Navigation,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 
@@ -24,6 +24,7 @@ import CustomersModule from '@/components/modules/CustomersModule'
 import ProductsModule from '@/components/modules/ProductsModule'
 import InventoryParentModule from '@/components/modules/InventoryParentModule'
 import OutboundParentModule from '@/components/modules/OutboundParentModule'
+import RunsheetModule from '@/components/modules/RunsheetModule'
 import ReturnsParentModule from '@/components/modules/ReturnsParentModule'
 import RiskModule from '@/components/modules/RiskModule'
 import UsersModule from '@/components/modules/UsersModule'
@@ -31,7 +32,7 @@ import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
 import AuditLogModule from '@/components/modules/AuditLogModule'
 
-type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'risk' | 'drivers' | 'users' | 'settings' | 'audit_log'
+type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'runsheets' | 'returns' | 'risk' | 'drivers' | 'users' | 'settings' | 'audit_log'
 
 interface NavItem {
   key: ModuleKey
@@ -61,6 +62,7 @@ const navItems: NavItem[] = [
   { key: 'products', label: 'Products', icon: Package, section: 'Receiving' },
   { key: 'inventory', label: 'Inventory', icon: Package, section: 'Warehouse' },
   { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Warehouse' },
+  { key: 'runsheets', label: 'Runsheets', icon: Navigation, section: 'Warehouse' },
   { key: 'returns', label: 'Returns', icon: RotateCcw, section: 'Warehouse' },
   { key: 'risk', label: 'Risk & Fraud', icon: ShieldAlert, section: 'Warehouse' },
   { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Delivery' },
@@ -80,6 +82,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType<{ onNavigate?: (mo
   products: ProductsModule,
   inventory: InventoryParentModule,
   outbound: OutboundParentModule,
+  runsheets: RunsheetModule,
   returns: ReturnsParentModule,
   risk: RiskModule,
   drivers: DriversModule,

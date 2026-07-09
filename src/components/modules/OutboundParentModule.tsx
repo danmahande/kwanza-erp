@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import {
   Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
   AlertTriangle, ChevronRight, X, Inbox, Upload, Layers, ShieldAlert,
-  HelpCircle, ClipboardList,
+  HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -17,7 +17,6 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
-import RunsheetModule from '@/components/modules/RunsheetModule'
 
 // ── Types ──
 interface OutboundRecord {
@@ -140,7 +139,11 @@ function riskScoreColor(score: number): string {
   return 'text-green-600'
 }
 
-export default function OutboundParentModule() {
+interface OutboundParentModuleProps {
+  onNavigate?: (module: string) => void
+}
+
+export default function OutboundParentModule({ onNavigate }: OutboundParentModuleProps = {}) {
   const [data, setData] = useState<OutboundRecord[]>([])
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [products, setProducts] = useState<Product[]>([])
@@ -150,7 +153,7 @@ export default function OutboundParentModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<OutboundRecord | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
-  const [activeTab, setActiveTab] = useState<'intake' | 'floor' | 'runsheets'>('intake')
+  const [activeTab, setActiveTab] = useState<'intake' | 'floor'>('intake')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [helpOpen, setHelpOpen] = useState(false)
   // Risk scores for pending orders — fetched from /api/risk/intake-scores
@@ -401,20 +404,6 @@ export default function OutboundParentModule() {
           )}
         </button>
         <button
-          onClick={() => setActiveTab('runsheets')}
-          className={`px-4 py-2 text-xs font-semibold border-b-2 transition-colors flex items-center gap-1.5 ${
-            activeTab === 'runsheets' ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          <ClipboardList size={12} />
-          Runsheets
-          {laneData[3].items.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700 text-[9px] font-mono font-bold">
-              {laneData[3].items.length}
-            </span>
-          )}
-        </button>
-        <button
           onClick={() => setHelpOpen(true)}
           className="ml-auto px-3 py-2 text-xs font-medium text-gray-400 hover:text-gray-600 flex items-center gap-1"
         >
@@ -643,7 +632,7 @@ export default function OutboundParentModule() {
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   if (action.toStatus === null) {
-                                    setActiveTab('runsheets')
+                                    onNavigate?.('runsheets')
                                   } else {
                                     handleTransition(item, action.toStatus)
                                   }
@@ -742,11 +731,6 @@ export default function OutboundParentModule() {
             </div>
           )}
         </>
-      )}
-
-      {/* ── RUNSHEETS TAB ── */}
-      {activeTab === 'runsheets' && (
-        <RunsheetModule />
       )}
 
       {/* Loading */}
@@ -874,7 +858,7 @@ export default function OutboundParentModule() {
                   </Button>
                 )}
                 {selectedRecord.status === 'staged' && (
-                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setDetailOpen(false); setActiveTab('runsheets') }}>
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setDetailOpen(false); onNavigate?.('runsheets') }}>
                     Assign Rider
                   </Button>
                 )}
@@ -1044,7 +1028,7 @@ export default function OutboundParentModule() {
               How the Outbound Module Works
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The Outbound module is where every order lives from the moment it enters your system to the moment it reaches the customer. It has three tabs that mirror the three phases of fulfillment: validating incoming orders, doing the warehouse work, and dispatching to riders. Here is how to use each one.
+              The Outbound module is where every order lives from the moment it enters your system to the moment it is ready for dispatch. It has two tabs: validating incoming orders and doing the warehouse work. When orders are staged and ready for a rider, you switch to the Runsheets module (its own entry in the sidebar, right below Outbound) to assign drivers and track deliveries. Here is how to use each part.
             </AlertDialogDescription>
           </AlertDialogHeader>
 
@@ -1056,9 +1040,9 @@ export default function OutboundParentModule() {
               </p>
             </div>
 
-            {/* The 3 tabs */}
+            {/* The 2 tabs + Runsheets module */}
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Three Tabs</p>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Two Tabs + Runsheets Module</p>
               <div className="space-y-2">
                 <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
                   <p className="text-xs text-orange-900 leading-relaxed">
@@ -1067,12 +1051,12 @@ export default function OutboundParentModule() {
                 </div>
                 <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
                   <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>2. Fulfillment Floor.</strong> This shows four lanes that orders move through: TO PICK (released, waiting for a picker → picking → picked), TO PACK (picked → packing → packed), TO STAGE (packed → staged at the dock), and TO DISPATCH (staged, waiting for a rider). Click any order to see its details. Each lane has an action button that advances the order to the next stage. When an order reaches TO DISPATCH, the button says "Assign Rider" and switches you to the Runsheets tab.
+                    <strong>2. Fulfillment Floor.</strong> This shows four lanes that orders move through: TO PICK (released, waiting for a picker → picking → picked), TO PACK (picked → packing → packed), TO STAGE (packed → staged at the dock), and TO DISPATCH (staged, waiting for a rider). Click any order to see its details. Each lane has an action button that advances the order to the next stage. When an order reaches TO DISPATCH, the button says "Assign Rider" and takes you to the Runsheets module.
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-yellow-50 border border-yellow-100">
                   <p className="text-xs text-yellow-900 leading-relaxed">
-                    <strong>3. Runsheets.</strong> This is where you assign riders to staged orders and track deliveries. Create a runsheet by selecting staged orders, choosing a rider, and assigning a vehicle number. You can scan order barcodes to add them quickly. Once a runsheet is created, the rider takes their list and leaves. When they return, you mark each stop as delivered (with COD amount collected) or failed (with a reason and reschedule date). Failed stops track attempt counts automatically — after 5 attempts, the order is permanently failed.
+                    <strong>3. Runsheets module (separate sidebar entry, right below Outbound).</strong> This is where you assign riders to staged orders and track deliveries. Create a runsheet by selecting staged orders, choosing a rider, and assigning a vehicle number. You can scan order barcodes to add them quickly. Once a runsheet is created, the rider takes their list and leaves. When they return, you mark each stop as delivered (with COD amount collected) or failed (with a reason and reschedule date). Failed stops track attempt counts automatically — after 5 attempts, the order is permanently failed.
                   </p>
                 </div>
               </div>
