@@ -1,18 +1,12 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
-  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import {
   Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
-  AlertTriangle, ChevronRight, Printer, Download, Trash2, X,
-  Inbox, Upload, Layers,
+  AlertTriangle, ChevronRight, X, Inbox, Upload, Layers, ShieldAlert,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -44,6 +38,15 @@ interface OutboundRecord {
   createdAt: string
 }
 
+// Risk score as returned by /api/risk/intake-scores
+interface IntakeRiskScore {
+  outboundId: string
+  score: number
+  decision: 'auto_release' | 'spot_check' | 'review' | 'blocked'
+  reasons: Array<{ rule: string; points: number; detail: string }>
+  scoredAt: string
+}
+
 interface Merchant {
   id: string; merchantId: string; businessName: string; deliveryType: string | null
 }
@@ -52,12 +55,8 @@ interface Product {
   id: string; productId: string; productLabel: string; unitSellingPrice: number; merchantId: string; merchantName: string
 }
 
-type ValidationFlag = 'pass' | 'warn' | 'fail'
-type FraudRisk = 'low' | 'medium' | 'high'
-
 // ── Lane config ──
-// 4 lanes covering the full post-intake floor flow:
-// RELEASED → PICKING (lane 1) → PICKED → PACKING (lane 2) → PACKED (lane 3, stage) → STAGED (lane 4, dispatch)
+// 4 lanes covering the post-intake floor flow.
 // 'pending' (NEW) orders live in the Intake Inbox tab, not in these lanes.
 const LANES = [
   {
@@ -108,49 +107,31 @@ const LANES = [
   },
 ] as const
 
-// ── Validation heuristics ──
-// In a real implementation these would come from a fraud engine + address
-// validation service + inventory check. Here we compute them client-side
-// from the order fields themselves so the Intake Inbox UI is functional.
-function computeValidationFlags(r: OutboundRecord): {
-  address: ValidationFlag
-  payment: ValidationFlag
-  stock: ValidationFlag
-  fraud: FraudRisk
-} {
-  // Address: must exist and be reasonably specific (8+ chars suggests more than just a town name)
-  const address: ValidationFlag =
-    (!r.customerAddress || r.customerAddress.trim().length < 8) ? 'fail' : 'pass'
-
-  // Payment: if saleAmount is null/zero, payment was never recorded → warn
-  // (COD orders typically still record the expected saleAmount; null means data gap)
-  const payment: ValidationFlag =
-    (r.saleAmount == null || r.saleAmount <= 0) ? 'warn' : 'pass'
-
-  // Stock: assume pass for demo. In production, check product.currentStock >= qty
-  const stock: ValidationFlag = 'pass'
-
-  // Fraud heuristic: high qty + high value = elevated risk.
-  // Real engine would also weigh: new customer, address mismatch with phone area code,
-  // device fingerprint reuse, promo code abuse, return-history of buyer, etc.
-  const amt = r.saleAmount || 0
-  let fraud: FraudRisk = 'low'
-  if (r.qty >= 5 && amt >= 500000) fraud = 'high'
-  else if (r.qty >= 3 || amt >= 200000) fraud = 'medium'
-
-  return { address, payment, stock, fraud }
+// ── Risk decision badge (for Intake Inbox display) ──
+function riskBadgeClass(decision: string): string {
+  switch (decision) {
+    case 'auto_release': return 'bg-green-100 text-green-700 border-green-200'
+    case 'spot_check':   return 'bg-amber-100 text-amber-700 border-amber-200'
+    case 'review':       return 'bg-red-100 text-red-700 border-red-200'
+    case 'blocked':      return 'bg-black text-white border-black'
+    default:             return 'bg-gray-100 text-gray-500 border-gray-200'
+  }
 }
 
-function fraudBadgeClass(risk: FraudRisk): string {
-  return risk === 'high' ? 'bg-red-100 text-red-700 border-red-200'
-       : risk === 'medium' ? 'bg-amber-100 text-amber-700 border-amber-200'
-       : 'bg-green-100 text-green-700 border-green-200'
+function riskLabel(decision: string): string {
+  switch (decision) {
+    case 'auto_release': return 'PASS'
+    case 'spot_check':   return 'SPOT'
+    case 'review':       return 'REVIEW'
+    case 'blocked':      return 'BLOCKED'
+    default:             return 'PENDING'
+  }
 }
 
-function flagIcon(flag: ValidationFlag) {
-  return flag === 'pass' ? <CheckCircle2 size={11} className="text-green-600 inline" />
-       : flag === 'warn' ? <AlertTriangle size={11} className="text-amber-500 inline" />
-       : <X size={11} className="text-red-500 inline" />
+function riskScoreColor(score: number): string {
+  if (score >= 70) return 'text-red-600'
+  if (score >= 30) return 'text-amber-600'
+  return 'text-green-600'
 }
 
 export default function OutboundParentModule() {
@@ -165,6 +146,8 @@ export default function OutboundParentModule() {
   const [showCompleted, setShowCompleted] = useState(false)
   const [activeTab, setActiveTab] = useState<'intake' | 'floor'>('intake')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  // Risk scores for pending orders — fetched from /api/risk/intake-scores
+  const [riskScores, setRiskScores] = useState<Map<string, IntakeRiskScore>>(new Map())
   const [form, setForm] = useState({
     merchantId: '', productId: '', customerName: '', customerContact: '',
     customerEmail: '', customerAddress: '', qty: '1', paymentMethod: 'Cash', createdBy: 'admin',
@@ -176,6 +159,15 @@ export default function OutboundParentModule() {
       .then(r => r.json())
       .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
       .catch(() => { setLoading(false); toast.error('Failed to load orders') })
+    // Also fetch risk scores for pending orders (used by Intake Inbox)
+    fetch('/api/risk/intake-scores')
+      .then(r => r.json())
+      .then(d => {
+        const map = new Map<string, IntakeRiskScore>()
+        for (const s of (d.scores || [])) map.set(s.outboundId, s)
+        setRiskScores(map)
+      })
+      .catch(() => { /* non-blocking — risk is optional */ })
   }, [])
 
   useEffect(() => {
@@ -193,7 +185,7 @@ export default function OutboundParentModule() {
       )
     : data
 
-  // ── Intake inbox: orders still in 'pending' (NEW) status, awaiting validation/release ──
+  // ── Intake inbox: orders still in 'pending' status, awaiting validation/release ──
   const intakeItems = filteredData.filter(r => r.status === 'pending')
 
   // ── Lane data ──
@@ -229,19 +221,21 @@ export default function OutboundParentModule() {
   }
 
   // ── Bulk release from intake inbox to pick floor ──
-  // Blocks orders with failed address check or high fraud risk — those need manager override
+  // Blocks orders with 'review' or 'blocked' risk decisions — those need manager override
+  // via the Risk module.
   const handleBulkRelease = async () => {
     const toRelease = intakeItems.filter(r => selectedIds.has(r.id))
     if (toRelease.length === 0) {
       toast.error('No orders selected')
       return
     }
+    // Check risk decisions for held orders
     const blocked = toRelease.filter(r => {
-      const f = computeValidationFlags(r)
-      return f.address === 'fail' || f.fraud === 'high'
+      const score = riskScores.get(r.id)
+      return score && (score.decision === 'review' || score.decision === 'blocked')
     })
     if (blocked.length > 0) {
-      toast.error(`${blocked.length} order(s) blocked: failed address check or high fraud risk. Review individually.`)
+      toast.error(`${blocked.length} order(s) are held for risk review. Approve them in the Risk module first.`)
       return
     }
     let ok = 0
@@ -433,22 +427,20 @@ export default function OutboundParentModule() {
                       <th className="text-left px-3 py-2 font-semibold">Product</th>
                       <th className="text-right px-3 py-2 font-semibold">Qty</th>
                       <th className="text-right px-3 py-2 font-semibold">Amount</th>
-                      <th className="text-center px-3 py-2 font-semibold">Address</th>
-                      <th className="text-center px-3 py-2 font-semibold">Payment</th>
-                      <th className="text-center px-3 py-2 font-semibold">Stock</th>
-                      <th className="text-center px-3 py-2 font-semibold">Fraud</th>
+                      <th className="text-center px-3 py-2 font-semibold">Risk Score</th>
+                      <th className="text-center px-3 py-2 font-semibold">Decision</th>
                       <th className="text-right px-3 py-2 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {intakeItems.map(item => {
-                      const flags = computeValidationFlags(item)
-                      const isBlocked = flags.address === 'fail' || flags.fraud === 'high'
+                      const score = riskScores.get(item.id)
+                      const isHeld = score && (score.decision === 'review' || score.decision === 'blocked')
                       const selected = selectedIds.has(item.id)
                       return (
                         <tr
                           key={item.id}
-                          className={`border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 transition-colors ${selected ? 'bg-orange-50' : ''}`}
+                          className={`border-b border-gray-50 last:border-0 cursor-pointer hover:bg-gray-50 transition-colors ${selected ? 'bg-orange-50' : ''} ${isHeld ? 'bg-red-50/40' : ''}`}
                           onClick={() => openDetail(item)}
                         >
                           <td className="px-2 py-2" onClick={(e) => e.stopPropagation()}>
@@ -483,17 +475,29 @@ export default function OutboundParentModule() {
                               <span className="font-mono text-[11px] font-semibold text-gray-700">{formatCurrencyCompact(item.saleAmount)}</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-center">{flagIcon(flags.address)}</td>
-                          <td className="px-3 py-2 text-center">{flagIcon(flags.payment)}</td>
-                          <td className="px-3 py-2 text-center">{flagIcon(flags.stock)}</td>
                           <td className="px-3 py-2 text-center">
-                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${fraudBadgeClass(flags.fraud)}`}>
-                              {flags.fraud.toUpperCase()}
-                            </span>
+                            {score ? (
+                              <span className={`font-mono text-sm font-bold ${riskScoreColor(score.score)}`}>
+                                {score.score}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400 italic">scoring…</span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            {score ? (
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${riskBadgeClass(score.decision)}`}>
+                                {riskLabel(score.decision)}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-gray-400">—</span>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                            {isBlocked ? (
-                              <span className="text-[10px] text-red-600 font-semibold">Review</span>
+                            {isHeld ? (
+                              <span className="text-[10px] text-red-600 font-semibold inline-flex items-center gap-1">
+                                <ShieldAlert size={10} /> Held
+                              </span>
                             ) : (
                               <button
                                 onClick={() => handleTransition(item, 'released')}
@@ -514,10 +518,19 @@ export default function OutboundParentModule() {
 
           {/* Validation legend */}
           <div className="flex items-center gap-4 text-[10px] text-gray-500 px-2 flex-wrap">
-            <span className="flex items-center gap-1"><CheckCircle2 size={11} className="text-green-600" /> Pass</span>
-            <span className="flex items-center gap-1"><AlertTriangle size={11} className="text-amber-500" /> Warn (auto-release, spot-check later)</span>
-            <span className="flex items-center gap-1"><X size={11} className="text-red-500" /> Fail (blocked from release)</span>
-            <span className="ml-auto">High fraud risk orders require manager approval</span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded bg-green-500" /> Pass (0–29)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded bg-amber-500" /> Spot-check (30–69)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded bg-red-500" /> Review (70–99)
+            </span>
+            <span className="flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded bg-black" /> Blocked (100)
+            </span>
+            <span className="ml-auto">Held orders require manager approval in the Risk module</span>
           </div>
         </div>
       )}
@@ -846,34 +859,37 @@ export default function OutboundParentModule() {
               </span>
             </div>
 
-            {/* Validation flags (only show for pending/intake) */}
+            {/* Risk score (only for pending/intake orders) */}
             {selectedRecord.status === 'pending' && (() => {
-              const flags = computeValidationFlags(selectedRecord)
+              const score = riskScores.get(selectedRecord.id)
+              if (!score) return null
               return (
                 <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Intake Validation</p>
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    <div>
-                      <div className="text-[10px] text-gray-500 mb-1">Address</div>
-                      <div>{flagIcon(flags.address)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-500 mb-1">Payment</div>
-                      <div>{flagIcon(flags.payment)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-500 mb-1">Stock</div>
-                      <div>{flagIcon(flags.stock)}</div>
-                    </div>
-                    <div>
-                      <div className="text-[10px] text-gray-500 mb-1">Fraud</div>
-                      <div>
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${fraudBadgeClass(flags.fraud)}`}>
-                          {flags.fraud.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Risk Assessment</p>
+                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold border ${riskBadgeClass(score.decision)}`}>
+                      {riskLabel(score.decision)}
+                    </span>
                   </div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className={`text-2xl font-mono font-bold ${riskScoreColor(score.score)}`}>
+                      {score.score}
+                    </span>
+                    <span className="text-[10px] text-gray-500">/ 100</span>
+                  </div>
+                  {score.reasons.length > 0 && (
+                    <div className="space-y-1.5">
+                      {score.reasons.map((r, i) => (
+                        <div key={i} className="flex items-start gap-2 text-[11px]">
+                          <span className="font-mono font-bold text-red-600 shrink-0 w-8">+{r.points}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-semibold text-gray-900">{r.rule}</div>
+                            <div className="text-gray-600">{r.detail}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })()}

@@ -176,6 +176,23 @@ export async function POST(req: NextRequest) {
       } else if (toStatus === 'failed' || toStatus === 'returned') {
         await notifyOrderFailed(custName, custContact, orderNum, reason)
       }
+
+      // Risk Module hook: update CustomerRiskProfile on delivery outcome.
+      // - 'delivered' → increment codDelivered90d (positive signal)
+      // - 'failed' / 'returned' → increment codRefusals90d (negative signal)
+      // These cached counters drive the fraud score on future orders from this customer.
+      // Non-blocking — failure here doesn't roll back the workflow transition.
+      if (['delivered', 'failed', 'returned'].includes(toStatus)) {
+        try {
+          const { updateCustomerProfile } = await import('@/lib/risk-db')
+          const event = toStatus === 'delivered' ? 'order_delivered'
+                      : toStatus === 'failed' ? 'order_failed'
+                      : 'order_returned'
+          await updateCustomerProfile(custContact, event, (record as Record<string, unknown>).saleAmount as number || null)
+        } catch (profileErr) {
+          console.error('CustomerRiskProfile update failed (non-blocking):', profileErr)
+        }
+      }
     }
 
     // Side-effect: cascade status to linked records

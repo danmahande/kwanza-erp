@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Store, CreditCard, Users, Package, ArrowUpRight,
   RotateCcw, UserCog, Truck, Settings, LogOut, Menu, X,
-  ChevronRight, ClipboardList,
+  ChevronRight, ClipboardList, ShieldAlert,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 
@@ -25,12 +25,13 @@ import ProductsModule from '@/components/modules/ProductsModule'
 import InventoryParentModule from '@/components/modules/InventoryParentModule'
 import OutboundParentModule from '@/components/modules/OutboundParentModule'
 import ReturnsParentModule from '@/components/modules/ReturnsParentModule'
+import RiskModule from '@/components/modules/RiskModule'
 import UsersModule from '@/components/modules/UsersModule'
 import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
 import AuditLogModule from '@/components/modules/AuditLogModule'
 
-type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'drivers' | 'users' | 'settings' | 'audit_log'
+type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'returns' | 'risk' | 'drivers' | 'users' | 'settings' | 'audit_log'
 
 interface NavItem {
   key: ModuleKey
@@ -61,6 +62,7 @@ const navItems: NavItem[] = [
   { key: 'inventory', label: 'Inventory', icon: Package, section: 'Warehouse' },
   { key: 'outbound', label: 'Outbound', icon: ArrowUpRight, section: 'Warehouse' },
   { key: 'returns', label: 'Returns', icon: RotateCcw, section: 'Warehouse' },
+  { key: 'risk', label: 'Risk & Fraud', icon: ShieldAlert, section: 'Warehouse' },
   { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Delivery' },
   { key: 'customers', label: 'Customers', icon: Users, section: 'Delivery' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Finance' },
@@ -79,6 +81,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType<{ onNavigate?: (mo
   inventory: InventoryParentModule,
   outbound: OutboundParentModule,
   returns: ReturnsParentModule,
+  risk: RiskModule,
   drivers: DriversModule,
   users: UsersModule,
   settings: SettingsModule,

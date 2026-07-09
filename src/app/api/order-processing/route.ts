@@ -206,7 +206,7 @@ export async function POST(req: NextRequest) {
     // Spawn the linked OutboundRecord (cascade).
     // Non-blocking try/catch — if the OutboundRecord creation fails, the order still exists so the user can recover.
     try {
-      await db.outboundRecord.create({
+      const newOutbound = await db.outboundRecord.create({
         data: {
           outboundId,
           orderNumber,
@@ -231,6 +231,29 @@ export async function POST(req: NextRequest) {
           status: deliveryType === 'self-delivery' ? 'self_delivery' : 'pending',
         },
       })
+
+      // Risk Module hook: score the order on creation.
+      // Non-blocking — if scoring fails, the order is still saved (it just
+      // won't have a RiskScore until manually re-scored). Scoring involves
+      // DB queries for customer history, address reuse, blocklist match, etc.
+      // Cash = COD path; everything else (M-Pesa, Airtel Money, Bank) = prepaid.
+      if (deliveryType !== 'self-delivery') {
+        const paymentPath = (body.paymentMethod === 'Cash' || !body.paymentMethod) ? 'cod' : 'prepaid'
+        try {
+          // Update customer risk profile (creates if first-time)
+          const { updateCustomerProfile } = await import('@/lib/risk-db')
+          await updateCustomerProfile(body.customerContact || '', 'order_created', saleAmount)
+          // Trigger scoring via internal API call (preserves auth context)
+          const origin = new URL(req.url).origin
+          fetch(`${origin}/api/risk/score`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Cookie': req.headers.get('cookie') || '' },
+            body: JSON.stringify({ outboundId: newOutbound.id, paymentPath }),
+          }).catch(err => console.error('Risk score trigger failed (non-blocking):', err))
+        } catch (riskErr) {
+          console.error('Risk profile update failed (non-blocking):', riskErr)
+        }
+      }
 
       // Workflow 1 cascade: decrement storage liability for these units (FIFO)
       // Only relevant if the merchant stores stock with us (drop-ship on-demand

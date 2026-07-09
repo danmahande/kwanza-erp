@@ -824,3 +824,124 @@ model OrderLineItem {
   @@index([orderNumber])
   @@index([productId])
 }
+// ── RISK MODULE ───────────────────────────────────────────────────────────────
+// Fraud detection & order risk scoring. Standalone subsystem — other modules
+// (Outbound, Order Processing, After-Sales) subscribe to it via /api/risk/*.
+// All engine parameters are stored in RiskSetting (editable from the UI), so
+// the scoring logic can be tuned without code changes.
+
+/// Manual blocklist — phones and addresses that should never pass intake.
+/// Soft-delete via isActive=false so we keep the audit trail.
+model FraudBlocklist {
+  id        String   @id @default(cuid())
+  /// Normalized phone (digits only) or null if address-only entry
+  phone     String?  @unique
+  /// Raw address text (lowercased for matching)
+  address   String?
+  /// Why this entry was added (e.g. "3 COD refusals in 90 days")
+  reason    String
+  /// Who added the entry
+  addedBy   String
+  addedAt   DateTime @default(now())
+  /// Soft-delete flag — keeps audit trail, excludes from active matching
+  isActive  Boolean  @default(true)
+
+  @@index([address])
+  @@index([isActive])
+}
+
+/// Persisted score for every order that enters the system. One row per scoring
+/// run (re-scores create new rows; latest wins). Includes the full reasons
+/// breakdown so a manager can see exactly why an order was flagged.
+model RiskScore {
+  id               String   @id @default(cuid())
+  /// FK → OutboundRecord.id
+  outboundId       String
+  /// Denormalized for fast lookup without joins
+  customerContact  String
+  customerAddress  String?
+  /// Composite score 0–100
+  score            Int
+  /// 'auto_release' | 'spot_check' | 'review' | 'blocked'
+  decision         String
+  /// JSON-serialized array: [{ rule: string, points: number, detail: string }, ...]
+  /// Stored as String because SQLite doesn't support Json natively.
+  reasons          String
+  /// Bumped when rules change so stale scores are detectable
+  engineVersion    String   @default("1.0.0")
+  /// 'cod' | 'prepaid' — which scoring path was taken
+  paymentPath      String
+  scoredAt         DateTime @default(now())
+
+  @@index([outboundId])
+  @@index([customerContact])
+  @@index([decision])
+  @@index([scoredAt])
+}
+
+/// Manager override on a held order. Append-only — first action wins; later
+/// attempts get "already overridden" error from the API.
+model RiskOverride {
+  id           String   @id @default(cuid())
+  /// FK → OutboundRecord.id
+  outboundId   String
+  /// 'approve' | 'reject'
+  action       String
+  managerName  String
+  /// Optional reason the manager supplied
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@index([outboundId])
+  @@index([createdAt])
+}
+
+/// Cached risk profile per customer (keyed by phone). Updated by hooks when
+/// orders complete, fail, or return. Avoids re-querying the full order history
+/// on every scoring run — scoring becomes O(1) lookup + a few cheap checks.
+model CustomerRiskProfile {
+  /// Phone number (normalized: digits only) is the primary key
+  customerContact       String   @id
+  /// 'retail' | 'wholesale' — wholesale bypasses qty-based signals
+  customerType          String   @default("retail")
+  totalOrders           Int      @default(0)
+  /// Count of failed/returned orders in the rolling window
+  codRefusals90d        Int      @default(0)
+  codDelivered90d       Int      @default(0)
+  /// Distinct shipping addresses this customer has used
+  distinctAddressesUsed Int      @default(0)
+  firstOrderDate        DateTime?
+  lastOrderDate         DateTime?
+  avgAOV                Float    @default(0)
+  /// Cached blocklist flag — kept in sync with FraudBlocklist table
+  isBlocklisted         Boolean  @default(false)
+  updatedAt             DateTime @updatedAt
+}
+
+/// Key-value store for all risk engine parameters. Editable from the UI so
+/// the ops manager can tune thresholds, zones, mule keywords, etc. without
+/// code deploys. Each row is one setting; value is JSON for flexibility.
+///
+/// Seeded on first GET /api/risk/settings if empty (see seedDefaultSettings
+/// in src/lib/risk-engine.ts).
+model RiskSetting {
+  id        String   @id @default(cuid())
+  /// Stable key, e.g. 'zones', 'aov_low', 'cod_refusal_threshold'
+  key       String   @unique
+  /// JSON-serialized value — type depends on key (see SETTING_DEFS in risk-engine.ts)
+  /// Stored as String because SQLite doesn't support Json natively.
+  value     String
+  /// 'thresholds' | 'zones' | 'keywords' | 'roles' | 'meta'
+  category  String
+  /// Human-readable label shown in the settings UI
+  label     String
+  /// 'number' | 'list' | 'select' | 'boolean' — drives the UI input type
+  inputType String
+  /// Optional help text shown under the input
+  helpText  String?
+  /// Who last changed this setting
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+}
