@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
+import { logAudit } from '@/lib/audit'
 
 // GET /api/items — list inventory items with optional filters
 export async function GET(req: NextRequest) {
@@ -29,14 +30,16 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
+      // SQLite doesn't support mode: 'insensitive' — default LIKE is already
+      // case-insensitive for ASCII, so plain contains works.
       where.OR = [
-        { itemId: { contains: search, mode: 'insensitive' } },
-        { productName: { contains: search, mode: 'insensitive' } },
-        { brand: { contains: search, mode: 'insensitive' } },
-        { variant: { contains: search, mode: 'insensitive' } },
-        { outboundId: { contains: search, mode: 'insensitive' } },
-        { inboundId: { contains: search, mode: 'insensitive' } },
-        { merchantName: { contains: search, mode: 'insensitive' } },
+        { itemId: { contains: search } },
+        { productName: { contains: search } },
+        { brand: { contains: search } },
+        { variant: { contains: search } },
+        { outboundId: { contains: search } },
+        { inboundId: { contains: search } },
+        { merchantName: { contains: search } },
       ]
     }
     if (status) where.status = status
@@ -116,6 +119,13 @@ export async function POST(req: NextRequest) {
       created.push(createdItem)
     }
 
+    await logAudit({
+      action: 'ITEMS_CREATED',
+      module: 'inventory',
+      entityId: `${created.length} items`,
+      details: `Created ${created.length} inventory item(s) for inbound ${created[0]?.inboundId || 'unknown'}`,
+    })
+
     return NextResponse.json({ items: created, count: created.length }, { status: 201 })
   } catch (error) {
     console.error('Items create error:', error)
@@ -171,6 +181,13 @@ export async function PUT(req: NextRequest) {
         previousStatus: existing.status,
         newStatus: updated.status,
       },
+    })
+
+    await logAudit({
+      action: 'ITEM_UPDATED',
+      module: 'inventory',
+      entityId: itemId,
+      details: `Status: ${existing.status} → ${updated.status}. Changed: ${Object.keys(updateData).join(', ')}`,
     })
 
     return NextResponse.json({ item: updated })

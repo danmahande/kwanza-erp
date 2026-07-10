@@ -12,6 +12,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Label } from '@/components/ui/label'
 
 // ── Types ──
 interface ItemEvent {
@@ -144,6 +149,52 @@ export default function ItemTrackerModule() {
     fetchAll(searchInput)
   }
 
+  // ── Update item status (DAMAGED, DISPOSED, RETURNED_TO_WAREHOUSE) ──
+  const [updateOpen, setUpdateOpen] = useState(false)
+  const [updateAction, setUpdateAction] = useState<'DAMAGED' | 'DISPOSED' | 'RETURNED_TO_WAREHOUSE' | 'RELOCATE'>('DAMAGED')
+  const [updateReason, setUpdateReason] = useState('')
+  const [newLocation, setNewLocation] = useState('')
+
+  const handleUpdateItem = async () => {
+    if (!item) return
+    const updates: Record<string, unknown> = { performedBy: 'warehouse' }
+    if (updateAction === 'RELOCATE') {
+      if (!newLocation.trim()) {
+        toast.error('New storage location is required')
+        return
+      }
+      updates.storageLocation = newLocation.trim()
+    } else {
+      updates.status = updateAction
+      updates.condition = updateAction === 'DAMAGED' ? 'damaged' : item.condition
+      if (updateAction === 'DISPOSED') {
+        updates.finalOutcome = 'disposed'
+      }
+      if (updateReason) {
+        updates.cancellationReason = updateReason
+      }
+    }
+    try {
+      const res = await fetch('/api/items', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itemId: item.itemId, ...updates }),
+      })
+      if (res.ok) {
+        const d = await res.json()
+        setItem(d.item)
+        toast.success(`Item marked as ${updateAction === 'RELOCATE' ? 'relocated' : updateAction.replace(/_/g, ' ').toLowerCase()}`)
+        setUpdateOpen(false)
+        setUpdateReason('')
+        setNewLocation('')
+      } else {
+        toast.error('Failed to update item')
+      }
+    } catch {
+      toast.error('Failed to update item')
+    }
+  }
+
   // ── Derived Stats ──
   const events = item?.events || []
 
@@ -269,6 +320,49 @@ export default function ItemTrackerModule() {
                 <p className="text-sm font-medium text-red-700 mt-0.5">{item.finalOutcome.replace(/_/g, ' ')}</p>
               </div>
             )}
+
+            {/* Actions — only show for items that are in the warehouse (not delivered/disposed) */}
+            {!['DELIVERED', 'DISPOSED', 'CANCELLED'].includes(item.status) && (
+              <div className="pt-3 border-t border-gray-100">
+                <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Warehouse Actions</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs h-8 text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => { setUpdateAction('DAMAGED'); setUpdateOpen(true) }}
+                  >
+                    <AlertTriangle size={12} className="mr-1" /> Mark Damaged
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs h-8 text-gray-600 border-gray-200 hover:bg-gray-100"
+                    onClick={() => { setUpdateAction('DISPOSED'); setUpdateOpen(true) }}
+                  >
+                    <Trash2 size={12} className="mr-1" /> Dispose
+                  </Button>
+                  {item.status !== 'IN_WAREHOUSE' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-xl text-xs h-8 text-orange-600 border-orange-200 hover:bg-orange-50"
+                      onClick={() => { setUpdateAction('RETURNED_TO_WAREHOUSE'); setUpdateOpen(true) }}
+                    >
+                      <RotateCcw size={12} className="mr-1" /> Return to Warehouse
+                    </Button>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-xl text-xs h-8 text-blue-600 border-blue-200 hover:bg-blue-50"
+                    onClick={() => { setUpdateAction('RELOCATE'); setUpdateOpen(true) }}
+                  >
+                    <MapPin size={12} className="mr-1" /> Relocate
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -343,6 +437,73 @@ export default function ItemTrackerModule() {
             )}
           </div>
         </div>
+
+        {/* ── Update Item Dialog ── */}
+        <AlertDialog open={updateOpen} onOpenChange={setUpdateOpen}>
+          <AlertDialogContent className="rounded-2xl max-w-md">
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                {updateAction === 'DAMAGED' && <><AlertTriangle size={18} className="text-red-500" /> Mark Item as Damaged</>}
+                {updateAction === 'DISPOSED' && <><Trash2 size={18} className="text-gray-500" /> Dispose Item</>}
+                {updateAction === 'RETURNED_TO_WAREHOUSE' && <><RotateCcw size={18} className="text-orange-500" /> Return to Warehouse</>}
+                {updateAction === 'RELOCATE' && <><MapPin size={18} className="text-blue-500" /> Relocate Item</>}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {updateAction === 'DAMAGED' && 'This will mark the item as damaged. The condition will be set to "damaged" and an event will be logged.'}
+                {updateAction === 'DISPOSED' && 'This will mark the item as disposed. This is a final outcome — the item cannot be used again. An event will be logged.'}
+                {updateAction === 'RETURNED_TO_WAREHOUSE' && 'This will mark the item as back in the warehouse. Use this when a delivery failed and the item was returned to storage.'}
+                {updateAction === 'RELOCATE' && 'Move this item to a different storage location. An event will be logged with the previous and new location.'}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+
+            <div className="space-y-3 py-2">
+              {updateAction === 'RELOCATE' ? (
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">New Storage Location <span className="text-red-400">*</span></Label>
+                  <Input
+                    value={newLocation}
+                    onChange={(e) => setNewLocation(e.target.value)}
+                    placeholder="e.g. A-12-B-03"
+                    className="rounded-xl"
+                  />
+                  {item.storageLocation && (
+                    <p className="text-[10px] text-gray-400 mt-1">Current location: {item.storageLocation}</p>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">
+                    Reason / Notes {updateAction === 'DISPOSED' ? <span className="text-red-400">*</span> : <span className="text-gray-400">(optional)</span>}
+                  </Label>
+                  <Input
+                    value={updateReason}
+                    onChange={(e) => setUpdateReason(e.target.value)}
+                    placeholder={updateAction === 'DAMAGED' ? 'e.g. Dropped during handling' : updateAction === 'DISPOSED' ? 'e.g. Expired — disposed per policy' : 'e.g. Customer refused delivery'}
+                    className="rounded-xl"
+                  />
+                </div>
+              )}
+              <div className="p-2 rounded-lg bg-gray-50 text-[10px] text-gray-500">
+                Item: <span className="font-mono font-semibold">{item.itemId}</span> — {item.productName}
+              </div>
+            </div>
+
+            <AlertDialogFooter>
+              <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleUpdateItem}
+                className={`rounded-xl ${
+                  updateAction === 'DAMAGED' ? 'bg-red-600 hover:bg-red-700' :
+                  updateAction === 'DISPOSED' ? 'bg-gray-600 hover:bg-gray-700' :
+                  updateAction === 'RETURNED_TO_WAREHOUSE' ? 'bg-orange-600 hover:bg-orange-700' :
+                  'bg-blue-600 hover:bg-blue-700'
+                } text-white`}
+              >
+                Confirm
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </motion.div>
     )
   }
