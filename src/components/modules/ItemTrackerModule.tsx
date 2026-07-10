@@ -105,11 +105,12 @@ export default function ItemTrackerModule() {
       const res = await fetch(`/api/items?itemId=${encodeURIComponent(query.trim())}&events=true`)
       const data = await res.json()
       if (res.ok && data.item) {
+        // Exact Item ID found — show detail view
         setItem(data.item)
         setItems([])
         setListMode(false)
-      } else if (res.ok) {
-        // No exact Item ID match — either show "not found" or fall back to broad search
+      } else if (res.status === 404) {
+        // Item ID not found — either fall back to broad search or show error
         if (onNotFound) {
           onNotFound()
         } else {
@@ -130,12 +131,16 @@ export default function ItemTrackerModule() {
     if (!query.trim()) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/items?search=${query.trim()}`)
+      const res = await fetch(`/api/items?search=${encodeURIComponent(query.trim())}`)
       const data = await res.json()
       if (res.ok) {
-        setItems(data.items || [])
+        const found = data.items || []
+        setItems(found)
         setItem(null)
         setListMode(true)
+        if (found.length === 0) {
+          toast.info(`No items found matching "${query.trim()}"`)
+        }
       }
     } catch {
       toast.error('Failed to search')

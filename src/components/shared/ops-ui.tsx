@@ -164,10 +164,12 @@ export function OpsHeader({
 
       {/* Search bar */}
       {(searchValue !== undefined || onSearchChange) && (
-        <div className="relative max-w-md">
+        <form
+          className="relative max-w-md"
+          onSubmit={e => { e.preventDefault(); onSearchSubmit?.() }}
+        >
           <button
-            type="button"
-            onClick={onSearchSubmit}
+            type="submit"
             className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#FF6B35] transition-colors"
             title="Search"
           >
@@ -177,10 +179,9 @@ export function OpsHeader({
             placeholder={searchPlaceholder || 'Search...'}
             value={searchValue || ''}
             onChange={e => onSearchChange?.(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') onSearchSubmit?.() }}
             className="pl-7 h-8 text-xs rounded-md"
           />
-        </div>
+        </form>
       )}
     </div>
   )
