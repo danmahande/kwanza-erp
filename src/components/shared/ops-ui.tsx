@@ -130,6 +130,7 @@ interface OpsHeaderProps {
   kpiCells?: Array<{ label: string; value: string | number; highlight?: boolean; highlightColor?: 'red' | 'green' | 'orange' }>
   searchValue?: string
   onSearchChange?: (v: string) => void
+  onSearchSubmit?: () => void
   searchPlaceholder?: string
   actionLabel?: string
   onAction?: () => void
@@ -137,7 +138,7 @@ interface OpsHeaderProps {
 }
 
 export function OpsHeader({
-  title, description, kpiCells, searchValue, onSearchChange, searchPlaceholder,
+  title, description, kpiCells, searchValue, onSearchChange, onSearchSubmit, searchPlaceholder,
   actionLabel, onAction, children,
 }: OpsHeaderProps) {
   return (
@@ -169,6 +170,7 @@ export function OpsHeader({
             placeholder={searchPlaceholder || 'Search...'}
             value={searchValue || ''}
             onChange={e => onSearchChange?.(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') onSearchSubmit?.() }}
             className="pl-7 h-8 text-xs rounded-md"
           />
         </div>

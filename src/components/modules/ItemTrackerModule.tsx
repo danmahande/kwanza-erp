@@ -523,9 +523,8 @@ export default function ItemTrackerModule() {
         ]}
         searchValue={searchInput}
         onSearchChange={setSearchInput}
-        searchPlaceholder="Enter Item ID (e.g., ITM-123456)..."
-        actionLabel="Track Item"
-        onAction={handleSearch}
+        onSearchSubmit={handleSearch}
+        searchPlaceholder="Enter Item ID (e.g., ITM-123456) or product name, then press Enter..."
       />
 
       {/* Search hint */}
