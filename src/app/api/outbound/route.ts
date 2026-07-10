@@ -31,6 +31,33 @@ export async function POST(req: NextRequest) {
     const _user = authResult as import('@/lib/auth-api').AuthUser
     const body = await req.json()
 
+    // ═══════════════════════════════════════════════════════════════
+    // INPUT VALIDATION
+    // ═══════════════════════════════════════════════════════════════
+
+    if (!body.customerName) {
+      return NextResponse.json({ error: 'customerName is required' }, { status: 400 })
+    }
+    if (!body.customerContact) {
+      return NextResponse.json({ error: 'customerContact is required' }, { status: 400 })
+    }
+    if (!body.productId) {
+      return NextResponse.json({ error: 'productId is required' }, { status: 400 })
+    }
+
+    const qty = parseInt(String(body.qty))
+    if (isNaN(qty) || qty <= 0) {
+      return NextResponse.json({
+        error: 'qty must be a positive integer',
+        received: body.qty,
+      }, { status: 400 })
+    }
+    body.qty = qty  // normalize
+
+    // ═══════════════════════════════════════════════════════════════
+    // PRE-FLIGHT CHECKS
+    // ═══════════════════════════════════════════════════════════════
+
     // Check merchant hold — same gate as inbound + order processing
     if (body.vendorId) {
       const merchant = await db.merchant.findUnique({
@@ -47,56 +74,84 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Generate ID — use timestamp + random suffix to avoid race condition
-    // (the old count+1 approach caused duplicate IDs on concurrent POSTs)
-    const outboundId = `OUT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
-
-    // Check sufficient stock BEFORE creating the record (fail fast, don't leave phantom records)
-    if (body.productId && body.qty) {
+    // Verify product exists + check sufficient stock BEFORE the transaction
+    if (body.productId) {
       const product = await db.product.findUnique({
         where: { productId: body.productId },
         select: { currentStock: true, productLabel: true },
       })
-      if (product && product.currentStock < body.qty) {
+      if (!product) {
+        return NextResponse.json({
+          error: `Product "${body.productId}" does not exist`,
+          code: 'PRODUCT_NOT_FOUND',
+        }, { status: 400 })
+      }
+      if (product.currentStock < qty) {
         return NextResponse.json({
           error: 'Insufficient stock',
-          details: `${product.productLabel}: only ${product.currentStock} units available, but outbound requires ${body.qty}`,
+          details: `${product.productLabel}: only ${product.currentStock} units available, but outbound requires ${qty}`,
+          code: 'INSUFFICIENT_STOCK',
+          currentStock: product.currentStock,
+          requested: qty,
         }, { status: 409 })
       }
     }
 
-    // Create the outbound record
-    const record = await db.outboundRecord.create({
-      data: { ...body, outboundId },
+    // Generate ID — use timestamp + random suffix to avoid race condition
+    const outboundId = `OUT-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — create record + decrement stock atomically
+    // ═══════════════════════════════════════════════════════════════
+
+    const record = await db.$transaction(async (tx) => {
+      // 1. Create the outbound record
+      const created = await tx.outboundRecord.create({
+        data: { ...body, outboundId },
+      })
+
+      // 2. Decrement stock ATOMICALLY — the WHERE clause ensures the
+      //    decrement only happens if there's enough stock. If another
+      //    request took the stock between our check and this update,
+      //    the transaction fails and rolls back.
+      if (body.productId) {
+        const updated = await tx.product.updateMany({
+          where: {
+            productId: body.productId,
+            currentStock: { gte: qty },  // atomic check — no race condition
+          },
+          data: { currentStock: { decrement: qty } },
+        })
+        if (updated.count === 0) {
+          // Stock was taken by another request between our check and this update
+          throw new Error(`STOCK_RACE: Product ${body.productId} stock was taken by another request. Please retry.`)
+        }
+      }
+
+      return created
     })
 
-    // Decrement product stock (non-blocking — record already exists)
-    if (body.productId && body.qty) {
-      try {
-        await db.product.update({
-          where: { productId: body.productId },
-          data: { currentStock: { decrement: body.qty } },
-        })
-      } catch (stockErr) {
-        console.error('Stock decrement failed (non-blocking):', stockErr)
-      }
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // POST-TRANSACTION — non-critical side effects (storage liability, risk)
+    // These run AFTER the transaction commits. If they fail, the outbound
+    // record still exists (which is correct — the order was placed).
+    // ═══════════════════════════════════════════════════════════════
 
-    // Decrement storage liability (same as order-processing POST)
-    if (body.vendorId && body.productId && body.qty && body.status !== 'self_delivery') {
+    // Decrement storage liability
+    if (body.vendorId && body.productId && qty && body.status !== 'self_delivery') {
       try {
         const { decrementStorageLiability } = await import('@/lib/storage-liability')
         await decrementStorageLiability({
           merchantId: body.vendorId,
           productId: body.productId,
-          qtyToRemove: body.qty,
+          qtyToRemove: qty,
         })
       } catch (liabilityErr) {
-        console.error('Storage liability decrement failed (non-blocking):', liabilityErr)
+        console.error('Storage liability decrement failed (non-blocking, logged):', liabilityErr)
       }
     }
 
-    // Risk Module hook: score the order on creation (same as order-processing POST)
+    // Risk Module hook: score the order on creation
     if (body.status !== 'self_delivery') {
       const paymentPath = (body.paymentMethod === 'Cash' || !body.paymentMethod) ? 'cod' : 'prepaid'
       try {
