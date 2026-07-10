@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react'
+import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle, ChevronDown, ChevronRight, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
@@ -50,6 +50,7 @@ export default function ProductsModule() {
   const [open, setOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [form, setForm] = useState({
@@ -215,7 +216,11 @@ export default function ProductsModule() {
         searchPlaceholder="Search products..."
         actionLabel="Add Product"
         onAction={openCreate}
-      />
+      >
+        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+          <HelpCircle size={12} className="mr-1" /> How does this work?
+        </Button>
+      </OpsHeader>
 
       {data.length === 0 ? (
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">
@@ -438,6 +443,70 @@ export default function ProductsModule() {
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Help Dialog */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Products Module Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Products module is your catalog — every item you store, sell, and ship lives here. Each product is linked to a merchant, has a cost and selling price, tracks current stock levels, and records every price change for audit. Products flow into Inbound (stock arrives), Outbound (stock leaves), and Risk (high-return SKUs are flagged). Without this module, the warehouse doesn't know what it has.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> Every parcel that enters or leaves your warehouse is tied to a product. This module defines what those products are: their name, brand, variant, category, unit of measurement, cost, selling price, commission rate, and minimum stock level. When a merchant delivers stock, it's received against a product. When a customer orders, the order references a product. When stock runs low, the minimum stock threshold triggers a reorder alert.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>1. Create products.</strong> Click "Add Product". Select a merchant first (the product belongs to that merchant). Fill in the product label, brand, variant, category, unit, cost, selling price, and commission percentage. The system validates that the merchant exists and warns if the selling price is below cost (loss-making).
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>2. Stock tracking.</strong> Current stock updates automatically: Inbound records increment it, Outbound orders decrement it, Shrinkage decrements it, RTV decrements it, and RMA RESTOCK disposition increments it. You don't manually adjust stock here — it flows from operational modules. The "low stock" KPI highlights products below their minimum stock threshold.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    <strong>3. Price changes.</strong> When you edit a product's selling price or unit cost, the system records the old and new values in a PriceHistory table — who changed it, when, from what, to what. This is your audit trail for margin analysis and dispute resolution. Every price change is also written to the audit log.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
+                  <p className="text-xs text-purple-900 leading-relaxed">
+                    <strong>4. Deactivate vs Delete.</strong> To stop selling a product, set it to inactive — it stays in the catalog for historical reference but can't be ordered. Deleting is blocked if the product has stock or any dependent records (inbound, outbound, RTV, shrinkage). In most cases, deactivate is the right choice.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>5. Search.</strong> Search by product label, category, product ID, merchant name, or brand. Click any row to expand it and see full details. Click edit to modify the product.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most inventory systems treat products as flat records — a name and a price. This module treats each product as a living entity with a lifecycle: it has a cost and a selling price (with full change history), a commission rate (for merchant settlements), a minimum stock threshold (for reorder alerts), and links to every operational record that touched it. When a merchant disputes their settlement, you can trace every product's price changes. When stock goes missing, you can see every inbound and outbound that touched that product. The product catalog isn't just a list — it's the foundation of your financial and operational accountability.
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
