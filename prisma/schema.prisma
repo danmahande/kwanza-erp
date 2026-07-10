@@ -790,6 +790,11 @@ model AuditLog {
   entityId        String?
   details         String?
   createdAt       DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([module])
+  @@index([action])
+  @@index([userId])
 }
 
 /// Notification queue — SMS/email messages to be sent to customers and merchants.
