@@ -98,19 +98,24 @@ export default function ItemTrackerModule() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [listMode, setListMode] = useState(false)
 
-  const fetchItem = useCallback(async (query: string) => {
+  const fetchItem = useCallback(async (query: string, onNotFound?: () => void) => {
     if (!query.trim()) return
     setLoading(true)
     try {
-      const res = await fetch(`/api/items?itemId=${query.trim()}&events=true`)
+      const res = await fetch(`/api/items?itemId=${encodeURIComponent(query.trim())}&events=true`)
       const data = await res.json()
       if (res.ok && data.item) {
         setItem(data.item)
         setItems([])
         setListMode(false)
       } else if (res.ok) {
-        toast.error('Item not found')
-        setItem(null)
+        // No exact Item ID match — either show "not found" or fall back to broad search
+        if (onNotFound) {
+          onNotFound()
+        } else {
+          toast.error('Item not found')
+          setItem(null)
+        }
       } else {
         toast.error(data.error || 'Search failed')
       }
@@ -140,8 +145,11 @@ export default function ItemTrackerModule() {
   }, [])
 
   const handleSearch = () => {
+    if (!searchInput.trim()) return
     setSearchQuery(searchInput)
-    fetchItem(searchInput)
+    // Try exact Item ID first. If no match, fall back to broad search
+    // (product name, brand, merchant, etc.) so Enter works for both.
+    fetchItem(searchInput, () => fetchAll(searchInput))
   }
 
   const handleShowAll = () => {
