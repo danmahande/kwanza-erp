@@ -141,11 +141,12 @@ export const RTV_WORKFLOW: WorkflowDefinition = {
     { status: 'rejected',           label: 'Rejected',           action: 'Vendor Rejected', isException: true, description: 'Vendor rejected the return' },
     { status: 'shipped',            label: 'Dispatched',         action: 'Dispatch to Vendor', description: 'Goods dispatched back to vendor' },
     { status: 'processed',          label: 'Processed',          action: 'Confirm Received', description: 'Vendor confirmed receipt' },
+    { status: 'cancelled',          label: 'Cancelled',          isException: true, description: 'RTV cancelled — stock restored to warehouse' },
   ],
   transitions: {
     pending:          ['pending_approval', 'cancelled'],
     pending_approval: ['approved', 'rejected', 'pending'],
-    approved:         ['shipped'],
+    approved:         ['shipped', 'cancelled'],
     rejected:         [],
     shipped:          ['processed'],
     processed:        [],

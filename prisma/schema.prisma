@@ -428,8 +428,12 @@ model InboundRecord {
 model OutboundRecord {
   id                String    @id @default(cuid())
   outboundId        String    @unique
-  /// Explicit order number (e.g., ORD-20260414-001)
+  /// Explicit order number (e.g., ORD-20260414-001, DS-014, RT-001)
   orderNumber       String?
+  /// Preserves the original DS-XXX order number when an RMA flips it to RT-XXX.
+  /// Set when the after-sales POST flips the order number — never overwritten.
+  /// Enables lookup by original DS number even after the return is processed.
+  originalOrderNumber String?
   /// User who created this order (e.g., U003, U004)
   userId            String?
   /// Tracking number for shipment tracking

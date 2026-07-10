@@ -4,35 +4,36 @@ import { logAudit } from '@/lib/audit'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
 
 /**
- * After-Sales (RMA) API — Workflow 3: Customer Returns + Disposition
+ * After-Sales (RMA) API — Production-hardened
  *
- * When a customer returns goods, we record which specific itemIds came back
- * and (later, on approval) what to do with each: RESTOCK / RTV / DISPOSE / LIQUIDATE.
+ * When a customer returns goods, we record which specific itemIds came back.
+ * The linked OutboundRecord's orderNumber is flipped from DS-XXX to RT-XXX,
+ * but the original DS number is preserved in `originalOrderNumber` so it's
+ * never lost.
  *
- * The DS→RT order number flip stays from the original implementation:
- * when an RMA is created against an originalOrderId, the linked OutboundRecord's
- * orderNumber is flipped from DS-XXX to RT-XXX.
+ * Stock is NOT restored on receipt — the returned item is in the warehouse
+ * but pending inspection. Stock is only restored when the RMA is approved
+ * with a RESTOCK disposition (after verification that the item is sellable).
  *
- * NOTE: SQLite stores JSON as TEXT, so itemIds and dispositions are JSON.stringify'd
- * strings, not native JSON columns.
+ * All multi-write operations are wrapped in db.$transaction.
  */
 
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
-    const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const afterSalesRecords = await db.afterSalesRecord.findMany({
-      where: {
+      where: search ? {
         OR: [
           { afterSalesId: { contains: search } },
           { returnOrderNumber: { contains: search } },
           { customerName: { contains: search } },
           { reason: { contains: search } },
         ],
-      },
+      } : {},
       orderBy: { createdAt: 'desc' },
+      take: 500,
     })
     return NextResponse.json(afterSalesRecords)
   } catch (error) {
@@ -47,103 +48,137 @@ export async function POST(req: NextRequest) {
     if (authResult instanceof NextResponse) return authResult
     const _user = authResult as AuthUser
     const body = await req.json()
-    const count = await db.afterSalesRecord.count()
-    const afterSalesId = `AS-${String(count + 1).padStart(4, '0')}`
 
-    // Generate return order number with RT prefix
-    const returnOrderNumber = `RT-${String(count + 1).padStart(3, '0')}`
+    // ═══════════════════════════════════════════════════════════════
+    // INPUT VALIDATION
+    // ═══════════════════════════════════════════════════════════════
 
-    // Workflow 3: capture which specific itemIds came back (stored as JSON string)
-    const itemIds = Array.isArray(body.itemIds) ? body.itemIds : []
-
-    // Flip the linked OutboundRecord's orderNumber from DS-XXX to RT-XXX
-    if (body.originalOrderId) {
-      const outboundRecord = await db.outboundRecord.findFirst({
-        where: {
-          OR: [
-            { orderNumber: body.originalOrderId },
-            { outboundId: body.originalOrderId },
-          ],
-        },
-      })
-
-      // F7: Reject if the original order doesn't exist
-      if (!outboundRecord) {
-        return NextResponse.json({
-          error: 'Original order not found',
-          details: `No outbound record found for order "${body.originalOrderId}". Verify the order number is correct.`,
-        }, { status: 400 })
-      }
-
-      if (outboundRecord) {
-        await db.outboundRecord.update({
-          where: { id: outboundRecord.id },
-          data: {
-            // store the original order number before the flip
-            // (note: the SQLite schema doesn't have originalOrderNumber, so we just flip)
-            orderNumber: returnOrderNumber,
-            status: 'returned',
-          },
-        })
-      }
+    if (!body.originalOrderId) {
+      return NextResponse.json({ error: 'originalOrderId is required' }, { status: 400 })
+    }
+    if (!body.customerName) {
+      return NextResponse.json({ error: 'customerName is required' }, { status: 400 })
+    }
+    if (!body.reason) {
+      return NextResponse.json({ error: 'reason is required' }, { status: 400 })
     }
 
-    const afterSalesRecord = await db.afterSalesRecord.create({
-      data: {
-        afterSalesId,
-        originalOrderId: body.originalOrderId || null,
-        returnOrderNumber,
-        customerId: body.customerId || '',
-        customerName: body.customerName || '',
-        reason: body.reason || '',
-        returnStatus: body.returnStatus || 'initiated',
-        agentId: body.agentId || null,
-        agentName: body.agentName || null,
-        refundAmount: body.refundAmount ? parseFloat(String(body.refundAmount)) : null,
-        replacementProductId: body.replacementProductId || null,
-        replacementProductName: body.replacementProductName || null,
-        returnTrackingNumber: body.returnTrackingNumber || null,
-        itemIds: itemIds.length > 0 ? JSON.stringify(itemIds) : null,
-        dispositions: null, // decided on approval
-        resolutionNotes: body.resolutionNotes || null,
+    const itemIds = Array.isArray(body.itemIds) ? body.itemIds : []
+    const refundAmount = body.refundAmount ? parseFloat(String(body.refundAmount)) : null
+    if (refundAmount !== null && (isNaN(refundAmount) || refundAmount < 0)) {
+      return NextResponse.json({ error: 'refundAmount must be a non-negative number' }, { status: 400 })
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PRE-FLIGHT: verify the original order exists
+    // ═══════════════════════════════════════════════════════════════
+
+    const outboundRecord = await db.outboundRecord.findFirst({
+      where: {
+        OR: [
+          { orderNumber: body.originalOrderId },
+          { outboundId: body.originalOrderId },
+          { originalOrderNumber: body.originalOrderId },  // also match by original DS number
+        ],
       },
     })
 
-    // Workflow 3: log a RETURNED_TO_WAREHOUSE event on each returned item
-    // (non-blocking — InventoryItem/ItemEvent tables may not always exist)
-    try {
+    if (!outboundRecord) {
+      return NextResponse.json({
+        error: 'Original order not found',
+        details: `No outbound record found for order "${body.originalOrderId}". Verify the order number is correct.`,
+        code: 'ORIGINAL_ORDER_NOT_FOUND',
+      }, { status: 400 })
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — flip order number + create RMA + log item events
+    // ═══════════════════════════════════════════════════════════════
+
+    // Generate IDs — timestamp + random to avoid race condition
+    const ts = Date.now().toString(36).toUpperCase()
+    const rand = Math.random().toString(36).slice(2, 5).toUpperCase()
+    const afterSalesId = `AS-${ts}-${rand}`
+    const returnOrderNumber = `RT-${ts.slice(-6)}-${rand}`
+
+    const afterSalesRecord = await db.$transaction(async (tx) => {
+      // 1. Flip the OutboundRecord's orderNumber from DS-XXX to RT-XXX
+      //    BUT preserve the original DS number in originalOrderNumber
+      const originalOrderNumber = outboundRecord.orderNumber || outboundRecord.outboundId
+      await tx.outboundRecord.update({
+        where: { id: outboundRecord.id },
+        data: {
+          originalOrderNumber,  // preserve the DS-XXX number
+          orderNumber: returnOrderNumber,  // flip to RT-XXX
+          status: 'returned',
+        },
+      })
+
+      // 2. Create the AfterSalesRecord
+      const created = await tx.afterSalesRecord.create({
+        data: {
+          afterSalesId,
+          originalOrderId: body.originalOrderId,
+          returnOrderNumber,
+          customerId: body.customerId || '',
+          customerName: body.customerName,
+          reason: body.reason,
+          returnStatus: body.returnStatus || 'initiated',
+          agentId: body.agentId || null,
+          agentName: body.agentName || null,
+          refundAmount,
+          replacementProductId: body.replacementProductId || null,
+          replacementProductName: body.replacementProductName || null,
+          returnTrackingNumber: body.returnTrackingNumber || null,
+          itemIds: itemIds.length > 0 ? JSON.stringify(itemIds) : null,
+          dispositions: null,
+          resolutionNotes: body.resolutionNotes || null,
+        },
+      })
+
+      // 3. Log RETURNED_TO_WAREHOUSE event on each returned item + mark status
       for (const itemId of itemIds) {
-        const item = await db.inventoryItem.findUnique({
+        const item = await tx.inventoryItem.findUnique({
           where: { itemId },
           select: { id: true },
         })
         if (item) {
-          await db.itemEvent.create({
+          await tx.itemEvent.create({
             data: {
               eventId: `EVT-${Date.now()}-${itemId.slice(-6)}`,
               itemId,
               eventType: 'RETURNED_TO_WAREHOUSE',
-              description: `Returned by customer ${body.customerName}. RMA: ${afterSalesId}`,
+              description: `Returned by customer ${body.customerName}. RMA: ${afterSalesId}. Order flipped: ${originalOrderNumber} → ${returnOrderNumber}`,
               performedBy: body.agentId || _user.name,
-              outboundId: body.originalOrderId || null,
-              // disposition is null here — set on approval
+              outboundId: outboundRecord.outboundId,
             },
           })
           // Mark item as back in warehouse, pending disposition decision
-          await db.inventoryItem.update({
+          // Stock is NOT restored here — only on RESTOCK disposition after verification
+          await tx.inventoryItem.update({
             where: { itemId },
             data: { status: 'RETURNED_PENDING_DISPOSITION' },
           })
         }
       }
-    } catch (itemErr) {
-      console.error('Item event logging failed (non-blocking):', itemErr)
-    }
+
+      return created
+    })
+
+    await logAudit({
+      action: 'RMA_CREATED',
+      module: 'after_sales',
+      entityId: afterSalesId,
+      details: `RMA created for ${body.customerName}. Original order: ${body.originalOrderId} → ${returnOrderNumber}. ${itemIds.length} item(s) returned, pending inspection.`,
+    })
 
     return NextResponse.json(afterSalesRecord, { status: 201 })
   } catch (error) {
     console.error('Error creating after-sales record:', error)
-    return NextResponse.json({ error: 'Failed to create after-sales record' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Failed to create after-sales record',
+      detail: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 })
   }
 }
 
@@ -155,87 +190,68 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const { id, ...data } = body
 
-    // Workflow 3: on approval, stamp the approver + apply per-item dispositions.
-    // body.dispositions should be an array of { itemId, disposition }
-    // where disposition ∈ { RESTOCK, RTV, DISPOSE, LIQUIDATE }.
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — update RMA + apply dispositions + merchant debit
+    // ═══════════════════════════════════════════════════════════════
+
     if (data.returnStatus === 'approved' && !data.approvedBy) {
       data.approvedBy = _user.name
       data.approvedAt = new Date()
     }
 
-    // If changing order number, update the linked outbound record
-    if (data.originalOrderId && data.returnOrderNumber) {
-      const outboundRecord = await db.outboundRecord.findFirst({
-        where: {
-          OR: [
-            { orderNumber: data.originalOrderId },
-            { outboundId: data.originalOrderId },
-          ],
+    const afterSalesRecord = await db.$transaction(async (tx) => {
+      // 1. Update the AfterSalesRecord
+      const updated = await tx.afterSalesRecord.update({
+        where: { id },
+        data: {
+          ...data,
+          updatedAt: new Date(),
         },
       })
 
-      if (outboundRecord) {
-        await db.outboundRecord.update({
-          where: { id: outboundRecord.id },
-          data: {
-            orderNumber: data.returnOrderNumber,
-            status: 'returned',
-          },
-        })
-      }
-    }
-
-    const afterSalesRecord = await db.afterSalesRecord.update({
-      where: { id },
-      data: {
-        ...data,
-        updatedAt: new Date(),
-      },
-    })
-
-    // Update merchant.totalReturnValue when a return is approved
-    if (data.returnStatus === 'approved' && afterSalesRecord.originalOrderId) {
-      try {
-        const outbound = await db.outboundRecord.findFirst({
+      // 2. Update merchant.totalReturnValue when a return is approved
+      if (data.returnStatus === 'approved' && updated.originalOrderId) {
+        const outbound = await tx.outboundRecord.findFirst({
           where: {
             OR: [
-              { orderNumber: afterSalesRecord.originalOrderId },
-              { outboundId: afterSalesRecord.originalOrderId },
+              { orderNumber: updated.originalOrderId },
+              { outboundId: updated.originalOrderId },
+              { originalOrderNumber: updated.originalOrderId },
             ],
           },
           select: { vendorId: true, saleAmount: true },
         })
         if (outbound?.vendorId) {
-          const returnValue = afterSalesRecord.refundAmount || outbound.saleAmount || 0
+          const returnValue = updated.refundAmount || outbound.saleAmount || 0
           if (returnValue > 0) {
-            await db.merchant.update({
+            await tx.merchant.update({
               where: { merchantId: outbound.vendorId },
               data: { totalReturnValue: { increment: returnValue } },
             })
           }
         }
-      } catch (merchantErr) {
-        console.error('Merchant return value update failed (non-blocking):', merchantErr)
       }
-    }
 
-    // Apply per-item dispositions when the RMA is approved
-    // body.dispositions = [{ itemId, disposition }]
-    if (Array.isArray(body.dispositions) && body.dispositions.length > 0) {
-      for (const d of body.dispositions) {
-        if (!d.itemId || !d.disposition) continue
-        try {
+      // 3. Apply per-item dispositions when the RMA is approved
+      if (Array.isArray(body.dispositions) && body.dispositions.length > 0) {
+        for (const d of body.dispositions) {
+          if (!d.itemId || !d.disposition) continue
+
           // Log the disposition event on the item
-          await db.itemEvent.create({
+          await tx.itemEvent.create({
             data: {
               eventId: `EVT-${Date.now()}-${d.itemId.slice(-6)}-${d.disposition}`,
               itemId: d.itemId,
               eventType: d.disposition === 'RESTOCK' ? 'STORED'
                 : d.disposition === 'RTV' ? 'RTV'
                 : d.disposition === 'DISPOSE' ? 'DISPOSED'
-                : 'DISPOSED', // LIQUIDATE → treated as disposed for event type
+                : 'DISPOSED', // LIQUIDATE → treated as disposed
               disposition: d.disposition,
-              description: `Disposition decision: ${d.disposition} (RMA ${afterSalesRecord.afterSalesId})`,
+              description: `Disposition decision: ${d.disposition} (RMA ${updated.afterSalesId})`,
               performedBy: data.approvedBy || _user.name,
             },
           })
@@ -243,41 +259,39 @@ export async function PUT(req: NextRequest) {
           // Update item status based on disposition
           const newStatus = d.disposition === 'RESTOCK' ? 'IN_WAREHOUSE'
             : d.disposition === 'RTV' ? 'RTV_PENDING'
-            : 'DISPOSED' // DISPOSE or LIQUIDATE
-          await db.inventoryItem.update({
+            : 'DISPOSED'
+          await tx.inventoryItem.update({
             where: { itemId: d.itemId },
             data: { status: newStatus },
           })
 
-          // For RESTOCK: increment Product.currentStock (item goes back on shelf)
-          // For RTV/DISPOSE/LIQUIDATE: stock was already decremented at outbound time, don't re-add
+          // For RESTOCK: increment Product.currentStock ATOMICALLY
+          // (item goes back on shelf after verification)
+          // For RTV/DISPOSE/LIQUIDATE: stock was decremented at outbound time, don't re-add
           if (d.disposition === 'RESTOCK') {
-            const item = await db.inventoryItem.findUnique({
+            const item = await tx.inventoryItem.findUnique({
               where: { itemId: d.itemId },
-              select: { productId: true, productName: true, merchantId: true, merchantName: true },
+              select: { productId: true },
             })
             if (item) {
-              try {
-                await db.product.update({
-                  where: { productId: item.productId },
-                  data: { currentStock: { increment: 1 } },
-                })
-              } catch (productErr) {
-                console.error('Product restock increment failed (non-blocking):', productErr)
-              }
+              await tx.product.update({
+                where: { productId: item.productId },
+                data: { currentStock: { increment: 1 } },
+              })
             }
           }
 
-          // If RTV, auto-create an RTVRecord (linking RMA → RTV → vendor approval)
+          // If RTV, auto-create an RTVRecord
           if (d.disposition === 'RTV') {
-            const item = await db.inventoryItem.findUnique({
+            const item = await tx.inventoryItem.findUnique({
               where: { itemId: d.itemId },
               select: { productId: true, productName: true, merchantId: true, merchantName: true },
             })
             if (item) {
-              const rtvCount = await db.rTVRecord.count()
-              const rtvId = `RTV-${String(rtvCount + 1).padStart(5, '0')}`
-              await db.rTVRecord.create({
+              const rtvTs = Date.now().toString(36).toUpperCase()
+              const rtvRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+              const rtvId = `RTV-${rtvTs}-${rtvRand}`
+              await tx.rTVRecord.create({
                 data: {
                   rtvId,
                   merchantId: item.merchantId,
@@ -285,38 +299,41 @@ export async function PUT(req: NextRequest) {
                   productId: item.productId,
                   productName: item.productName,
                   qty: 1,
-                  reason: afterSalesRecord.reason || 'Customer return — faulty',
+                  reason: updated.reason || 'Customer return — faulty',
                   status: 'pending',
                 },
               })
             }
           }
-        } catch (itemErr) {
-          console.error(`Disposition application failed for item ${d.itemId} (non-blocking):`, itemErr)
         }
+
+        // Save the dispositions JSON back onto the after-sales record
+        await tx.afterSalesRecord.update({
+          where: { id },
+          data: { dispositions: JSON.stringify(body.dispositions) },
+        })
       }
 
-      // Save the dispositions JSON back onto the after-sales record
-      await db.afterSalesRecord.update({
-        where: { id },
-        data: { dispositions: JSON.stringify(body.dispositions) },
-      })
-    }
+      return updated
+    })
 
     // Audit the approval or status change
     if (data.returnStatus) {
       await logAudit({
-        action: data.returnStatus === 'approved' ? 'APPROVE' : data.returnStatus === 'rejected' ? 'REJECT' : 'STATUS_CHANGE',
+        action: data.returnStatus === 'approved' ? 'RMA_APPROVED' : data.returnStatus === 'rejected' ? 'RMA_REJECTED' : 'RMA_STATUS_CHANGE',
         module: 'after_sales',
         entityId: afterSalesRecord.afterSalesId,
-        details: `RMA ${afterSalesRecord.afterSalesId} status set to ${data.returnStatus} for ${afterSalesRecord.customerName}`,
+        details: `RMA ${afterSalesRecord.afterSalesId} status set to ${data.returnStatus} for ${afterSalesRecord.customerName}${body.dispositions ? ` — ${body.dispositions.length} disposition(s) applied` : ''}`,
       })
     }
 
     return NextResponse.json(afterSalesRecord)
   } catch (error) {
     console.error('Error updating after-sales record:', error)
-    return NextResponse.json({ error: 'Failed to update after-sales record' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Failed to update after-sales record',
+      detail: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 })
   }
 }
 
@@ -327,7 +344,24 @@ export async function DELETE(req: NextRequest) {
     const _user = authResult as AuthUser
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
-    await db.afterSalesRecord.delete({ where: { id: id! } })
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
+
+    const record = await db.afterSalesRecord.findUnique({ where: { id } })
+    if (!record) {
+      return NextResponse.json({ error: 'Record not found' }, { status: 404 })
+    }
+
+    await db.afterSalesRecord.delete({ where: { id } })
+
+    await logAudit({
+      action: 'RMA_DELETED',
+      module: 'after_sales',
+      entityId: record.afterSalesId,
+      details: `Deleted RMA ${record.afterSalesId} for ${record.customerName}`,
+    })
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting after-sales record:', error)
