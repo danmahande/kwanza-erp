@@ -549,7 +549,7 @@ model Driver {
   id                String    @id @default(cuid())
   driverId          String    @unique
   name              String
-  phone             String
+  phone             String    @unique
   nationalId        String?
   licenseNumber     String?
   vehicleType       String?
@@ -569,8 +569,33 @@ model Driver {
   /// Shift tracking: when the driver checked out (null = still on shift)
   shiftEnd          DateTime?
   trips             DriverTrip[]
+  shifts            DriverShift[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+/// Shift history — one row per completed shift. Created when a driver
+/// checks out. Enables hours-worked calculations for payroll.
+/// The Driver.shiftStart/shiftEnd fields track the CURRENT shift;
+/// this table preserves all PAST shifts.
+model DriverShift {
+  id              String    @id @default(cuid())
+  driverId        String
+  driver          Driver    @relation(fields: [driverId], references: [driverId])
+  driverName      String
+  /// When the driver checked in
+  shiftStart      DateTime
+  /// When the driver checked out (null = still on shift — shouldn't happen
+  /// here since rows are only created on checkout, but kept for safety)
+  shiftEnd        DateTime?
+  /// Duration in hours (computed on checkout for convenience)
+  durationHours   Float?
+  /// Optional notes (e.g., "short shift — vehicle breakdown")
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  @@index([driverId])
+  @@index([shiftStart])
 }
 
 /// Daily trip record for each driver — the 'route sheet'

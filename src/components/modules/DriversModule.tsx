@@ -14,7 +14,7 @@ import {
   Car, Shield, ShieldAlert, Loader2, Package,
   X, CheckSquare, Upload, Trash2, TrendingUp,
   Banknote, AlertTriangle, Bell, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
-  MessageSquare, Plus, CheckCircle2,
+  MessageSquare, Plus, CheckCircle2, HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -173,6 +173,7 @@ export default function DriversModule() {
     vehicleType: '', vehicleNumber: '', status: 'active',
     damages: '', loss: '', expectedBankings: '', banked: '',
   })
+  const [helpOpen, setHelpOpen] = useState(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // ── Keyboard shortcut ──
@@ -546,6 +547,9 @@ export default function DriversModule() {
         onAction={openCreate}
       >
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={DRIVER_STATUSES} counts={statusCounts} />
+        <Button variant="outline" size="sm" className="rounded-xl border-gray-200 h-9 text-xs font-medium gap-1.5" onClick={() => setHelpOpen(true)}>
+          <HelpCircle size={13} />How does this work?
+        </Button>
         <Button variant="outline" size="sm" className="rounded-xl border-gray-200 h-9 text-xs font-medium gap-1.5" onClick={handleExportAll}>
           <Upload size={13} />Export
         </Button>
@@ -1123,6 +1127,82 @@ export default function DriversModule() {
           )}
         </div>
       </DetailSlideOver>
+
+      {/* ── Help Dialog ── */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Drivers Module Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Drivers module manages your delivery fleet — the riders who pick up parcels from your warehouse and deliver them to customers. It tracks who is on shift, what they delivered, how much COD cash they collected, whether they banked that cash, and their overall performance. Every driver action is audited. Here is how to use it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> Every parcel that leaves your warehouse is handed to a driver. That driver is responsible for delivering it, collecting cash (if COD), and banking that cash back to the office. This module tracks every step of that process — from shift check-in to cash banking — and gives you the data to hold drivers accountable. Without it, you cannot answer "which driver delivered this order?" or "how much cash does this driver still owe us?"
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>1. Add drivers.</strong> Click "Add Driver" to create a new driver record. Enter their name, phone number (must be unique — two drivers cannot share a phone), vehicle type, and vehicle number. The system generates a unique Driver ID (DRV-xxx). Every driver creation is audited.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>2. Shift management.</strong> Click "Check In" when a driver starts their shift. Click "Check Out" when they finish. The system records the shift start, shift end, and duration in a DriverShift history row — so you can compute hours worked for payroll. Previous shifts are never overwritten; each check-out creates a new history entry.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                  <p className="text-xs text-orange-900 leading-relaxed">
+                    <strong>3. Assign orders.</strong> Drivers are assigned to orders via Runsheets (in the Outbound module). Once a runsheet is created, the driver's name appears on each order. The driver delivers each stop, collects COD cash, and returns. You track delivery outcomes (delivered, failed, rescheduled) in the Runsheets module.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
+                  <p className="text-xs text-purple-900 leading-relaxed">
+                    <strong>4. Track performance.</strong> Click any driver's name to open their full profile. The profile shows 30-day performance metrics: success rate, first-attempt rate, average cycle time (dispatched to delivered), COD collection rate, banking rate, risk percentage, and a 7-day delivery sparkline. You can also see their trip timeline (daily, weekly, monthly) with delivery volumes, COD collected, and distance traveled.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                  <p className="text-xs text-red-900 leading-relaxed">
+                    <strong>5. COD banking.</strong> When a driver banks cash (in the Payments module → COD Reconciliation), the system reconciles it against what they collected. If the driver banked less than they collected (shortfall), the difference is added to their damages. If the shortfall is unrecoverable, the cashier can write it off — it moves from damages (recoverable) to loss (company absorbs it). All banking records are retained for audit.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>6. Communication log.</strong> Every call, message, or interaction with a driver is logged in the driver detail slide-over. You can set follow-up reminders and resolve entries. Communication logs can be deleted (for mistakes) but the deletion is audited — you always know who deleted what and when.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>7. Deactivate vs Delete.</strong> To remove a driver from active duty, set their status to "inactive" — they stay in the system with all their history. Deleting a driver is blocked if they have any runsheets, bankings, communication logs, or trip records — because deleting would lose all that history. In most cases, deactivate is the right choice.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most delivery systems treat drivers as just a name on a runsheet. This module treats each driver as a full entity with a lifecycle: they check in, receive orders, deliver, collect cash, bank cash, and check out. Every step is tracked, audited, and reconciled. You can answer any question: "How many hours did John work last week?" (shift history), "What is his delivery success rate?" (performance metrics), "How much cash does he still owe us?" (COD reconciliation), and "What did we discuss on our last call?" (communication log). And none of it can be silently deleted — every action leaves an audit trail.
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">
+              Got it
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

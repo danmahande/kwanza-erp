@@ -126,6 +126,7 @@ export default function DriverProfile({
   const [period, setPeriod] = useState<Period>('monthly')
   const [tripData, setTripData] = useState<TripData | null>(null)
   const [tripLoading, setTripLoading] = useState(false)
+  const [perfData, setPerfData] = useState<Record<string, unknown> | null>(null)
   const [showEditSalary, setShowEditSalary] = useState(false)
   const [editForm, setEditForm] = useState({ salaryAmount: '', salaryPayDay: '', dateHired: '' })
 
@@ -141,6 +142,19 @@ export default function DriverProfile({
   }, [driver.driverId, period])
 
   useEffect(() => { fetchTrips() }, [fetchTrips])
+
+  // Fetch performance metrics (success rate, cycle time, COD rate, sparkline)
+  const fetchPerformance = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/drivers/${driver.id}/performance?days=30`)
+      if (res.ok) {
+        const data = await res.json()
+        setPerfData(data)
+      }
+    } catch { /* non-blocking */ }
+  }, [driver.id])
+
+  useEffect(() => { fetchPerformance() }, [fetchPerformance])
 
   // Refresh driver data
   const refreshDriver = useCallback(async () => {
@@ -292,6 +306,67 @@ export default function DriverProfile({
           </div>
         ))}
       </div>
+
+      {/* ══════════════════════════════════ */}
+      {/* ── PERFORMANCE METRICS (30-day window from /api/drivers/[id]/performance) ── */}
+      {/* ══════════════════════════════════ */}
+      {perfData && (
+        <div className="bg-white rounded-2xl border border-gray-100 p-5">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2 mb-4">
+            <TrendingUp size={15} className="text-[#FF6B35]" /> 30-Day Performance Metrics
+          </h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            {(() => {
+              const rates = (perfData.rates || {}) as Record<string, number>
+              const totals = (perfData.totals || {}) as Record<string, number>
+              const cycle = (perfData.cycleTime || {}) as Record<string, number>
+              const cod = (perfData.cod || {}) as Record<string, number>
+              const metrics = [
+                { label: 'Success Rate', value: `${rates.successRate ?? 0}%`, color: (rates.successRate ?? 0) >= 80 ? 'text-green-600' : 'text-amber-600' },
+                { label: '1st Attempt Rate', value: `${rates.firstAttemptRate ?? 0}%`, color: 'text-blue-600' },
+                { label: 'Avg Cycle Time', value: cycle.avgHours ? `${cycle.avgHours}h` : '—', color: 'text-purple-600' },
+                { label: 'COD Rate', value: `${rates.codRate ?? 0}%`, color: 'text-green-600' },
+                { label: 'Banking Rate', value: `${rates.bankingRate ?? 0}%`, color: (rates.bankingRate ?? 0) >= 80 ? 'text-green-600' : 'text-amber-600' },
+                { label: 'Risk %', value: `${rates.riskPercent ?? 0}%`, color: (rates.riskPercent ?? 0) <= 10 ? 'text-green-600' : 'text-red-600' },
+                { label: 'Orders', value: fmt(totals.orders ?? 0), color: 'text-gray-700' },
+                { label: 'Delivered', value: fmt(totals.delivered ?? 0), color: 'text-green-600' },
+                { label: 'Failed', value: fmt(totals.failed ?? 0), color: 'text-red-600' },
+                { label: 'Distance', value: `${fmt(totals.distance ?? 0)} km`, color: 'text-blue-600' },
+                { label: 'COD Collected', value: fmtMoney(cod.totalCollected ?? 0), color: 'text-green-700' },
+                { label: 'Unbanked', value: fmtMoney(cod.unbanked ?? 0), color: (cod.unbanked ?? 0) > 0 ? 'text-red-600' : 'text-gray-400' },
+              ]
+              return metrics.map(m => (
+                <div key={m.label} className="bg-gray-50 rounded-lg border border-gray-100 p-2.5">
+                  <p className="text-[9px] text-gray-400 uppercase tracking-wider font-medium mb-0.5">{m.label}</p>
+                  <p className={`text-sm font-bold ${m.color}`}>{m.value}</p>
+                </div>
+              ))
+            })()}
+          </div>
+          {/* 7-day sparkline */}
+          {Array.isArray(perfData.sparkline) && (perfData.sparkline as Array<Record<string, unknown>>).length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-[10px] text-gray-400 uppercase tracking-wider font-medium mb-2">Last 7 Days</p>
+              <div className="flex items-end gap-2 h-16">
+                {(perfData.sparkline as Array<{ date: string; total: number; delivered: number }>).map((day, i) => {
+                  const max = Math.max(...(perfData.sparkline as Array<{ total: number }>).map(d => d.total), 1)
+                  const h = Math.max(2, (day.total / max) * 100)
+                  const dh = day.total > 0 ? Math.max(2, (day.delivered / day.total) * h) : 0
+                  return (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div className="w-full flex flex-col justify-end h-12 relative">
+                        <div className="w-full bg-gray-200 rounded-t-sm" style={{ height: `${h}%` }} title={`Total: ${day.total}`} />
+                        <div className="w-full bg-green-400 rounded-t-sm absolute bottom-0" style={{ height: `${dh}%` }} title={`Delivered: ${day.delivered}`} />
+                      </div>
+                      <span className="text-[8px] text-gray-400 font-mono">{day.date}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ══════════════════════════════════ */}
       {/* ── PERFORMANCE TIMELINE ── */}

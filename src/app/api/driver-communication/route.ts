@@ -77,6 +77,14 @@ export async function DELETE(req: NextRequest) {
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
     await db.driverCommunication.delete({ where: { id } })
+
+    await logAudit({
+      action: 'COMMUNICATION_DELETED',
+      module: 'driver-communication',
+      entityId: id,
+      details: `Deleted driver communication entry`,
+    })
+
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete entry' }, { status: 500 })
@@ -92,6 +100,14 @@ export async function PATCH(req: NextRequest) {
     const { id, isResolved } = body
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
     const entry = await db.driverCommunication.update({ where: { id }, data: { isResolved: !!isResolved } })
+
+    await logAudit({
+      action: 'COMMUNICATION_UPDATED',
+      module: 'driver-communication',
+      entityId: id,
+      details: `Communication entry ${isResolved ? 'resolved' : 'reopened'}`,
+    })
+
     return NextResponse.json(entry)
   } catch {
     return NextResponse.json({ error: 'Failed to update entry' }, { status: 500 })

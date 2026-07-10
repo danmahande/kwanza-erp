@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth-api'
+import { logAudit } from '@/lib/audit'
 
 // ── GET /api/drivers/trips?driverId=xxx&period=daily|weekly|monthly|quarterly|yearly ──
 export async function GET(req: NextRequest) {
@@ -101,8 +102,9 @@ export async function POST(req: NextRequest) {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
     const body = await req.json()
-    const count = await db.driverTrip.count()
-    const tripId = `TRP-${String(count + 1).padStart(5, '0')}`
+    const tripTs = Date.now().toString(36).toUpperCase()
+    const tripRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+    const tripId = `TRP-${tripTs}-${tripRand}`
     const driver = await db.driver.findUnique({ where: { driverId: body.driverId }, select: { name: true } })
     const trip = await db.driverTrip.create({
       data: {
@@ -114,6 +116,14 @@ export async function POST(req: NextRequest) {
         lastGeoLocation: body.lastGeoLocation || null, runsheetId: body.runsheetId || null, notes: body.notes || null,
       },
     })
+
+    await logAudit({
+      action: 'TRIP_CREATED',
+      module: 'drivers',
+      entityId: tripId,
+      details: `Created trip ${tripId} for driver ${driver?.name || body.driverName || 'Unknown'}: ${body.totalStops || 0} stops, ${body.delivered || 0} delivered, ${body.failed || 0} failed. COD: ${body.codCollected || 0}.`,
+    })
+
     return NextResponse.json(trip, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Failed to create trip' }, { status: 500 })
@@ -124,9 +134,18 @@ export async function PUT(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as import('@/lib/auth-api').AuthUser
     const body = await req.json()
     const { id, ...data } = body
     const trip = await db.driverTrip.update({ where: { id }, data })
+
+    await logAudit({
+      action: 'TRIP_UPDATED',
+      module: 'drivers',
+      entityId: trip.tripId,
+      details: `Updated trip ${trip.tripId} for driver ${trip.driverName}: ${Object.keys(data).join(', ')}`,
+    })
+
     return NextResponse.json(trip)
   } catch {
     return NextResponse.json({ error: 'Failed to update trip' }, { status: 500 })
