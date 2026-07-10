@@ -1,176 +1,354 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Tag, Ruler, CreditCard, Warehouse, Plus, X, Settings } from 'lucide-react'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 
-// ── Badge color palette ──
-const BADGE_COLORS = [
-  { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200/60', hover: 'hover:bg-orange-100/60' },
-  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200/60', hover: 'hover:bg-blue-100/60' },
-  { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200/60', hover: 'hover:bg-green-100/60' },
-  { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60', hover: 'hover:bg-purple-100/60' },
-  { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/60', hover: 'hover:bg-amber-100/60' },
-  { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200/60', hover: 'hover:bg-pink-100/60' },
-]
-
-// ── Card entrance animation ──
-const cardVariants = {
-  hidden: { opacity: 0, y: 24, scale: 0.97 },
-  visible: (i: number) => ({
-    opacity: 1, y: 0, scale: 1,
-    transition: { duration: 0.4, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] as const },
-  }),
+interface SettingItem {
+  key: string
+  label: string
+  value: string[]
+  updatedBy: string | null
+  updatedAt: string | null
 }
 
-// ── Settings Section Component ──
+const ICON_MAP: Record<string, { icon: typeof Tag; color: string }> = {
+  categories: { icon: Tag, color: '#FF6B35' },
+  units: { icon: Ruler, color: '#1B2A4A' },
+  paymentMethods: { icon: CreditCard, color: '#22C55E' },
+  storageLocations: { icon: Warehouse, color: '#3B82F6' },
+}
+
+const BADGE_COLORS = [
+  { bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200/60' },
+  { bg: 'bg-blue-50', text: 'text-blue-700', border: 'border-blue-200/60' },
+  { bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200/60' },
+  { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200/60' },
+  { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200/60' },
+  { bg: 'bg-pink-50', text: 'text-pink-700', border: 'border-pink-200/60' },
+]
+
 function SettingsSection({
-  title, icon: Icon, items, setItems, color, delay = 0,
+  setting, onAdd, onRemove, delay,
 }: {
-  title: string; icon: React.ElementType; items: string[]; setItems: (v: string[]) => void; color: string; delay?: number
+  setting: SettingItem
+  onAdd: (key: string, item: string) => void
+  onRemove: (key: string, item: string) => void
+  delay: number
 }) {
   const [inputVal, setInputVal] = useState('')
+  const config = ICON_MAP[setting.key] || { icon: Tag, color: '#6B7280' }
+  const Icon = config.icon
 
   const addItem = () => {
-    if (!inputVal || items.includes(inputVal)) return
-    setItems([...items, inputVal])
+    const trimmed = inputVal.trim()
+    if (!trimmed) return
+    if (setting.value.includes(trimmed)) {
+      toast.error(`"${trimmed}" already exists`)
+      return
+    }
+    onAdd(setting.key, trimmed)
     setInputVal('')
-    toast.success('Item added')
-  }
-
-  const removeItem = (item: string) => {
-    setItems(items.filter(l => l !== item))
-    toast.success('Item removed')
   }
 
   return (
     <motion.div
-      custom={delay}
-      variants={cardVariants}
-      initial="hidden"
-      animate="visible"
-      whileHover={{ y: -2, boxShadow: '0 8px 24px rgba(0,0,0,0.06)' }}
-      transition={{ duration: 0.2 }}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: delay * 0.08 }}
+      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
     >
-      <Card className="bg-white/90 backdrop-blur-sm border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
-        {/* Card header with icon and count */}
-        <CardHeader className="pb-3 pt-5 px-5">
-          <CardTitle className="text-sm flex items-center gap-3 text-gray-800 font-bold">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}12` }}>
-              <Icon size={18} style={{ color }} aria-hidden="true" />
-            </div>
-            <span className="flex-1">{title}</span>
-            <Badge variant="secondary" className="ml-auto text-[10px] bg-gray-100/80 text-gray-500 border-0 px-2.5 py-0.5 font-semibold rounded-full">
-              {items.length}
-            </Badge>
-          </CardTitle>
-        </CardHeader>
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${config.color}12` }}>
+          <Icon size={16} style={{ color: config.color }} />
+        </div>
+        <span className="text-sm font-bold text-gray-800 flex-1">{setting.label}</span>
+        <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px] font-mono font-bold px-2 py-0.5">
+          {setting.value.length}
+        </Badge>
+      </div>
 
-        <CardContent className="space-y-4 px-5 pb-5">
-          {/* Add item input */}
-          <div className="flex gap-2">
-            <Input
-              placeholder={`Add new ${title.toLowerCase()}...`}
-              value={inputVal}
-              onChange={e => setInputVal(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && addItem()}
-              className="rounded-xl border-gray-200/80 text-sm h-10 bg-gray-50/50 focus:bg-white transition-colors"
-            />
-            <Button
-              onClick={addItem}
-              size="icon"
-              className="bg-[#FF6B35] hover:bg-[#E55A25] text-white shrink-0 rounded-xl h-10 w-10 shadow-sm shadow-[#FF6B35]/20"
-            >
-              <Plus size={16} />
-            </Button>
-          </div>
+      {/* Body */}
+      <div className="p-4 space-y-3">
+        {/* Add input */}
+        <div className="flex gap-2">
+          <Input
+            placeholder={`Add new ${setting.label.toLowerCase()}...`}
+            value={inputVal}
+            onChange={e => setInputVal(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addItem()}
+            className="rounded-lg border-gray-200 text-sm h-9"
+          />
+          <Button onClick={addItem} size="icon" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white shrink-0 rounded-lg h-9 w-9">
+            <Plus size={14} />
+          </Button>
+        </div>
 
-          {/* Items badges */}
-          <div className="flex flex-wrap gap-2 min-h-[44px]">
-            {items.map((item, idx) => {
-              const c = BADGE_COLORS[idx % BADGE_COLORS.length]
-              return (
-                <motion.div
-                  key={item}
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.8 }}
-                  transition={{ duration: 0.15 }}
+        {/* Items */}
+        <div className="flex flex-wrap gap-2 min-h-[36px]">
+          {setting.value.map((item, idx) => {
+            const c = BADGE_COLORS[idx % BADGE_COLORS.length]
+            return (
+              <Badge
+                key={item}
+                className={`px-2.5 py-1 text-xs flex items-center gap-1.5 rounded-lg border ${c.border} ${c.bg} ${c.text} transition-colors font-medium`}
+              >
+                {item}
+                <button
+                  onClick={() => onRemove(setting.key, item)}
+                  className="ml-0.5 hover:text-red-500 transition-colors opacity-50 hover:opacity-100"
                 >
-                  <Badge
-                    variant="secondary"
-                    className={`px-3 py-1.5 text-xs flex items-center gap-1.5 rounded-lg border ${c.border} ${c.bg} ${c.text} ${c.hover} transition-colors cursor-default font-medium`}
-                  >
-                    {item}
-                    <button
-                      onClick={() => removeItem(item)}
-                      aria-label={`Remove ${item}`}
-                      className="ml-0.5 hover:text-red-500 transition-colors opacity-50 hover:opacity-100"
-                    >
-                      <X size={12} />
-                    </button>
-                  </Badge>
-                </motion.div>
-              )
-            })}
-            {items.length === 0 && (
-              <div className="flex items-center justify-center w-full py-3">
-                <p className="text-xs text-gray-400">No items. Add one above.</p>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+                  <X size={11} />
+                </button>
+              </Badge>
+            )
+          })}
+          {setting.value.length === 0 && (
+            <p className="text-xs text-gray-400 py-2">No items. Add one above.</p>
+          )}
+        </div>
+
+        {/* Last updated */}
+        {setting.updatedAt && (
+          <p className="text-[9px] text-gray-300">
+            Updated {new Date(setting.updatedAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}
+            {setting.updatedBy ? ` by ${setting.updatedBy}` : ''}
+          </p>
+        )}
+      </div>
     </motion.div>
   )
 }
 
-// ════════════════════════════════════════════
-// ── MAIN COMPONENT ──
-// ════════════════════════════════════════════
 export default function SettingsModule() {
-  const [cats, setCats] = useState<string[]>(['Produce', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Other'])
-  const [unts, setUnts] = useState<string[]>(['kg', 'unit', 'pack', 'liter', 'box', 'dozen'])
-  const [pays, setPays] = useState<string[]>(['M-Pesa', 'Bank Transfer', 'Cash', 'Cheque'])
-  const [locs, setLocs] = useState<string[]>(['Warehouse A', 'Warehouse B', 'Cold Room', 'Shelf 1', 'Shelf 2'])
+  const [settings, setSettings] = useState<SettingItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
 
-  const totalItems = cats.length + unts.length + pays.length + locs.length
+  const fetchData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings')
+      const d = await res.json()
+      setSettings(d.settings || [])
+      setDirty(false)
+    } catch {
+      toast.error('Failed to load settings')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const stats = [
-    { label: 'Total Items',     value: totalItems,      icon: Tag,       color: '#FF6B35', bg: 'bg-[#FF6B35]/15',   border: 'border-[#FF6B35]/20',   gradient: 'from-[#FF6B35]/10 to-[#FF6B35]/5' },
-    { label: 'Categories',      value: cats.length,     icon: Tag,       color: '#F59E0B', bg: 'bg-amber-500/15',   border: 'border-amber-500/20',   gradient: 'from-amber-500/10 to-amber-500/5' },
-    { label: 'Units',           value: unts.length,     icon: Ruler,     color: '#1B2A4A', bg: 'bg-slate-600/15',   border: 'border-slate-500/20',   gradient: 'from-slate-500/10 to-slate-500/5' },
-    { label: 'Payment Methods', value: pays.length,     icon: CreditCard, color: '#22C55E', bg: 'bg-green-500/15',   border: 'border-green-500/20',   gradient: 'from-green-500/10 to-green-500/5' },
-    { label: 'Locations',       value: locs.length,     icon: Warehouse,  color: '#3B82F6', bg: 'bg-blue-500/15',    border: 'border-blue-500/20',    gradient: 'from-blue-500/10 to-blue-500/5' },
-  ]
+  useEffect(() => { fetchData() }, [fetchData])
+
+  // Update a setting in local state (marks dirty)
+  const updateSetting = (key: string, newValue: string[]) => {
+    setSettings(prev => prev.map(s => s.key === key ? { ...s, value: newValue } : s))
+    setDirty(true)
+  }
+
+  const handleAdd = (key: string, item: string) => {
+    const setting = settings.find(s => s.key === key)
+    if (!setting) return
+    updateSetting(key, [...setting.value, item])
+    toast.success(`Added "${item}"`)
+  }
+
+  const handleRemove = (key: string, item: string) => {
+    const setting = settings.find(s => s.key === key)
+    if (!setting) return
+    updateSetting(key, setting.value.filter(v => v !== item))
+    toast.success(`Removed "${item}"`)
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          settings: settings.map(s => ({ key: s.key, value: s.value })),
+        }),
+      })
+      if (res.ok) {
+        toast.success('Settings saved')
+        setDirty(false)
+        fetchData()
+      } else {
+        const err = await res.json()
+        toast.error(err.error || 'Failed to save')
+      }
+    } catch {
+      toast.error('Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDiscard = () => {
+    fetchData()
+    toast.info('Changes discarded')
+  }
+
+  const totalItems = settings.reduce((s, st) => s + st.value.length, 0)
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-6">
-      {/* ── Office Header ── */}
+    <div className="space-y-3">
       <OpsHeader
         title="Settings"
-        description="Configure system dimensions and preferences"
+        description="System-wide configuration. Changes persist to the database."
         kpiCells={[
-          { label: 'CATEGORIES', value: cats.length },
-          { label: 'UNITS', value: unts.length },
-          { label: 'PAYMENT METHODS', value: pays.length },
-          { label: 'LOCATIONS', value: locs.length },
+          { label: 'CATEGORIES', value: settings.find(s => s.key === 'categories')?.value.length ?? 0 },
+          { label: 'UNITS', value: settings.find(s => s.key === 'units')?.value.length ?? 0 },
+          { label: 'PAYMENT METHODS', value: settings.find(s => s.key === 'paymentMethods')?.value.length ?? 0 },
+          { label: 'LOCATIONS', value: settings.find(s => s.key === 'storageLocations')?.value.length ?? 0 },
+          { label: 'TOTAL ITEMS', value: totalItems },
         ]}
-      />
+      >
+        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+          <HelpCircle size={12} className="mr-1" /> How does this work?
+        </Button>
+        <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
+          <RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+        </Button>
+      </OpsHeader>
 
-      {/* ── Settings Grid ── */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        <SettingsSection title="Product Categories" icon={Tag} items={cats} setItems={setCats} color="#FF6B35" delay={0} />
-        <SettingsSection title="Units of Measurement" icon={Ruler} items={unts} setItems={setUnts} color="#1B2A4A" delay={1} />
-        <SettingsSection title="Payment Methods" icon={CreditCard} items={pays} setItems={setPays} color="#22C55E" delay={2} />
-        <SettingsSection title="Storage Locations" icon={Warehouse} items={locs} setItems={setLocs} color="#3B82F6" delay={3} />
-      </div>
-    </motion.div>
+      {/* Save bar — sticky when dirty */}
+      {dirty && (
+        <div className="sticky top-0 z-10 flex items-center justify-between bg-white rounded-lg border border-[#FF6B35] px-3 py-2 shadow-sm">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-[#FF6B35] animate-pulse" />
+            <span className="text-gray-700 font-medium">Unsaved changes</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="rounded-md text-xs h-7" onClick={handleDiscard} disabled={saving}>
+              Discard
+            </Button>
+            <Button size="sm" className="rounded-md text-xs h-7 bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSave} disabled={saving}>
+              {saving ? <><RefreshCw size={12} className="mr-1 animate-spin" /> Saving...</> : <><CheckCircle2 size={12} className="mr-1" /> Save Changes</>}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <RefreshCw size={24} className="animate-spin text-gray-400" />
+        </div>
+      )}
+
+      {/* Settings grid */}
+      {!loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {settings.map((s, i) => (
+            <SettingsSection
+              key={s.key}
+              setting={s}
+              onAdd={handleAdd}
+              onRemove={handleRemove}
+              delay={i}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Help Dialog */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Settings Module Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Settings module configures system-wide lists that other modules use: product categories, units of measurement, payment methods, and storage locations. Changes here affect dropdowns and validation across the entire system. Only admins can make changes. Every update is saved to the database and audited.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> When a warehouse worker creates an inbound record, they select a product category. When finance records a payment, they select a payment method. When stock is put away, it goes to a storage location. All of these dropdowns are configured here — not hardcoded. If you add a new product line (e.g., "Electronics"), you add it here once, and it appears in every dropdown across the system. Without this module, you'd need a developer to add new categories or payment methods.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Four Setting Types</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
+                  <p className="text-xs text-orange-900 leading-relaxed">
+                    <strong>Product Categories</strong> — Used when creating products. Each product is assigned a category (Produce, Dairy, Bakery, etc.). These appear in the Products module dropdown and drive the dashboard's category breakdown.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>Units of Measurement</strong> — Used when receiving stock. Each product is measured in a unit (kg, unit, pack, liter, box, dozen). These appear in the Inbound and Inventory modules.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>Payment Methods</strong> — Used when recording payments to merchants and from customers. These appear in the Payments module and on the Outbound order form. Add new methods (e.g., "Airtel Money") here, and they become available everywhere.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>Storage Locations</strong> — Used when putting away stock. Each inbound batch is assigned to a storage location (Warehouse A, Cold Room, Shelf 1, etc.). These appear in the Inbound module and the Item Tracker.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>1. Add items.</strong> Type a name in the input field and press Enter (or click the + button). The item appears as a badge. Changes are tracked locally — the "Unsaved changes" bar appears.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>2. Remove items.</strong> Click the X on any badge to remove it. The item disappears immediately from the local state. If you change your mind, click "Discard" to revert to the saved version.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>3. Save changes.</strong> Click "Save Changes" to persist all modifications to the database. Only admins can save. Every save is audited — the audit log records which settings were changed, by whom, and how many items each setting now has.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>4. Defaults.</strong> On first load, the system seeds sensible defaults (Produce, Dairy, kg, unit, M-Pesa, Warehouse A, etc.). You can customize these to match your operation — remove what you don't use, add what you need.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most ERP systems hardcode categories, units, and payment methods in the source code. Adding a new one requires a developer and a code deploy. This module puts that power in the hands of the admin — changes take effect immediately across the entire system, with no code changes and no downtime. And every change is audited, so you always know who added "Electronics" as a category or who removed "Cheque" as a payment method.
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }

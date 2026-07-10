@@ -428,8 +428,10 @@ model InboundRecord {
 model OutboundRecord {
   id                String    @id @default(cuid())
   outboundId        String    @unique
-  /// Explicit order number (e.g., ORD-20260414-001)
+  /// Explicit order number (e.g., ORD-20260414-001, DS-014, RT-001)
   orderNumber       String?
+  /// Preserves the original DS-XXX order number when an RMA flips it to RT-XXX.
+  originalOrderNumber String?
   /// User who created this order (e.g., U003, U004)
   userId            String?
   /// Tracking number for shipment tracking
@@ -545,7 +547,7 @@ model Driver {
   id                String    @id @default(cuid())
   driverId          String    @unique
   name              String
-  phone             String
+  phone             String    @unique
   nationalId        String?
   licenseNumber     String?
   vehicleType       String?
@@ -565,8 +567,26 @@ model Driver {
   /// Shift tracking: when the driver checked out (null = still on shift)
   shiftEnd          DateTime?
   trips             DriverTrip[]
+  shifts            DriverShift[]
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+}
+
+/// Shift history — one row per completed shift. Created when a driver
+/// checks out. Enables hours-worked calculations for payroll.
+model DriverShift {
+  id              String    @id @default(cuid())
+  driverId        String
+  driver          Driver    @relation(fields: [driverId], references: [driverId])
+  driverName      String
+  shiftStart      DateTime
+  shiftEnd        DateTime?
+  durationHours   Float?
+  notes           String?
+  createdAt       DateTime  @default(now())
+
+  @@index([driverId])
+  @@index([shiftStart])
 }
 
 /// Daily trip record for each driver — the 'route sheet'
@@ -902,4 +922,17 @@ model RiskSetting {
   updatedAt DateTime @updatedAt
 
   @@index([category])
+}
+
+/// System-wide settings — categories, units, payment methods, storage locations.
+/// Key-value store where each row is one setting type (value is JSON-serialized array).
+/// Seeded on first GET if empty.
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   // JSON-serialized array of strings
+  label     String
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
