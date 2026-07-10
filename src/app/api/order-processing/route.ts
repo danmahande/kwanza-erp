@@ -81,9 +81,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!customer) {
-      // Generate customer ID
-      const customerCount = await db.customer.count()
-      const customerId = `CUST-${String(customerCount + 1).padStart(4, '0')}`
+      // Generate customer ID — timestamp + random to avoid race condition
+      // (the old count+1 approach caused duplicate IDs on concurrent POSTs)
+      const custTs = Date.now().toString(36).toUpperCase()
+      const custRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+      const customerId = `CUS-${custTs}-${custRand}`
 
       customer = await db.customer.create({
         data: {
@@ -96,6 +98,41 @@ export async function POST(req: NextRequest) {
           totalOrderValue: body.totalAmount || 0,
           createdBy: body.createdBy || _user.name,
         },
+      })
+
+      // Create a fresh CustomerRiskProfile (score 0, fresh start)
+      // The system grades them over time based on delivery outcomes.
+      // But only if one doesn't already exist — preserves fraud history
+      // if someone was deleted and re-registered with the same phone.
+      const { normalizePhone } = await import('@/lib/risk-engine')
+      const normalizedPhone = normalizePhone(body.customerContact || '')
+      if (normalizedPhone) {
+        const existingProfile = await db.customerRiskProfile.findUnique({
+          where: { customerContact: normalizedPhone },
+        })
+        if (!existingProfile) {
+          await db.customerRiskProfile.create({
+            data: {
+              customerContact: normalizedPhone,
+              customerType: 'retail',
+              totalOrders: 1,
+              codRefusals90d: 0,
+              codDelivered90d: 0,
+              distinctAddressesUsed: 0,
+              firstOrderDate: new Date(),
+              lastOrderDate: new Date(),
+              avgAOV: body.totalAmount || 0,
+              isBlocklisted: false,
+            },
+          })
+        }
+      }
+
+      await logAudit({
+        action: 'CUSTOMER_CREATED',
+        module: 'customers',
+        entityId: customerId,
+        details: `Auto-created customer ${customerId}: ${body.customerName} (${body.customerContact}). Risk profile initialized.`,
       })
     } else {
       // Update existing customer's order statistics
