@@ -1,31 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
+import { logAudit } from '@/lib/audit'
 
 /**
- * Payment Batches API — Workflow 6
+ * Payment Batches API — Production-hardened
  *
- * Finance team selects unpaid merchant statements, generates a batch, submits
- * to the bank, and marks as disbursed. Each MerchantPayment created in the
- * batch links back to the statement it settles.
+ * Finance team selects unpaid merchant statements, generates a batch,
+ * submits to the bank, and marks as disbursed. Each MerchantPayment
+ * created in the batch links back to the statement it settles.
  *
- * GET  /api/payment-batches                  → list batches
- * GET  /api/payment-batches?id=...           → single batch with payment details
- * POST /api/payment-batches                  → create batch from selected statements
- *      body: { statementIds: string[], paymentMethod, recordedBy }
- * PUT  /api/payment-batches?id=...           → update batch (e.g. mark disbursed)
- *      body: { status, bankReference, disbursedAt }
+ * All mutations are transactional and audited. Batch DELETE reverses
+ * all merchant figures, re-opens statements, and deletes payments in
+ * a single transaction — no partial state.
  */
 
 export async function GET(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
-    const _user = authResult as AuthUser
     const id = req.nextUrl.searchParams.get('id')
 
     if (id) {
-      // Single batch with its payments
       const batch = await db.paymentBatch.findUnique({ where: { id } })
       if (!batch) return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
 
@@ -56,6 +52,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const { statementIds, paymentMethod, recordedBy, notes } = body
 
+    // ═══════════════════════════════════════════════════════════════
+    // INPUT VALIDATION
+    // ═══════════════════════════════════════════════════════════════
+
     if (!Array.isArray(statementIds) || statementIds.length === 0) {
       return NextResponse.json({ error: 'statementIds array is required' }, { status: 400 })
     }
@@ -77,18 +77,20 @@ export async function POST(req: NextRequest) {
 
     const totalAmount = unpaidStatements.reduce((s, st) => s + st.netPayable, 0)
 
-    // ── Create batch + payments + update statements + update merchants in ONE transaction ──
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — create batch + payments + update statements + update merchants
+    // ═══════════════════════════════════════════════════════════════
+
     const paymentDate = new Date()
     const year = paymentDate.getFullYear()
     const month = paymentDate.getMonth() + 1
     const day = paymentDate.getDate()
 
-    let paymentCounter = await db.merchantPayment.count()
-
     const result = await db.$transaction(async (tx) => {
-      // Create the batch
-      const batchCount = await tx.paymentBatch.count()
-      const batchId = `PB-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(batchCount + 1).padStart(3, '0')}`
+      // Generate batch ID — timestamp + random to avoid race condition
+      const batchTs = Date.now().toString(36).toUpperCase()
+      const batchRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+      const batchId = `PB-${paymentDate.toISOString().slice(0, 10).replace(/-/g, '')}-${batchTs.slice(-4)}${batchRand}`
 
       const batch = await tx.paymentBatch.create({
         data: {
@@ -102,12 +104,13 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      const createdPayments = []
       for (const stmt of unpaidStatements) {
-        paymentCounter += 1
-        const paymentId = `PAY-${String(paymentCounter).padStart(3, '0')}`
+        // Generate payment ID — timestamp + random
+        const payTs = Date.now().toString(36).toUpperCase()
+        const payRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+        const paymentId = `PAY-${payTs}-${payRand}`
 
-        const payment = await tx.merchantPayment.create({
+        await tx.merchantPayment.create({
           data: {
             paymentId,
             merchantId: stmt.merchantId,
@@ -126,7 +129,6 @@ export async function POST(req: NextRequest) {
             status: 'submitted',
           },
         })
-        createdPayments.push(payment)
 
         // Mark the statement as paid
         await tx.merchantStatement.update({
@@ -144,13 +146,23 @@ export async function POST(req: NextRequest) {
         })
       }
 
-      return { batch, paymentsCreated: createdPayments.length, totalAmount }
+      return { batch, paymentsCreated: unpaidStatements.length, totalAmount }
+    })
+
+    await logAudit({
+      action: 'BATCH_CREATED',
+      module: 'payments',
+      entityId: result.batch.batchId,
+      details: `Created payment batch ${result.batch.batchId} with ${result.paymentsCreated} payment(s) totaling ${result.totalAmount}. Statements marked as paid, merchant figures updated.`,
     })
 
     return NextResponse.json(result, { status: 201 })
   } catch (error) {
     console.error('Error creating payment batch:', error)
-    return NextResponse.json({ error: 'Failed to create payment batch' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Failed to create payment batch',
+      detail: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 })
   }
 }
 
@@ -162,32 +174,59 @@ export async function PUT(req: NextRequest) {
     const body = await req.json()
     const { id, ...data } = body
 
-    // If marking as disbursed, stamp the time
-    if (data.status === 'disbursed' && !data.disbursedAt) {
-      data.disbursedAt = new Date()
+    if (!id) {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 })
+    }
 
-      // Also mark all linked MerchantPayments as completed
-      const batch = await db.paymentBatch.findUnique({ where: { id } })
-      if (batch) {
-        await db.merchantPayment.updateMany({
-          where: { batchId: batch.batchId },
+    const existing = await db.paymentBatch.findUnique({ where: { id } })
+    if (!existing) {
+      return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — update batch + mark payments completed on disburse
+    // ═══════════════════════════════════════════════════════════════
+
+    const batch = await db.$transaction(async (tx) => {
+      // If marking as disbursed, stamp the time + mark all linked payments as completed
+      if (data.status === 'disbursed' && !data.disbursedAt) {
+        data.disbursedAt = new Date()
+
+        await tx.merchantPayment.updateMany({
+          where: { batchId: existing.batchId },
           data: { status: 'completed' },
         })
       }
-    }
 
-    const batch = await db.paymentBatch.update({
-      where: { id },
-      data: { ...data, updatedAt: new Date() },
+      const updated = await tx.paymentBatch.update({
+        where: { id },
+        data: { ...data, updatedAt: new Date() },
+      })
+
+      return updated
+    })
+
+    await logAudit({
+      action: data.status === 'disbursed' ? 'BATCH_DISBURSED' : 'BATCH_UPDATED',
+      module: 'payments',
+      entityId: batch.batchId,
+      details: data.status === 'disbursed'
+        ? `Batch ${batch.batchId} marked as disbursed. All linked payments marked as completed.`
+        : `Batch ${batch.batchId} updated: ${Object.keys(data).join(', ')}`,
     })
 
     return NextResponse.json(batch)
   } catch (error) {
     console.error('Error updating payment batch:', error)
-    return NextResponse.json({ error: 'Failed to update payment batch' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Failed to update payment batch',
+      detail: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 })
   }
 }
 
+// DELETE — reverses ALL merchant figures, re-opens ALL statements, deletes ALL payments,
+// deletes the batch — all in ONE transaction. Blocks deletion of disbursed batches.
 export async function DELETE(req: NextRequest) {
   try {
     const authResult = requireAuth(req)
@@ -200,49 +239,67 @@ export async function DELETE(req: NextRequest) {
     if (!batch) return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
 
     if (batch.status === 'disbursed') {
-      return NextResponse.json({ error: 'Cannot delete a disbursed batch' }, { status: 400 })
+      return NextResponse.json({
+        error: 'Cannot delete a disbursed batch',
+        hint: 'Funds have already been sent to merchants. Contact finance to reverse the bank transfer.',
+        code: 'DISBURSED',
+      }, { status: 409 })
     }
 
-    // Fetch all payments in this batch BEFORE unlinking (we need the amounts + merchant IDs)
+    // Fetch all payments in this batch BEFORE the transaction (we need amounts + merchant IDs)
     const payments = await db.merchantPayment.findMany({
       where: { batchId: batch.batchId },
       select: { id: true, merchantId: true, amount: true, statementId: true },
     })
 
-    // F1: Reverse merchant cumulative figures for each payment
-    for (const p of payments) {
-      if (p.merchantId && p.amount > 0) {
-        try {
-          await db.merchant.update({
+    // ═══════════════════════════════════════════════════════════════
+    // TRANSACTION — reverse everything or nothing
+    // ═══════════════════════════════════════════════════════════════
+
+    await db.$transaction(async (tx) => {
+      // 1. Reverse merchant cumulative figures for each payment
+      for (const p of payments) {
+        if (p.merchantId && p.amount > 0) {
+          await tx.merchant.update({
             where: { merchantId: p.merchantId },
             data: {
               actualPayment: { decrement: p.amount },
               pendingPayment: { increment: p.amount },
             },
           })
-        } catch (merchantErr) {
-          console.error(`Merchant reversal failed for ${p.merchantId} (non-blocking):`, merchantErr)
+        }
+
+        // 2. Re-open statements that were marked paid by this batch
+        if (p.statementId) {
+          await tx.merchantStatement.updateMany({
+            where: { statementId: p.statementId },
+            data: { isPaid: false, paidAt: null, status: 'issued' },
+          })
         }
       }
 
-      // Re-open any statements that were marked paid by this batch
-      if (p.statementId) {
-        await db.merchantStatement.updateMany({
-          where: { statementId: p.statementId },
-          data: { isPaid: false, paidAt: null, status: 'issued' },
-        })
-      }
-    }
+      // 3. Delete the payments
+      await tx.merchantPayment.deleteMany({
+        where: { batchId: batch.batchId },
+      })
 
-    // Delete the payments themselves (they were created by the batch, not standalone)
-    await db.merchantPayment.deleteMany({
-      where: { batchId: batch.batchId },
+      // 4. Delete the batch
+      await tx.paymentBatch.delete({ where: { id } })
     })
 
-    await db.paymentBatch.delete({ where: { id } })
+    await logAudit({
+      action: 'BATCH_DELETED',
+      module: 'payments',
+      entityId: batch.batchId,
+      details: `Deleted batch ${batch.batchId}. Reversed ${payments.length} payment(s), re-opened ${new Set(payments.map(p => p.statementId).filter(Boolean)).size} statement(s), reversed merchant figures for ${new Set(payments.map(p => p.merchantId).filter(Boolean)).size} merchant(s).`,
+    })
+
     return NextResponse.json({ success: true, reversed: payments.length })
   } catch (error) {
     console.error('Error deleting payment batch:', error)
-    return NextResponse.json({ error: 'Failed to delete payment batch' }, { status: 500 })
+    return NextResponse.json({
+      error: 'Failed to delete payment batch',
+      detail: error instanceof Error ? error.message : 'Unknown error',
+    }, { status: 500 })
   }
 }

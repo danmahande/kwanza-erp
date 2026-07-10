@@ -121,6 +121,12 @@ export async function POST(req: NextRequest) {
         period: body.period,
         generatedBy: body.generatedBy || _user.name,
       })
+      await logAudit({
+        action: 'STATEMENTS_GENERATED_ALL',
+        module: 'statements',
+        entityId: body.period,
+        details: `Generated statements for all merchants for period ${body.period}. ${results.filter((r: { success: boolean }) => r.success).length} successful, ${results.filter((r: { success: boolean }) => !r.success).length} failed.`,
+      })
       return NextResponse.json({ success: true, results }, { status: 201 })
     }
 
@@ -129,6 +135,13 @@ export async function POST(req: NextRequest) {
       merchantId: body.merchantId,
       period: body.period,
       generatedBy: body.generatedBy || _user.name,
+    })
+
+    await logAudit({
+      action: 'STATEMENT_GENERATED',
+      module: 'statements',
+      entityId: result.statementId || body.merchantId,
+      details: `Generated statement for merchant ${body.merchantId} for period ${body.period}. Net payable: ${result.netPayable || 'N/A'}`,
     })
 
     return NextResponse.json({ success: true, ...result }, { status: 201 })

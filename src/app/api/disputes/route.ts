@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
     }
 
     const count = await db.statementDispute.count()
-    const disputeId = `DSP-${String(count + 1).padStart(5, '0')}`
+    const disputeId = `DSP-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`
 
     const dispute = await db.statementDispute.create({
       data: {
@@ -225,5 +225,53 @@ export async function PATCH(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Unknown error'
     return NextResponse.json({ error: 'Failed to resolve dispute', detail: msg }, { status: 500 })
+  }
+}
+
+// DELETE — only allowed for open disputes (not yet credited or under review).
+// Credited disputes have a linked credit memo that can't be reversed by deletion.
+export async function DELETE(req: NextRequest) {
+  try {
+    const authResult = requireAuth(req)
+    if (authResult instanceof NextResponse) return authResult
+    const _user = authResult as AuthUser
+    const { searchParams } = new URL(req.url)
+    const id = searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+    const existing = await db.statementDispute.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Dispute not found' }, { status: 404 })
+
+    // Block deletion of credited disputes (credit memo exists)
+    if (existing.status === 'credited') {
+      return NextResponse.json({
+        error: 'Cannot delete a credited dispute',
+        hint: `A credit memo (${existing.paymentId}) was issued for this dispute. Reverse the credit memo payment first.`,
+        code: 'CREDITED',
+      }, { status: 409 })
+    }
+
+    // Block deletion of under_review disputes (being investigated)
+    if (existing.status === 'under_review') {
+      return NextResponse.json({
+        error: 'Cannot delete a dispute under review',
+        hint: 'Reject the dispute first to close it, then delete if needed.',
+        code: 'UNDER_REVIEW',
+      }, { status: 409 })
+    }
+
+    await db.statementDispute.delete({ where: { id } })
+
+    await logAudit({
+      action: 'DISPUTE_DELETED',
+      module: 'disputes',
+      entityId: existing.disputeId,
+      details: `Deleted dispute ${existing.disputeId} for ${existing.merchantName}. Status was: ${existing.status}.`,
+    })
+
+    return NextResponse.json({ success: true })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: 'Failed to delete dispute', detail: msg }, { status: 500 })
   }
 }

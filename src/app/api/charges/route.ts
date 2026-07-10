@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     }
 
     const count = await db.charge.count()
-    const chargeId = `CHG-${String(count + 1).padStart(5, '0')}`
+    const chargeId = `CHG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 5).toUpperCase()}`
 
     const charge = await db.charge.create({
       data: {
@@ -172,9 +172,31 @@ export async function DELETE(req: NextRequest) {
     const _user = authResult as AuthUser
     const id = req.nextUrl.searchParams.get('id')
     if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+    const existing = await db.charge.findUnique({ where: { id } })
+    if (!existing) return NextResponse.json({ error: 'Charge not found' }, { status: 404 })
+
+    // Block deletion of invoiced charges (they're on a merchant's statement)
+    if (existing.status === 'invoiced') {
+      return NextResponse.json({
+        error: 'Cannot delete an invoiced charge',
+        hint: 'This charge is already on a merchant statement. Delete the statement first, or create a credit note.',
+        code: 'INVOICED',
+      }, { status: 409 })
+    }
+
     await db.charge.delete({ where: { id } })
+
+    await logAudit({
+      action: 'CHARGE_DELETED',
+      module: 'charges',
+      entityId: existing.chargeId,
+      details: `Deleted charge ${existing.chargeId} (${existing.chargeType}: ${existing.amount} for ${existing.merchantName}). Status was: ${existing.status}.`,
+    })
+
     return NextResponse.json({ success: true })
-  } catch {
-    return NextResponse.json({ error: 'Failed to delete charge' }, { status: 500 })
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'Unknown error'
+    return NextResponse.json({ error: 'Failed to delete charge', detail: msg }, { status: 500 })
   }
 }
