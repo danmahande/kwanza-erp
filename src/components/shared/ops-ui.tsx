@@ -165,7 +165,14 @@ export function OpsHeader({
       {/* Search bar */}
       {(searchValue !== undefined || onSearchChange) && (
         <div className="relative max-w-md">
-          <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
+          <button
+            type="button"
+            onClick={onSearchSubmit}
+            className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#FF6B35] transition-colors"
+            title="Search"
+          >
+            <Search size={12} />
+          </button>
           <Input
             placeholder={searchPlaceholder || 'Search...'}
             value={searchValue || ''}
