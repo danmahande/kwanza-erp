@@ -148,13 +148,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       })
     })
 
-    // 7. After-sales (customer returns)
-    const afterSales = await db.afterSalesRecord.findMany({
-      where: { customerId: { contains: merchant.merchantId } },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      select: { afterSalesId: true, customerName: true, reason: true, returnStatus: true, refundAmount: true, createdAt: true },
+    // 7. After-sales (customer returns) — link via OutboundRecord.vendorId
+    // (was querying customerId contains merchantId — almost never matched)
+    const merchantOrderIds = await db.outboundRecord.findMany({
+      where: { vendorId: merchant.merchantId },
+      select: { orderNumber: true, outboundId: true, originalOrderNumber: true },
     })
+    const orderIdList = merchantOrderIds
+      .flatMap(o => [o.orderNumber, o.outboundId, o.originalOrderNumber])
+      .filter((v): v is string => v !== null && v !== undefined)
+
+    const afterSales = orderIdList.length > 0
+      ? await db.afterSalesRecord.findMany({
+          where: { originalOrderId: { in: orderIdList } },
+          orderBy: { createdAt: 'desc' },
+          take: limit,
+          select: { afterSalesId: true, customerName: true, reason: true, returnStatus: true, refundAmount: true, createdAt: true },
+        })
+      : []
     afterSales.forEach(r => {
       events.push({
         timestamp: r.createdAt, type: 'rma', icon: 'package-x',

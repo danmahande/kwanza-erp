@@ -65,10 +65,24 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const shrinkageQty = shrinkage.reduce((s, r) => s + r.qty, 0)
     const shrinkageValue = shrinkage.reduce((s, r) => s + (r.totalValue || 0), 0)
 
-    // After-sales (RMA) in window
-    const rmaCount = await db.afterSalesRecord.count({
-      where: { createdAt: { gte: since }, customerName: { contains: mid } },
+    // After-sales (RMA) in window — link via OutboundRecord.vendorId
+    // (was querying customerName contains merchantId — almost never matched)
+    const merchantOrderNumbers = await db.outboundRecord.findMany({
+      where: { vendorId: mid },
+      select: { orderNumber: true, outboundId: true, originalOrderNumber: true },
     })
+    const orderNumberList = merchantOrderNumbers
+      .flatMap(o => [o.orderNumber, o.outboundId, o.originalOrderNumber])
+      .filter((v): v is string => v !== null && v !== undefined)
+
+    const rmaCount = orderNumberList.length > 0
+      ? await db.afterSalesRecord.count({
+          where: {
+            createdAt: { gte: since },
+            originalOrderId: { in: orderNumberList },
+          },
+        })
+      : 0
 
     // Inbound volume in window
     const inbounds = await db.inboundRecord.findMany({

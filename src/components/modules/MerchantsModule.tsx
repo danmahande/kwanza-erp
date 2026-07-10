@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Download, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon } from 'lucide-react'
+import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Download, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon, HelpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
@@ -135,6 +135,7 @@ export default function MerchantsModule() {
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
   const [rateCard, setRateCard] = useState<RateCard | null>(null)
   const [rateCardHistory, setRateCardHistory] = useState<RateCard[]>([])
+  const [helpOpen, setHelpOpen] = useState(false)
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [profileOpen, setProfileOpen] = useState(false)
   const [activityData, setActivityData] = useState<Array<Record<string, unknown>>>([])
@@ -541,6 +542,9 @@ export default function MerchantsModule() {
         actionLabel="Add Merchant"
         onAction={() => { setEditing(null); setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' }); setOpen(true) }}
       >
+        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+          <HelpCircle size={12} className="mr-1" /> How does this work?
+        </Button>
         <Button variant="outline" size="sm" onClick={handleExportReport} className="h-7 text-xs rounded-md">
           <Download size={12} className="mr-1" /> Export Report
         </Button>
@@ -966,6 +970,80 @@ export default function MerchantsModule() {
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleImport} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Import</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Help Dialog */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Merchants Module Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Merchants module is the financial hub of your warehouse operation. Every merchant (vendor) who stores products in your warehouse has a record here — with their cumulative financial position, rate card, communication log, and operational history. This module ties together inbound (stock received), outbound (orders shipped), payments (what they've been paid), returns (RTV + shrinkage), and statements (monthly settlements). It's where you answer "how much do we owe this merchant?" and "are they profitable?"
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> Merchants are your business partners — they supply the products you store and fulfill. This module tracks everything about each merchant: their contact details, delivery type (self-delivery or warehouse-fulfilled), bank details for payments, contracted rates (rate card), operational hold status, and cumulative financials (total inbound value, total sales, total returns, total shrinkage, total paid, pending balance). Without this module, you can't generate statements, create payment batches, or know whether a merchant is profitable.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>1. Create merchants.</strong> Click "Add Merchant". Fill in business name, contact, email, delivery type (self-delivery means the merchant fulfills their own orders; warehouse-fulfilled means you do it), bank details, and contract dates. Every creation is audited.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>2. Rate cards.</strong> Each merchant has a rate card — the fees you charge them per unit for receiving, storage, picking, packing, returns, COD remittance, and your commission percentage. When you create a new rate card, the old one is automatically superseded (in a transaction — no race conditions). Rate cards drive the monthly statement calculations.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
+                  <p className="text-xs text-amber-900 leading-relaxed">
+                    <strong>3. Operational hold.</strong> If a merchant has an overdue balance or dispute, you can place them on hold. This blocks all inbound (stock receiving) and outbound (order creation) for that merchant — the system enforces it at the API level, not just in the UI. The hold records who set it, when, and why.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
+                  <p className="text-xs text-purple-900 leading-relaxed">
+                    <strong>4. Communication log.</strong> Every call, email, WhatsApp, or visit with a merchant is logged with follow-up reminders. Overdue follow-ups appear on the Operations Desk. This is your relationship management tool — you always know what was discussed, when, and what the next step is.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>5. Financial position.</strong> Each merchant card shows their cumulative financials: total inbound value (stock received), total sales value (orders delivered), total returns, total shrinkage, total paid, and pending balance. The profitability calculation shows revenue, commission, shrinkage, returns, and net. This is the data that drives the monthly statement.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>6. Statements.</strong> At month-end, you generate a statement for each merchant. The statement rolls up all fees (from the rate card), sales, returns, and shrinkage into a net payable figure. Statements go through an approval workflow (draft → pending approval → approved → issued → paid). Payment batches are created from issued statements.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>7. Deactivate vs Delete.</strong> To stop working with a merchant, deactivate them — they stay in the system with all their financial history. Deleting is blocked if they have ANY dependent records (products, inbound, outbound, payments, statements, RTV, shrinkage, charges, communication, storage liabilities). In most cases, deactivate is the right choice.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most warehouse systems treat merchants as just a name and a contact number. This module treats each merchant as a financial entity with a full lifecycle: contracted rates, operational hold enforcement, cumulative financial tracking, communication logging, monthly statements, and payment batches. You can answer any question: "How much do we owe this merchant?" (pending balance), "Are they profitable?" (profitability calculation), "What did we discuss last?" (communication log), "Why are they on hold?" (hold reason + who set it), and "What's their rate card?" (rate card history with superseded versions preserved). Every financial action — statement generation, payment batch, charge, dispute — flows back to this module and updates the merchant's cumulative position.
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

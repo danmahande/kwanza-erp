@@ -108,8 +108,9 @@ export async function POST(req: NextRequest) {
     if (authResult instanceof NextResponse) return authResult
     const _user = authResult as AuthUser
     const body = await req.json()
-    const count = await db.merchant.count()
-    const merchantId = `MCH-${String(count + 1).padStart(3, '0')}`
+    const mchTs = Date.now().toString(36).toUpperCase()
+    const mchRand = Math.random().toString(36).slice(2, 5).toUpperCase()
+    const merchantId = `MCH-${mchTs}-${mchRand}`
     const merchant = await db.merchant.create({
       data: { ...body, merchantId },
     })
@@ -166,7 +167,7 @@ export async function DELETE(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const id = searchParams.get('id')
 
-    // F2: Check for existing records before deleting
+    // F2: Check for existing records before deleting — include ALL dependent tables
     const merchant = await db.merchant.findUnique({ where: { id: id! }, select: { merchantId: true, businessName: true } })
     if (!merchant) return NextResponse.json({ error: 'Merchant not found' }, { status: 404 })
 
@@ -179,9 +180,11 @@ export async function DELETE(req: NextRequest) {
       db.rTVRecord.count({ where: { merchantId: merchant.merchantId } }),
       db.shrinkageRecord.count({ where: { merchantId: merchant.merchantId } }),
       db.charge.count({ where: { merchantId: merchant.merchantId } }),
+      db.merchantCommunication.count({ where: { merchantId: merchant.merchantId } }),
+      db.storageLiability.count({ where: { merchantId: merchant.merchantId } }),
     ])
-    const [products, inbounds, outbounds, payments, statements, rtvs, shrinkage, charges] = checks
-    const totalDeps = products + inbounds + outbounds + payments + statements + rtvs + shrinkage + charges
+    const [products, inbounds, outbounds, payments, statements, rtvs, shrinkage, charges, comms, liabilities] = checks
+    const totalDeps = products + inbounds + outbounds + payments + statements + rtvs + shrinkage + charges + comms + liabilities
 
     if (totalDeps > 0) {
       const details: string[] = []
@@ -193,6 +196,8 @@ export async function DELETE(req: NextRequest) {
       if (rtvs) details.push(`${rtvs} RTV records`)
       if (shrinkage) details.push(`${shrinkage} shrinkage records`)
       if (charges) details.push(`${charges} charges`)
+      if (comms) details.push(`${comms} communication logs`)
+      if (liabilities) details.push(`${liabilities} storage liabilities`)
       return NextResponse.json({
         error: `Cannot delete merchant "${merchant.businessName}" — ${totalDeps} dependent records exist`,
         details,
@@ -201,6 +206,14 @@ export async function DELETE(req: NextRequest) {
     }
 
     await db.merchant.delete({ where: { id: id! } })
+
+    await logAudit({
+      action: 'MERCHANT_DELETED',
+      module: 'merchants',
+      entityId: merchant.merchantId,
+      details: `Deleted merchant ${merchant.businessName} (${merchant.merchantId}). No dependent records. By ${_user.name}.`,
+    })
+
     return NextResponse.json({ success: true })
   } catch {
     return NextResponse.json({ error: 'Failed to delete merchant' }, { status: 500 })
