@@ -42,3 +42,7 @@ next-env.d.ts
 
 # SQLite journal files (should not be committed)
 prisma/*.db-journal
+
+# Database files — never commit these (each dev has their own)
+prisma/*.db
+prisma/*.db-journal
