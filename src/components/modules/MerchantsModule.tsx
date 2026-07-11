@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState, useCallback } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,106 +10,37 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Settings as SettingsIcon, FileText, Filter, ChevronDown, ChevronRight, Upload, Download, Clock, ArrowDownRight, ArrowUpRight, DollarSign, AlertTriangle, RotateCcw, PackageX, Calendar, CheckCircle2, Phone, Building2, Pause, Play, MessageSquare, Plus, BarChart3, AlertOctagon, HelpCircle } from 'lucide-react'
+import {
+  Search, Filter, ChevronDown, ChevronRight, Upload, Download,
+  AlertTriangle, CheckCircle2, Phone, Building2, Pause, Play,
+  MessageSquare, Plus, HelpCircle, Settings as SettingsIcon,
+  FileText, Calendar, X, ArrowRight, ArrowLeft, Truck, MapPin,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
-import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
 
+// ── Types ──
+
 interface Merchant {
-  id: string
-  merchantId: string
-  businessName: string
-  contact: string
-  email: string
-  deliveryType: string | null
-  currency: string
-  isActive: boolean
-  isOnHold: boolean
-  holdReason: string | null
-  holdSetAt: string | null
-  holdSetBy: string | null
-  createdAt: string
-  taxId: string | null
-  address: string | null
-  bankName: string | null
-  bankAccount: string | null
-  contactPerson: string | null
-  altPhone: string | null
-  contractStart: string | null
-  contractEnd: string | null
-  notes: string | null
-  totalInboundValue: number
-  totalSalesValue: number
-  totalShrinkageValue: number
-  totalReturnValue: number
-  expectedPayment: number
-  actualPayment: number
-  pendingPayment: number
-  storageLiabilityBalance: number
-  productCount: number
-  orderCount: number
-  lastInboundAt: string | null
-  lastOutboundAt: string | null
-  lastPaymentAt: string | null
-  lastCommunicationAt: string | null
-  lastCommunicationType: string | null
-  lastCommunicationSubject: string | null
+  id: string; merchantId: string; businessName: string; contact: string; email: string
+  deliveryType: string | null; currency: string; isActive: boolean; isOnHold: boolean
+  holdReason: string | null; holdSetAt: string | null; holdSetBy: string | null
+  createdAt: string; taxId: string | null; address: string | null
+  bankName: string | null; bankAccount: string | null; contactPerson: string | null
+  altPhone: string | null; paymentTerms: string | null
+  communicationChannels: string | null; deliveryAddresses: string | null
+  productCategories: string | null
+  contractStart: string | null; contractEnd: string | null; notes: string | null
+  totalInboundValue: number; totalSalesValue: number; totalShrinkageValue: number
+  totalReturnValue: number; expectedPayment: number; actualPayment: number
+  pendingPayment: number; storageLiabilityBalance: number
+  productCount: number; orderCount: number
+  lastInboundAt: string | null; lastOutboundAt: string | null; lastPaymentAt: string | null
   pendingFollowUps: number
   profitability: { revenue: number; commission: number; shrinkage: number; returns: number; net: number }
-  statements: Array<{
-    id: string; statementId: string; period: string; netPayable: number
-    isPaid: boolean; status: string; createdAt: string
-  }>
-}
-
-interface CommunicationEntry {
-  id: string
-  merchantId: string
-  type: string
-  direction: string
-  subject: string
-  notes: string | null
-  recordedBy: string
-  followUpAt: string | null
-  isResolved: boolean
-  createdAt: string
-}
-
-interface PerformanceData {
-  merchantId: string
-  businessName: string
-  currency: string
-  window: { days: number; since: string }
-  totals: {
-    orders: number; delivered: number; cancelled: number; failed: number; inTransit: number
-    returns: number; rma: number; shrinkageQty: number; shrinkageValue: number
-    inboundQty: number; inboundValue: number
-  }
-  rates: {
-    successRate: number; firstAttemptRate: number; returnsRate: number
-    cancellationRate: number; codRate: number
-  }
-  cycleTime: { avgHours: number; avgDays: number; samples: number }
-  cod: { totalSale: number; totalCollected: number; shortfall: number }
-  sparkline: Array<{ date: string; total: number; delivered: number }>
-}
-
-interface RateCard {
-  id: string
-  merchantId: string
-  inboundReceivingPerUnit: number
-  storagePerUnitPerDay: number
-  pickPerUnit: number
-  packPerOrder: number
-  returnProcessingPerUnit: number
-  commissionPercent: number
-  codRemittanceFeePerOrder: number
-  codShortfallPenalty: number
-  isActive: boolean
-  validFrom: string
-  validTo: string | null
+  statements: Array<{ id: string; statementId: string; period: string; netPayable: number; isPaid: boolean; status: string; createdAt: string }>
 }
 
 const FILTER_CHIPS = [
@@ -122,99 +53,427 @@ const FILTER_CHIPS = [
   { key: 'consignment', label: 'Consignment', deliveryType: 'consignment', status: '' },
 ]
 
+const PAYMENT_TERMS = [
+  { value: 'prepaid', label: 'Prepaid' },
+  { value: 'cod', label: 'Cash on Delivery' },
+  { value: 'net_7', label: 'Net 7 days' },
+  { value: 'net_14', label: 'Net 14 days' },
+  { value: 'net_30', label: 'Net 30 days' },
+  { value: 'net_60', label: 'Net 60 days' },
+]
+
+const CURRENCIES = [
+  { value: 'UGX', label: 'UGX (Ugandan Shilling)' },
+  { value: 'KES', label: 'KES (Kenyan Shilling)' },
+  { value: 'USD', label: 'USD (US Dollar)' },
+]
+
+const CATEGORIES = ['Produce', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Electronics', 'Personal Care', 'Other']
+
+const deliveryCode = (dt: string | null) => dt === 'drop-ship' ? 'DS' : dt === 'consignment' ? 'CN' : 'SD'
+const deliveryLabel = (dt: string | null) => dt === 'drop-ship' ? 'Drop-Ship' : dt === 'consignment' ? 'Consignment' : 'Self-Delivery'
+
+const timeAgo = (date: string | null) => {
+  if (!date) return '—'
+  const diff = Date.now() - new Date(date).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 30) return `${days}d ago`
+  return new Date(date).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ONBOARDING WIZARD
+// ═══════════════════════════════════════════════════════════════
+
+const WIZARD_STEPS = [
+  { num: 1, title: 'Business', desc: 'Company details' },
+  { num: 2, title: 'Financial', desc: 'Currency & payment terms' },
+  { num: 3, title: 'Delivery', desc: 'Addresses & type' },
+  { num: 4, title: 'Products', desc: 'Categories supplied' },
+  { num: 5, title: 'Communication', desc: 'Channels & contacts' },
+]
+
+interface WizardForm {
+  businessName: string; contact: string; email: string; taxId: string; address: string
+  currency: string; paymentTerms: string; bankName: string; bankAccount: string
+  deliveryType: string; deliveryAddresses: Array<{ label: string; address: string }>
+  productCategories: string[]
+  contactPerson: string; altPhone: string
+  communicationChannels: string[]; contractStart: string; contractEnd: string; notes: string
+}
+
+const emptyForm: WizardForm = {
+  businessName: '', contact: '', email: '', taxId: '', address: '',
+  currency: 'UGX', paymentTerms: 'net_30', bankName: '', bankAccount: '',
+  deliveryType: 'self-delivery', deliveryAddresses: [{ label: 'Main Warehouse', address: '' }],
+  productCategories: [],
+  contactPerson: '', altPhone: '',
+  communicationChannels: ['phone'], contractStart: '', contractEnd: '', notes: '',
+}
+
+function OnboardingWizard({ open, onClose, onComplete, editing }: {
+  open: boolean; onClose: () => void; onComplete: (form: WizardForm) => void; editing: Merchant | null
+}) {
+  const [step, setStep] = useState(1)
+  const [form, setForm] = useState<WizardForm>(emptyForm)
+
+  useEffect(() => {
+    if (editing) {
+      setForm({
+        businessName: editing.businessName, contact: editing.contact, email: editing.email,
+        taxId: editing.taxId || '', address: editing.address || '',
+        currency: editing.currency || 'UGX', paymentTerms: editing.paymentTerms || 'net_30',
+        bankName: editing.bankName || '', bankAccount: editing.bankAccount || '',
+        deliveryType: editing.deliveryType || 'self-delivery',
+        deliveryAddresses: editing.deliveryAddresses ? JSON.parse(editing.deliveryAddresses) : [{ label: 'Main Warehouse', address: editing.address || '' }],
+        productCategories: editing.productCategories ? JSON.parse(editing.productCategories) : [],
+        contactPerson: editing.contactPerson || '', altPhone: editing.altPhone || '',
+        communicationChannels: editing.communicationChannels ? JSON.parse(editing.communicationChannels) : ['phone'],
+        contractStart: editing.contractStart ? editing.contractStart.slice(0, 10) : '',
+        contractEnd: editing.contractEnd ? editing.contractEnd.slice(0, 10) : '',
+        notes: editing.notes || '',
+      })
+    } else {
+      setForm(emptyForm)
+    }
+    setStep(1)
+  }, [editing, open])
+
+  const canProceed = () => {
+    if (step === 1) return form.businessName.trim() && form.contact.trim() && form.email.trim()
+    if (step === 2) return form.currency && form.paymentTerms
+    if (step === 3) {
+      if (form.deliveryType === 'self-delivery' || form.deliveryType === 'drop-ship') {
+        return form.deliveryAddresses.every(a => a.address.trim())
+      }
+      return true
+    }
+    return true
+  }
+
+  const handleNext = () => { if (step < 5) setStep(step + 1) }
+  const handleBack = () => { if (step > 1) setStep(step - 1) }
+
+  const toggleCategory = (cat: string) => {
+    setForm(f => ({
+      ...f,
+      productCategories: f.productCategories.includes(cat)
+        ? f.productCategories.filter(c => c !== cat)
+        : [...f.productCategories, cat]
+    }))
+  }
+
+  const toggleChannel = (ch: string) => {
+    setForm(f => ({
+      ...f,
+      communicationChannels: f.communicationChannels.includes(ch)
+        ? f.communicationChannels.filter(c => c !== ch)
+        : [...f.communicationChannels, ch]
+    }))
+  }
+
+  const addAddress = () => setForm(f => ({ ...f, deliveryAddresses: [...f.deliveryAddresses, { label: '', address: '' }] }))
+  const removeAddress = (i: number) => setForm(f => ({ ...f, deliveryAddresses: f.deliveryAddresses.filter((_, idx) => idx !== i) }))
+  const updateAddress = (i: number, field: 'label' | 'address', val: string) => setForm(f => ({ ...f, deliveryAddresses: f.deliveryAddresses.map((a, idx) => idx === i ? { ...a, [field]: val } : a) }))
+
+  return (
+    <DetailSlideOver
+      open={open}
+      onClose={onClose}
+      title={editing ? `Edit ${editing.businessName}` : 'Onboard New Merchant'}
+      subtitle={`Step ${step} of 5 · ${WIZARD_STEPS[step - 1].desc}`}
+      width="lg"
+      footer={
+        <div className="flex items-center justify-between w-full">
+          <Button variant="outline" size="sm" className="rounded-xl" onClick={onClose}>Cancel</Button>
+          <div className="flex items-center gap-2">
+            {step > 1 && <Button variant="outline" size="sm" className="rounded-xl" onClick={handleBack}><ArrowLeft size={12} className="mr-1" /> Back</Button>}
+            {step < 5 ? (
+              <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleNext} disabled={!canProceed()}>
+                Next <ArrowRight size={12} className="ml-1" />
+              </Button>
+            ) : (
+              <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={() => onComplete(form)} disabled={!canProceed()}>
+                {editing ? 'Save Changes' : 'Create Merchant'}
+              </Button>
+            )}
+          </div>
+        </div>
+      }
+    >
+      {/* Step indicator */}
+      <div className="flex items-center gap-1 mb-6">
+        {WIZARD_STEPS.map((s, i) => (
+          <div key={s.num} className="flex items-center flex-1">
+            <div className={`flex items-center gap-2 ${s.num === step ? 'opacity-100' : s.num < step ? 'opacity-60' : 'opacity-30'}`}>
+              <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${s.num < step ? 'bg-green-500 text-white' : s.num === step ? 'bg-[#FF6B35] text-white' : 'bg-gray-200 text-gray-500'}`}>
+                {s.num < step ? '✓' : s.num}
+              </div>
+              <span className={`text-[10px] font-medium ${s.num === step ? 'text-gray-900' : 'text-gray-400'}`}>{s.title}</span>
+            </div>
+            {i < 4 && <div className={`flex-1 h-px mx-2 ${s.num < step ? 'bg-green-400' : 'bg-gray-200'}`} />}
+          </div>
+        ))}
+      </div>
+
+      {/* Step 1: Business */}
+      {step === 1 && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Business Name <span className="text-red-400">*</span></Label>
+            <Input value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} placeholder="e.g., Supreme Office Supplies Ltd" className="rounded-xl" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Primary Phone <span className="text-red-400">*</span></Label>
+              <Input value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} placeholder="+256 700 123 456" className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Email <span className="text-red-400">*</span></Label>
+              <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="info@business.com" className="rounded-xl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Tax ID (TIN)</Label>
+              <Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="TIN number" className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Registered Address</Label>
+              <Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Plot number, street, city" className="rounded-xl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Contract Start</Label>
+              <Input type="date" value={form.contractStart} onChange={e => setForm({ ...form, contractStart: e.target.value })} className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Contract End</Label>
+              <Input type="date" value={form.contractEnd} onChange={e => setForm({ ...form, contractEnd: e.target.value })} className="rounded-xl" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 2: Financial */}
+      {step === 2 && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Currency</Label>
+            <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+              {CURRENCIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Payment Terms</Label>
+            <select value={form.paymentTerms} onChange={e => setForm({ ...form, paymentTerms: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+              {PAYMENT_TERMS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank Name</Label>
+              <Input value={form.bankName} onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="Stanbic, Centenary, etc." className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank Account Number</Label>
+              <Input value={form.bankAccount} onChange={e => setForm({ ...form, bankAccount: e.target.value })} placeholder="Account number" className="rounded-xl" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Delivery */}
+      {step === 3 && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Delivery Type</Label>
+            <div className="space-y-2">
+              {[
+                { value: 'self-delivery', label: 'Self-Delivery', desc: 'Merchant fulfills orders using their own drivers. We do not touch stock.' },
+                { value: 'drop-ship', label: 'Drop-Ship', desc: 'Supplier delivers to our warehouse on demand when an order is placed.' },
+                { value: 'consignment', label: 'Consignment', desc: 'Stock is stored in our warehouse. Merchant retains ownership until sale.' },
+              ].map(opt => (
+                <button key={opt.value} onClick={() => setForm({ ...form, deliveryType: opt.value })}
+                  className={`w-full text-left p-3 rounded-xl border transition-all ${form.deliveryType === opt.value ? 'border-[#FF6B35] bg-orange-50' : 'border-gray-200 hover:border-gray-300'}`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-4 h-4 rounded-full border-2 ${form.deliveryType === opt.value ? 'border-[#FF6B35] bg-[#FF6B35]' : 'border-gray-300'}`} />
+                    <span className="text-sm font-semibold text-gray-900">{opt.label}</span>
+                  </div>
+                  <p className="text-[11px] text-gray-500 mt-1 ml-6">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {(form.deliveryType === 'self-delivery' || form.deliveryType === 'drop-ship') && (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <Label className="text-gray-700 font-medium text-xs">Delivery Addresses</Label>
+                <Button variant="outline" size="sm" className="h-6 text-[10px] rounded-lg" onClick={addAddress}><Plus size={10} className="mr-1" /> Add</Button>
+              </div>
+              <div className="space-y-2">
+                {form.deliveryAddresses.map((addr, i) => (
+                  <div key={i} className="flex gap-2 items-start">
+                    <Input value={addr.label} onChange={e => updateAddress(i, 'label', e.target.value)} placeholder="Label (e.g., Main Warehouse)" className="rounded-lg text-xs h-8 w-32 shrink-0" />
+                    <Input value={addr.address} onChange={e => updateAddress(i, 'address', e.target.value)} placeholder="Full address" className="rounded-lg text-xs h-8 flex-1" />
+                    {form.deliveryAddresses.length > 1 && <button onClick={() => removeAddress(i)} className="text-gray-400 hover:text-red-500 mt-1"><X size={14} /></button>}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1.5">
+                {form.deliveryType === 'self-delivery' ? 'Where the merchant\'s warehouse is located (for self-delivery fulfillment).' : 'Where the supplier delivers stock when an order is placed (for drop-ship).'}
+              </p>
+            </div>
+          )}
+          {form.deliveryType === 'consignment' && (
+            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[11px] text-blue-700">
+              Stock will be stored at your warehouse. No delivery addresses needed — the merchant brings stock to you.
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Step 4: Products */}
+      {step === 4 && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Categories Supplied</Label>
+            <p className="text-[11px] text-gray-500 mb-3">Select all categories this merchant supplies. Used for filtering and reporting.</p>
+            <div className="flex flex-wrap gap-2">
+              {CATEGORIES.map(cat => {
+                const selected = form.productCategories.includes(cat)
+                return (
+                  <button key={cat} onClick={() => toggleCategory(cat)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${selected ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    {cat}
+                  </button>
+                )
+              })}
+            </div>
+            {form.productCategories.length === 0 && <p className="text-[10px] text-gray-400 mt-2">No categories selected. You can add products individually later.</p>}
+          </div>
+        </div>
+      )}
+
+      {/* Step 5: Communication */}
+      {step === 5 && (
+        <div className="space-y-4">
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Preferred Communication Channels</Label>
+            <p className="text-[11px] text-gray-500 mb-3">How does this merchant prefer to be contacted?</p>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { value: 'phone', label: 'Phone Call' },
+                { value: 'whatsapp', label: 'WhatsApp' },
+                { value: 'email', label: 'Email' },
+              ].map(ch => {
+                const selected = form.communicationChannels.includes(ch.value)
+                return (
+                  <button key={ch.value} onClick={() => toggleChannel(ch.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${selected ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                    {ch.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Contact Person</Label>
+              <Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} placeholder="Name of account manager" className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Alternative Phone</Label>
+              <Input value={form.altPhone} onChange={e => setForm({ ...form, altPhone: e.target.value })} placeholder="Secondary contact" className="rounded-xl" />
+            </div>
+          </div>
+          <div>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Notes</Label>
+            <textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any additional information about this merchant..." rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+          </div>
+        </div>
+      )}
+    </DetailSlideOver>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
 export default function MerchantsModule() {
   const [data, setData] = useState<Merchant[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
-  const [open, setOpen] = useState(false)
-  const [rateCardOpen, setRateCardOpen] = useState(false)
-  const [statementOpen, setStatementOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [wizardOpen, setWizardOpen] = useState(false)
   const [editing, setEditing] = useState<Merchant | null>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
-  const [rateCard, setRateCard] = useState<RateCard | null>(null)
-  const [rateCardHistory, setRateCardHistory] = useState<RateCard[]>([])
-  const [helpOpen, setHelpOpen] = useState(false)
-  const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [profileOpen, setProfileOpen] = useState(false)
-  const [activityData, setActivityData] = useState<Array<Record<string, unknown>>>([])
-  const [activityLoading, setActivityLoading] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
-  const [importText, setImportText] = useState('')
-
-  // Slide-over tab state: 'overview' | 'performance' | 'communication'
-  const [activeTab, setActiveTab] = useState<'overview' | 'performance' | 'communication'>('overview')
-  const [performanceData, setPerformanceData] = useState<PerformanceData | null>(null)
-  const [performanceLoading, setPerformanceLoading] = useState(false)
-  const [perfWindow, setPerfWindow] = useState(30)
-  const [commEntries, setCommEntries] = useState<CommunicationEntry[]>([])
-  const [commLoading, setCommLoading] = useState(false)
-  const [commForm, setCommForm] = useState({ type: 'call', direction: 'outbound', subject: '', notes: '', followUpAt: '', isResolved: true })
+  const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
+  const [tableOpen, setTableOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
   const [holdDialogOpen, setHoldDialogOpen] = useState(false)
   const [holdReason, setHoldReason] = useState('')
+  const [holdMerchant, setHoldMerchant] = useState<Merchant | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [rateCardOpen, setRateCardOpen] = useState(false)
+  const [rateCard, setRateCard] = useState<Record<string, unknown> | null>(null)
+  const [rateForm, setRateForm] = useState({ inboundReceivingPerUnit: 0, storagePerUnitPerDay: 0, pickPerUnit: 0, packPerOrder: 0, returnProcessingPerUnit: 0, commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0 })
+  const [statementOpen, setStatementOpen] = useState(false)
+  const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
+  const [topProducts, setTopProducts] = useState<Array<{ productName: string; qty: number; revenue: number }>>([])
+  const [topProductsLoading, setTopProductsLoading] = useState(false)
 
-  const [form, setForm] = useState({
-    businessName: '', contact: '', email: '', deliveryType: 'self-delivery',
-    taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '',
-    altPhone: '', contractStart: '', contractEnd: '', notes: '',
-  })
-
-  const [rateForm, setRateForm] = useState({
-    inboundReceivingPerUnit: 0, storagePerUnitPerDay: 0, pickPerUnit: 0,
-    packPerOrder: 0, returnProcessingPerUnit: 0, commissionPercent: 0,
-    codRemittanceFeePerOrder: 0, codShortfallPenalty: 0,
-  })
-
-  const fetchData = () => {
+  const fetchData = useCallback(() => {
     const chip = FILTER_CHIPS.find(c => c.key === activeFilter) || FILTER_CHIPS[0]
     const params = new URLSearchParams()
     if (search) params.set('search', search)
     if (chip.deliveryType) params.set('deliveryType', chip.deliveryType)
     if (chip.status) params.set('status', chip.status)
-    fetch(`/api/merchants?${params.toString()}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
-  }
+    fetch(`/api/merchants?${params.toString()}`)
+      .then(r => r.json())
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => { setLoading(false) })
+  }, [search, activeFilter])
 
-  useEffect(() => { fetchData() }, [search, activeFilter])
+  useEffect(() => { fetchData() }, [fetchData])
 
+  // Filtered data for display
+  const filteredData = data
   const totalMerchants = data.length
   const activeMerchants = data.filter(m => m.isActive).length
   const onHoldMerchants = data.filter(m => m.isOnHold).length
   const totalPending = data.reduce((s, m) => s + (m.pendingPayment || 0), 0)
-  const totalStorage = data.reduce((s, m) => s + (m.storageLiabilityBalance || 0), 0)
   const followUpsDue = data.reduce((s, m) => s + (m.pendingFollowUps || 0), 0)
 
-  const kpiCells = [
-    { label: 'MERCHANTS', value: totalMerchants },
-    { label: 'ACTIVE', value: activeMerchants },
-    { label: 'ON HOLD', value: onHoldMerchants, highlight: onHoldMerchants > 0, highlightColor: 'red' as const },
-    { label: 'FOLLOW-UPS DUE', value: followUpsDue, highlight: followUpsDue > 0, highlightColor: 'orange' as const },
-    { label: 'PENDING PAYMENTS', value: formatCurrencyCompact(totalPending), highlight: totalPending > 0, highlightColor: 'orange' as const },
-    { label: 'STORAGE LIABILITY', value: formatCurrencyCompact(totalStorage) },
-  ]
-
-  const handleSubmit = async () => {
-    if (!form.businessName || !form.contact || !form.email) {
-      toast.error('Business name, contact, and email are required')
-      return
-    }
+  // ── Actions ──
+  const handleWizardComplete = async (form: WizardForm) => {
     const payload = {
       ...form,
+      deliveryAddresses: JSON.stringify(form.deliveryAddresses),
+      productCategories: JSON.stringify(form.productCategories),
+      communicationChannels: JSON.stringify(form.communicationChannels),
       contractStart: form.contractStart || null,
       contractEnd: form.contractEnd || null,
-      isActive: editing ? editing.isActive : true,
     }
-    if (editing) {
-      await fetch('/api/merchants', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...payload }) })
-      toast.success('Merchant updated')
-    } else {
-      await fetch('/api/merchants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, createdBy: 'admin' }) })
-      toast.success('Merchant created')
-    }
-    setOpen(false)
-    setEditing(null)
-    setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' })
-    fetchData()
+    try {
+      if (editing) {
+        await fetch('/api/merchants', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...payload }) })
+        toast.success('Merchant updated')
+      } else {
+        await fetch('/api/merchants', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, createdBy: 'admin' }) })
+        toast.success('Merchant onboarded')
+      }
+      setWizardOpen(false); setEditing(null); fetchData()
+    } catch { toast.error('Failed to save') }
   }
 
   const handleToggleActive = async (m: Merchant) => {
@@ -223,49 +482,67 @@ export default function MerchantsModule() {
     fetchData()
   }
 
-  const handleEdit = (item: Merchant) => {
-    setEditing(item)
-    setForm({
-      businessName: item.businessName, contact: item.contact, email: item.email,
-      deliveryType: item.deliveryType || 'self-delivery',
-      taxId: item.taxId || '', address: item.address || '', bankName: item.bankName || '',
-      bankAccount: item.bankAccount || '', contactPerson: item.contactPerson || '',
-      altPhone: item.altPhone || '',
-      contractStart: item.contractStart ? item.contractStart.slice(0, 10) : '',
-      contractEnd: item.contractEnd ? item.contractEnd.slice(0, 10) : '',
-      notes: item.notes || '',
-    })
-    setOpen(true)
-  }
-
-  const handleDelete = async () => {
-    if (deletingId) {
-      await fetch(`/api/merchants?id=${deletingId}`, { method: 'DELETE' })
-      toast.success('Merchant deleted')
-      setDeleteOpen(false); setDeletingId(null); fetchData()
+  const handleHoldToggle = (m: Merchant) => {
+    if (m.isOnHold) {
+      // Release hold
+      fetch('/api/merchants', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: m.id, isOnHold: false }) })
+        .then(() => { toast.success(`${m.businessName} released from hold`); fetchData() })
+    } else {
+      setHoldMerchant(m); setHoldReason(''); setHoldDialogOpen(true)
     }
   }
 
-  const handleOpenRateCard = async (merchant: Merchant) => {
-    setSelectedMerchant(merchant)
+  const handleHoldConfirm = async () => {
+    if (!holdMerchant) return
+    await fetch('/api/merchants', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: holdMerchant.id, isOnHold: true, holdReason, holdSetBy: 'admin' }) })
+    toast.success(`${holdMerchant.businessName} placed on hold`)
+    setHoldDialogOpen(false); setHoldMerchant(null); fetchData()
+  }
+
+  const handleExpand = (m: Merchant) => {
+    setSelectedMerchant(m); setProfileOpen(true)
+    // Fetch top products
+    setTopProductsLoading(true)
+    fetch(`/api/products?search=${m.merchantId}`).then(r => r.json()).then(d => {
+      // This is a placeholder — ideally we'd have a dedicated endpoint
+      // for top products by merchant. For now, use product count from merchant data.
+      setTopProducts([])
+      setTopProductsLoading(false)
+    }).catch(() => setTopProductsLoading(false))
+  }
+
+  const handleEdit = (m: Merchant) => {
+    setEditing(m); setProfileOpen(false); setWizardOpen(true)
+  }
+
+  const handleDelete = async () => {
+    if (!deletingId) return
     try {
-      const res = await fetch(`/api/rate-card?merchantId=${merchant.merchantId}`)
+      const res = await fetch(`/api/merchants?id=${deletingId}`, { method: 'DELETE' })
+      if (res.ok) { toast.success('Merchant deleted'); setDeleteOpen(false); setDeletingId(null); fetchData() }
+      else { const err = await res.json(); toast.error(err.error || 'Cannot delete') }
+    } catch { toast.error('Failed to delete') }
+  }
+
+  const handleOpenRateCard = async (m: Merchant) => {
+    setSelectedMerchant(m); setProfileOpen(false)
+    try {
+      const res = await fetch(`/api/rate-card?merchantId=${m.merchantId}`)
       const cards = await res.json()
       if (Array.isArray(cards) && cards.length > 0) {
-        const active = cards.find((c: RateCard) => c.isActive) || cards[0]
+        const active = cards.find((c: Record<string, unknown>) => c.isActive) || cards[0]
         setRateCard(active)
-        setRateCardHistory(cards)
         setRateForm({
-          inboundReceivingPerUnit: active.inboundReceivingPerUnit, storagePerUnitPerDay: active.storagePerUnitPerDay,
-          pickPerUnit: active.pickPerUnit, packPerOrder: active.packPerOrder,
-          returnProcessingPerUnit: active.returnProcessingPerUnit, commissionPercent: active.commissionPercent,
-          codRemittanceFeePerOrder: active.codRemittanceFeePerOrder, codShortfallPenalty: active.codShortfallPenalty,
+          inboundReceivingPerUnit: Number(active.inboundReceivingPerUnit) || 0,
+          storagePerUnitPerDay: Number(active.storagePerUnitPerDay) || 0,
+          pickPerUnit: Number(active.pickPerUnit) || 0,
+          packPerOrder: Number(active.packPerOrder) || 0,
+          returnProcessingPerUnit: Number(active.returnProcessingPerUnit) || 0,
+          commissionPercent: Number(active.commissionPercent) || 0,
+          codRemittanceFeePerOrder: Number(active.codRemittanceFeePerOrder) || 0,
+          codShortfallPenalty: Number(active.codShortfallPenalty) || 0,
         })
-      } else {
-        setRateCard(null)
-        setRateCardHistory([])
-        setRateForm({ inboundReceivingPerUnit: 0, storagePerUnitPerDay: 0, pickPerUnit: 0, packPerOrder: 0, returnProcessingPerUnit: 0, commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0 })
-      }
+      } else { setRateCard(null) }
       setRateCardOpen(true)
     } catch { toast.error('Failed to load rate card') }
   }
@@ -273,13 +550,13 @@ export default function MerchantsModule() {
   const handleSaveRateCard = async () => {
     if (!selectedMerchant) return
     const method = rateCard ? 'PUT' : 'POST'
-    const body = rateCard ? { id: rateCard.id, ...rateForm } : { merchantId: selectedMerchant.merchantId, ...rateForm }
+    const body = rateCard ? { id: (rateCard as Record<string, string>).id, ...rateForm } : { merchantId: selectedMerchant.merchantId, ...rateForm }
     await fetch('/api/rate-card', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     toast.success('Rate card saved'); setRateCardOpen(false)
   }
 
-  const handleOpenStatement = (merchant: Merchant) => {
-    setSelectedMerchant(merchant); setStatementPeriod(new Date().toISOString().slice(0, 7)); setStatementOpen(true)
+  const handleOpenStatement = (m: Merchant) => {
+    setSelectedMerchant(m); setProfileOpen(false); setStatementPeriod(new Date().toISOString().slice(0, 7)); setStatementOpen(true)
   }
 
   const handleGenerateStatement = async () => {
@@ -292,333 +569,142 @@ export default function MerchantsModule() {
     } catch { toast.error('Failed') }
   }
 
-  const deliveryCode = (dt: string | null) => dt === 'drop-ship' ? 'DS' : dt === 'consignment' ? 'CN' : 'SD'
-
-  const timeAgo = (date: string | null) => {
-    if (!date) return '—'
-    const diff = Date.now() - new Date(date).getTime()
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-    if (days === 0) return 'Today'
-    if (days === 1) return 'Yesterday'
-    if (days < 30) return `${days}d ago`
-    const months = Math.floor(days / 30)
-    return `${months}mo ago`
-  }
-
-  // Open profile slide-over when a merchant row is clicked
-  const handleExpand = async (merchant: Merchant) => {
-    setSelectedMerchant(merchant)
-    setProfileOpen(true)
-    setActiveTab('overview')
-    setPerformanceData(null)
-    setCommEntries([])
-    setActivityLoading(true)
-    try {
-      const res = await fetch(`/api/merchants/${merchant.id}/activity?limit=15`)
-      const d = await res.json()
-      setActivityData(d.timeline || [])
-    } catch {
-      setActivityData([])
-    } finally {
-      setActivityLoading(false)
-    }
-  }
-
-  // Load performance data when Performance tab is opened
-  const loadPerformance = async (merchant: Merchant, days: number) => {
-    setPerformanceLoading(true)
-    try {
-      const res = await fetch(`/api/merchants/${merchant.id}/performance?days=${days}`)
-      const d = await res.json()
-      setPerformanceData(d)
-    } catch {
-      setPerformanceData(null)
-      toast.error('Failed to load performance')
-    } finally {
-      setPerformanceLoading(false)
-    }
-  }
-
-  // Load communication entries when Communication tab is opened
-  const loadCommunication = async (merchant: Merchant) => {
-    setCommLoading(true)
-    try {
-      const res = await fetch(`/api/merchant-communication?merchantId=${merchant.merchantId}&limit=50`)
-      const d = await res.json()
-      setCommEntries(Array.isArray(d) ? d : [])
-    } catch {
-      setCommEntries([])
-    } finally {
-      setCommLoading(false)
-    }
-  }
-
-  // Switch tab + lazy-load data
-  const handleTabSwitch = (tab: 'overview' | 'performance' | 'communication') => {
-    setActiveTab(tab)
-    if (!selectedMerchant) return
-    if (tab === 'performance' && !performanceData) loadPerformance(selectedMerchant, perfWindow)
-    if (tab === 'communication' && commEntries.length === 0) loadCommunication(selectedMerchant)
-  }
-
-  // Change performance window
-  const handlePerfWindowChange = (days: number) => {
-    setPerfWindow(days)
-    if (selectedMerchant) loadPerformance(selectedMerchant, days)
-  }
-
-  // Save new communication entry
-  const handleSaveComm = async () => {
-    if (!selectedMerchant) return
-    if (!commForm.subject.trim()) { toast.error('Subject is required'); return }
-    try {
-      const res = await fetch('/api/merchant-communication', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          merchantId: selectedMerchant.merchantId,
-          type: commForm.type,
-          direction: commForm.direction,
-          subject: commForm.subject,
-          notes: commForm.notes || null,
-          recordedBy: 'admin',
-          followUpAt: commForm.followUpAt ? new Date(commForm.followUpAt).toISOString() : null,
-          isResolved: commForm.isResolved,
-        }),
-      })
-      if (res.ok) {
-        toast.success('Communication logged')
-        setCommForm({ type: 'call', direction: 'outbound', subject: '', notes: '', followUpAt: '', isResolved: true })
-        loadCommunication(selectedMerchant)
-        fetchData()
-      } else { toast.error('Failed to log') }
-    } catch { toast.error('Failed to log') }
-  }
-
-  // Delete communication entry
-  const handleDeleteComm = async (id: string) => {
-    if (!selectedMerchant) return
-    await fetch(`/api/merchant-communication?id=${id}`, { method: 'DELETE' })
-    toast.success('Entry deleted')
-    loadCommunication(selectedMerchant)
-    fetchData()
-  }
-
-  // Toggle resolved state of a comm entry
-  const handleToggleResolved = async (entry: CommunicationEntry) => {
-    if (!selectedMerchant) return
-    await fetch('/api/merchant-communication', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: entry.id, isResolved: !entry.isResolved }),
-    })
-    loadCommunication(selectedMerchant)
-    fetchData()
-  }
-
-  // Toggle hold status: opens dialog to capture reason when placing on hold
-  const handleHoldToggle = (merchant: Merchant) => {
-    if (merchant.isOnHold) {
-      // Release: no reason needed
-      fetch('/api/merchants', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: merchant.id, isOnHold: false }),
-      }).then(() => {
-        toast.success(`${merchant.businessName} released from hold`)
-        fetchData()
-        if (selectedMerchant?.id === merchant.id) setSelectedMerchant({ ...merchant, isOnHold: false })
-      })
-    } else {
-      setHoldReason('')
-      setHoldDialogOpen(true)
-    }
-  }
-
-  const handleConfirmHold = async () => {
-    if (!selectedMerchant) return
-    await fetch('/api/merchants', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: selectedMerchant.id, isOnHold: true, holdReason: holdReason || 'Overdue balance / dispute', holdSetBy: 'admin' }),
-    })
-    toast.success(`${selectedMerchant.businessName} placed on hold`)
-    setHoldDialogOpen(false)
-    setSelectedMerchant({ ...selectedMerchant, isOnHold: true, holdReason: holdReason || 'Overdue balance / dispute' })
-    fetchData()
-  }
-
-  // #17: CSV import: parse and bulk create
-  const handleImport = async () => {
-    if (!importText.trim()) { toast.error('Paste CSV data first'); return }
-    const lines = importText.trim().split('\n')
-    const header = lines[0].toLowerCase().split(',').map(h => h.trim())
-    const requiredCols = ['businessname', 'contact', 'email']
-    for (const col of requiredCols) {
-      if (!header.includes(col)) { toast.error(`CSV must have columns: ${requiredCols.join(', ')} (and optionally: deliverytype, taxid, bankname, bankaccount)`); return }
-    }
-    let success = 0, failed = 0
-    for (let i = 1; i < lines.length; i++) {
-      const vals = lines[i].split(',').map(v => v.trim())
-      if (vals.length < 3) continue
-      const row: Record<string, string> = {}
-      header.forEach((h, j) => { row[h] = vals[j] || '' })
-      try {
-        await fetch('/api/merchants', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            businessName: row.businessname, contact: row.contact, email: row.email,
-            deliveryType: row.deliverytype || 'self-delivery',
-            taxId: row.taxid || '', bankName: row.bankname || '', bankAccount: row.bankaccount || '',
-            isActive: true, createdBy: 'admin',
-          }),
-        })
-        success++
-      } catch { failed++ }
-    }
-    toast.success(`Imported ${success} merchants${failed > 0 ? `, ${failed} failed` : ''}`)
-    setImportOpen(false); setImportText(''); fetchData()
-  }
-
-  // Generate merchant financial report as CSV
-  const handleExportReport = () => {
-    if (data.length === 0) { toast.error('No merchants to export'); return }
-    const headers = [
-      'Merchant ID', 'Business Name', 'Delivery Type', 'Status', 'On Hold',
-      'Contact', 'Email', 'Currency',
-      'Total Inbound Value', 'Total Sales Value', 'Total Shrinkage Value', 'Total Return Value',
-      'Expected Payment', 'Actual Payment', 'Pending Payment', 'Storage Liability',
-      'Product Count', 'Order Count',
-      'Profitability Revenue', 'Profitability Commission', 'Profitability Shrinkage', 'Profitability Returns', 'Profitability Net',
-      'Last Inbound', 'Last Outbound', 'Last Payment', 'Last Communication',
-      'Pending Follow-ups', 'Contract Start', 'Contract End',
-    ]
-    const rows = data.map(m => [
-      m.merchantId, m.businessName, m.deliveryType || 'self-delivery',
-      m.isActive ? 'Active' : 'Inactive', m.isOnHold ? 'Yes' : 'No',
-      m.contact, m.email, m.currency,
-      m.totalInboundValue, m.totalSalesValue, m.totalShrinkageValue, m.totalReturnValue,
-      m.expectedPayment, m.actualPayment, m.pendingPayment, m.storageLiabilityBalance,
-      m.productCount, m.orderCount,
-      m.profitability.revenue, m.profitability.commission, m.profitability.shrinkage, m.profitability.returns, m.profitability.net,
-      m.lastInboundAt ? new Date(m.lastInboundAt).toLocaleDateString('en-UG') : '',
-      m.lastOutboundAt ? new Date(m.lastOutboundAt).toLocaleDateString('en-UG') : '',
-      m.lastPaymentAt ? new Date(m.lastPaymentAt).toLocaleDateString('en-UG') : '',
-      m.lastCommunicationAt ? new Date(m.lastCommunicationAt).toLocaleDateString('en-UG') : '',
-      m.pendingFollowUps,
-      m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '',
-      m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : '',
-    ])
-    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v ?? ''}"`).join(','))].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `merchant-report-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-    toast.success(`Exported ${data.length} merchants to CSV`)
-  }
-
-  // #13: Contract status helper
-  const contractStatus = (m: Merchant): { label: string; color: string } | null => {
-    if (!m.contractStart && !m.contractEnd) return null
+  const contractStatus = (m: Merchant) => {
+    if (!m.contractEnd) return null
+    const end = new Date(m.contractEnd)
     const now = new Date()
-    if (m.contractEnd && new Date(m.contractEnd) < now) return { label: 'EXPIRED', color: 'bg-red-100 text-red-700' }
-    if (m.contractEnd) {
-      const daysLeft = Math.ceil((new Date(m.contractEnd).getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
-      if (daysLeft <= 7) return { label: `${daysLeft}d LEFT`, color: 'bg-red-100 text-red-700' }
-      if (daysLeft <= 30) return { label: `${daysLeft}d LEFT`, color: 'bg-orange-100 text-orange-700' }
-    }
-    if (m.contractStart && new Date(m.contractStart) > now) return { label: 'UPCOMING', color: 'bg-blue-100 text-blue-700' }
-    return { label: 'ACTIVE', color: 'bg-green-100 text-green-700' }
+    if (end < now) return { label: 'EXPIRED', color: 'bg-red-100 text-red-700' }
+    const daysLeft = Math.floor((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+    if (daysLeft <= 30) return { label: `${daysLeft}D LEFT`, color: 'bg-orange-100 text-orange-700' }
+    return null
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+    <div className="space-y-3">
+      {/* ── Header ── */}
       <OpsHeader
         title="Merchants"
-        description="Vendor partners and their cumulative financial position"
-        kpiCells={kpiCells}
+        description="Onboard and manage vendor partners"
+        kpiCells={[
+          { label: 'MERCHANTS', value: totalMerchants },
+          { label: 'ACTIVE', value: activeMerchants },
+          { label: 'ON HOLD', value: onHoldMerchants, highlight: onHoldMerchants > 0, highlightColor: 'red' as const },
+          { label: 'FOLLOW-UPS', value: followUpsDue, highlight: followUpsDue > 0, highlightColor: 'orange' as const },
+          { label: 'PENDING PAYMENTS', value: formatCurrencyCompact(totalPending), highlight: totalPending > 0, highlightColor: 'orange' as const },
+        ]}
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Search by name, ID, contact, or email..."
-        actionLabel="Add Merchant"
-        onAction={() => { setEditing(null); setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' }); setOpen(true) }}
+        searchPlaceholder="Search merchants..."
+        actionLabel="Onboard Merchant"
+        onAction={() => { setEditing(null); setWizardOpen(true) }}
       >
-        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-          <HelpCircle size={12} className="mr-1" /> How does this work?
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleExportReport} className="h-7 text-xs rounded-md">
-          <Download size={12} className="mr-1" /> Export Report
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
-          <Upload size={12} className="mr-1" /> Import CSV
-        </Button>
+        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md"><HelpCircle size={12} className="mr-1" /> Help</Button>
+        <Button variant="outline" size="sm" onClick={() => setTableOpen(true)} className="h-7 text-xs rounded-md"><Filter size={12} className="mr-1" /> View All</Button>
       </OpsHeader>
 
-      {/* Filter chips (#6, #7) */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Filter size={14} className="text-gray-400" />
-        {FILTER_CHIPS.map(chip => {
-          const count = chip.key === 'all' ? data.length : data.filter(m => {
-            if (chip.status === 'active') return m.isActive && !m.isOnHold
-            if (chip.status === 'inactive') return !m.isActive
-            if (chip.status === 'onhold') return m.isOnHold
-            if (chip.deliveryType) return m.deliveryType === chip.deliveryType
-            return true
-          }).length
-          // Note: the count here is approximate (from already-filtered data). For exact counts
-          // we'd need a separate API call. This is good enough for a visual indicator.
-          const isActive = activeFilter === chip.key
-          return (
-            <button key={chip.key} onClick={() => setActiveFilter(chip.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              {chip.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Follow-ups due banner */}
-      {followUpsDue > 0 && (
-        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3">
-          <AlertTriangle size={16} className="text-orange-600 shrink-0" />
-          <div className="flex-1 text-xs">
-            <p className="text-orange-800 font-semibold">{followUpsDue} follow-up{followUpsDue > 1 ? 's' : ''} overdue across {data.filter(m => m.pendingFollowUps > 0).length} merchant{data.filter(m => m.pendingFollowUps > 0).length > 1 ? 's' : ''}</p>
-            <p className="text-orange-600 text-[11px] mt-0.5">Open a merchant profile → Communication tab to resolve or reschedule.</p>
-          </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {data.filter(m => m.pendingFollowUps > 0).slice(0, 5).map(m => (
-              <button key={m.id} onClick={() => { handleExpand(m); setActiveTab('communication'); }}
-                className="bg-white border border-orange-300 hover:bg-orange-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-orange-700">
-                {m.businessName}, {m.pendingFollowUps}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* On-hold warning banner */}
+      {/* ── Alert banners ── */}
       {onHoldMerchants > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-3">
           <Pause size={16} className="text-red-600 shrink-0" />
           <div className="flex-1 text-xs">
-            <p className="text-red-800 font-semibold">{onHoldMerchants} merchant{onHoldMerchants > 1 ? 's' : ''} on hold. New inbounds and orders blocked.</p>
-            <p className="text-red-600 text-[11px] mt-0.5">Click the red square in the status column to release a hold.</p>
+            <p className="text-red-800 font-semibold">{onHoldMerchants} merchant(s) on hold — inbounds and orders blocked.</p>
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {data.filter(m => m.isOnHold).slice(0, 5).map(m => (
-              <button key={m.id} onClick={() => handleExpand(m)}
-                className="bg-white border border-red-300 hover:bg-red-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-red-700">
-                {m.businessName}
-              </button>
+              <button key={m.id} onClick={() => handleExpand(m)} className="bg-white border border-red-300 hover:bg-red-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-red-700">{m.businessName}</button>
+            ))}
+          </div>
+        </div>
+      )}
+      {followUpsDue > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3">
+          <AlertTriangle size={16} className="text-orange-600 shrink-0" />
+          <div className="flex-1 text-xs">
+            <p className="text-orange-800 font-semibold">{followUpsDue} follow-up(s) overdue across {data.filter(m => m.pendingFollowUps > 0).length} merchant(s).</p>
+          </div>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {data.filter(m => m.pendingFollowUps > 0).slice(0, 5).map(m => (
+              <button key={m.id} onClick={() => handleExpand(m)} className="bg-white border border-orange-300 hover:bg-orange-100 rounded-full px-2.5 py-1 text-[11px] font-medium text-orange-700">{m.businessName}</button>
             ))}
           </div>
         </div>
       )}
 
-      {/* Dense table */}
-      {data.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm">No merchants found.</div>
-      ) : (
+      {/* ── Search results (inline, not table) ── */}
+      {search && (
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {filteredData.length === 0 ? (
+            <div className="py-8 text-center text-gray-400 text-sm">No merchants match "{search}"</div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {filteredData.slice(0, 10).map(m => (
+                <div key={m.id} onClick={() => handleExpand(m)} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                  <span className={`w-2 h-2 rounded-full shrink-0 ${m.isOnHold ? 'bg-red-500' : m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold text-gray-900">{m.businessName}</span>
+                    <span className="text-[10px] text-gray-400 ml-2">{m.merchantId}</span>
+                  </div>
+                  <span className="text-[10px] text-gray-500 font-mono shrink-0">{deliveryCode(m.deliveryType)}</span>
+                  <span className={`text-[11px] font-mono font-bold shrink-0 ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</span>
+                  <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                </div>
+              ))}
+              {filteredData.length > 10 && (
+                <button onClick={() => setTableOpen(true)} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
+                  View all {filteredData.length} merchants →
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Onboarding CTA (when no search) ── */}
+      {!search && !loading && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-gray-900 mb-1">Merchant Management</h3>
+              <p className="text-[11px] text-gray-500 max-w-md">Onboard new vendors, manage existing accounts, review profitability, configure rate cards, and generate statements. Search above to find a merchant, or click "View All" to see the full list.</p>
+            </div>
+            <Button className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl shrink-0" onClick={() => { setEditing(null); setWizardOpen(true) }}>
+              <Plus size={14} className="mr-1.5" /> Onboard Merchant
+            </Button>
+          </div>
+          {/* Quick stats */}
+          <div className="grid grid-cols-4 gap-3 mt-4 pt-4 border-t border-gray-100">
+            <div><p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Active</p><p className="text-lg font-mono font-bold text-green-700">{activeMerchants}</p></div>
+            <div><p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">On Hold</p><p className={`text-lg font-mono font-bold ${onHoldMerchants > 0 ? 'text-red-600' : 'text-gray-400'}`}>{onHoldMerchants}</p></div>
+            <div><p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Pending Payments</p><p className="text-lg font-mono font-bold text-orange-600">{formatCurrencyCompact(totalPending)}</p></div>
+            <div><p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold">Follow-ups</p><p className={`text-lg font-mono font-bold ${followUpsDue > 0 ? 'text-orange-600' : 'text-gray-400'}`}>{followUpsDue}</p></div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Loading ── */}
+      {loading && <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-300" /></div>}
+
+      {/* ══ ONBOARDING WIZARD ══ */}
+      <OnboardingWizard open={wizardOpen} onClose={() => { setWizardOpen(false); setEditing(null) }} onComplete={handleWizardComplete} editing={editing} />
+
+      {/* ══ TABLE SLIDE-OVER (View All) ══ */}
+      <DetailSlideOver
+        open={tableOpen}
+        onClose={() => setTableOpen(false)}
+        title="All Merchants"
+        subtitle={`${data.length} total`}
+        width="xl"
+      >
+        {/* Filter chips */}
+        <div className="flex items-center gap-1.5 flex-wrap mb-3">
+          <Filter size={12} className="text-gray-400" />
+          {FILTER_CHIPS.map(chip => (
+            <button key={chip.key} onClick={() => setActiveFilter(chip.key)}
+              className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+              {chip.label}
+            </button>
+          ))}
+        </div>
         <DenseTable>
           <thead>
             <tr>
@@ -628,102 +714,84 @@ export default function MerchantsModule() {
               <DenseTh className="w-16 text-right">SKUs</DenseTh>
               <DenseTh className="w-16 text-right">Orders</DenseTh>
               <DenseTh className="w-28 text-right">Sales</DenseTh>
-              <DenseTh className="w-28 text-right">Pending <InfoTip term="pendingPayment" size={11} /></DenseTh>
-              <DenseTh className="w-28 text-right">Storage <InfoTip term="storageLiability" size={11} /></DenseTh>
+              <DenseTh className="w-28 text-right">Pending</DenseTh>
+              <DenseTh className="w-28 text-right">Storage</DenseTh>
               <DenseTh className="w-28 text-right">Shrinkage</DenseTh>
               <DenseTh className="w-16 text-center">Status</DenseTh>
               <DenseTh className="w-28 text-right">Actions</DenseTh>
             </tr>
           </thead>
           <tbody>
-            {data.map((m) => {
-              return (
-                  <DenseTr key={m.id} onClick={() => handleExpand(m)} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
-                    <DenseTd mono className="text-gray-500">
-                      <div className="flex flex-col gap-0.5">
-                        <span>{m.merchantId}</span>
-                        {m.pendingFollowUps > 0 && <span className="text-[8px] text-orange-600 font-semibold" title={`${m.pendingFollowUps} follow-up(s) due`}>●{m.pendingFollowUps}FU</span>}
-                      </div>
-                    </DenseTd>
-                    <DenseTd className="text-gray-900 font-medium">
-                      <div className="flex items-center gap-1.5">
-                        {m.isOnHold && <span title={`On hold: ${m.holdReason || 'no reason'}`}><Pause size={11} className="text-red-500" /></span>}
-                        <span>{m.businessName}</span>
-                      </div>
-                    </DenseTd>
-                    <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
-                    <DenseTd mono right className={m.productCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.productCount}</DenseTd>
-                    <DenseTd mono right className={m.orderCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.orderCount}</DenseTd>
-                    <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
-                    <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>{formatCurrencyCompact(m.pendingPayment, m.currency)}</DenseTd>
-                    <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</DenseTd>
-                    <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
-                    <DenseTd className="text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <div className="flex items-center gap-1">
-                          <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Click to deactivate' : 'Click to activate'}>
-                            <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
-                          </button>
-                        </div>
-                        {(() => { const cs = contractStatus(m); return cs ? <span className={`text-[8px] px-1 py-0.5 rounded font-semibold ${cs.color}`}>{cs.label}</span> : null })()}
-                      </div>
-                    </DenseTd>
-                    <DenseTd right>
-                      <div className="flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-                        <button onClick={() => handleHoldToggle(m)} title={m.isOnHold ? 'Release hold' : 'Place on hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}>
-                          {m.isOnHold ? 'Hold' : 'Hold'}
-                        </button>
-                        <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
-                        <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
-                        <button onClick={() => { handleExpand(m); setActiveTab('communication'); }} title="Log communication" className="p-1 text-gray-400 hover:text-[#FF6B35]"><MessageSquare size={12} /></button>
-                      </div>
-                    </DenseTd>
-                  </DenseTr>
-              )
-            })}
+            {data.map(m => (
+              <DenseTr key={m.id} onClick={() => { setTableOpen(false); handleExpand(m) }} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
+                <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
+                <DenseTd className="text-gray-900 font-medium">
+                  <div className="flex items-center gap-1.5">
+                    {m.isOnHold && <Pause size={11} className="text-red-500" />}
+                    {m.businessName}
+                  </div>
+                </DenseTd>
+                <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
+                <DenseTd mono right className={m.productCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.productCount}</DenseTd>
+                <DenseTd mono right className={m.orderCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.orderCount}</DenseTd>
+                <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
+                <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>{formatCurrencyCompact(m.pendingPayment, m.currency)}</DenseTd>
+                <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</DenseTd>
+                <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
+                <DenseTd className="text-center">
+                  <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Deactivate' : 'Activate'}>
+                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                  </button>
+                </DenseTd>
+                <DenseTd right>
+                  <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                    <button onClick={() => handleHoldToggle(m)} title={m.isOnHold ? 'Release' : 'Hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>{m.isOnHold ? 'Hold' : 'Hold'}</button>
+                    <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
+                    <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
+                  </div>
+                </DenseTd>
+              </DenseTr>
+            ))}
           </tbody>
         </DenseTable>
-      )}
+      </DetailSlideOver>
 
-      {/* Profile slide-over */}
+      {/* ══ PROFILE SLIDE-OVER ══ */}
       <DetailSlideOver
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
         title={selectedMerchant?.businessName || ''}
-        subtitle={selectedMerchant ? `${selectedMerchant.merchantId}, ${(selectedMerchant.deliveryType || 'self-delivery').replace('-', ' ')}` : ''}
+        subtitle={selectedMerchant ? `${selectedMerchant.merchantId} · ${deliveryLabel(selectedMerchant.deliveryType)}` : ''}
         width="lg"
         footer={selectedMerchant ? (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleEdit(selectedMerchant) }}><SettingsIcon size={13} className="mr-1" /> Edit</Button>
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleOpenRateCard(selectedMerchant) }}><FileText size={13} className="mr-1" /> Rate Card</Button>
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => { setProfileOpen(false); handleOpenStatement(selectedMerchant) }}><Calendar size={13} className="mr-1" /> Statement</Button>
+          <div className="flex items-center justify-between w-full">
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleEdit(selectedMerchant)}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
+              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleOpenRateCard(selectedMerchant)}><FileText size={12} className="mr-1" /> Rate Card</Button>
+              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleOpenStatement(selectedMerchant)}><Calendar size={12} className="mr-1" /> Statement</Button>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" className={`h-8 text-xs rounded-xl ${selectedMerchant.isOnHold ? 'text-red-600 border-red-200 hover:bg-red-50' : ''}`} onClick={() => handleHoldToggle(selectedMerchant)}>
-                {selectedMerchant.isOnHold ? <><Play size={13} className="mr-1" /> Release</> : <><Pause size={13} className="mr-1" /> Hold</>}
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className={`rounded-xl text-xs ${selectedMerchant.isOnHold ? 'text-red-600 border-red-200' : ''}`} onClick={() => handleHoldToggle(selectedMerchant)}>
+                {selectedMerchant.isOnHold ? <><Play size={12} className="mr-1" /> Release</> : <><Pause size={12} className="mr-1" /> Hold</>}
               </Button>
-              <Button variant="outline" size="sm" className="h-8 text-xs rounded-xl" onClick={() => setProfileOpen(false)}>Close</Button>
+              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setProfileOpen(false)}>Close</Button>
             </div>
           </div>
         ) : undefined}
       >
         {selectedMerchant && (() => {
           const m = selectedMerchant
+          const cats = m.productCategories ? JSON.parse(m.productCategories) as string[] : []
+          const channels = m.communicationChannels ? JSON.parse(m.communicationChannels) as string[] : []
+          const addresses = m.deliveryAddresses ? JSON.parse(m.deliveryAddresses) as Array<{ label: string; address: string }> : []
           return (
             <div className="space-y-3">
-              {/* Status row */}
-              <div className="flex items-center gap-2 flex-wrap">
+              {/* Status */}
+              <div className="flex items-center gap-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${m.isOnHold ? 'bg-red-500' : m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                <span className="text-[11px] text-gray-600 font-medium">
-                  {m.isOnHold ? 'On hold' : m.isActive ? 'Active' : 'Inactive'}
-                </span>
-                {m.isOnHold && (
-                  <span className="text-[10px] text-red-600">{m.holdReason || 'No reason given'}</span>
-                )}
-                <span className="text-[10px] text-gray-400 ml-auto">
-                  Last inbound: {timeAgo(m.lastInboundAt)}, Last payment: {timeAgo(m.lastPaymentAt)}
-                </span>
+                <span className="text-[11px] font-medium text-gray-700">{m.isOnHold ? 'On hold' : m.isActive ? 'Active' : 'Inactive'}</span>
+                {m.isOnHold && <span className="text-[10px] text-red-600">{m.holdReason || 'No reason'}</span>}
+                <span className="text-[10px] text-gray-400 ml-auto">Last inbound: {timeAgo(m.lastInboundAt)}</span>
               </div>
 
               {/* Key stats */}
@@ -737,316 +805,229 @@ export default function MerchantsModule() {
                   <p className="text-lg font-bold text-gray-900 font-mono">{m.orderCount}</p>
                 </div>
                 <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Sales</p>
-                  <p className="text-lg font-bold text-gray-900 font-mono">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</p>
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Net</p>
+                  <p className={`text-lg font-bold font-mono ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</p>
                 </div>
               </div>
 
-              {/* Contact */}
+              {/* Profitability breakdown */}
               <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Phone size={10} /> Contact</p>
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Profitability</p>
                 <div className="space-y-1 text-xs">
-                  <p className="text-gray-900 font-medium">{m.contact}</p>
-                  <p className="text-gray-500">{m.email}</p>
-                  {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
-                  {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
-                  {m.address && <p className="text-gray-500">{m.address}</p>}
-                </div>
-              </div>
-
-              {/* Business */}
-              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Building2 size={10} /> Business</p>
-                <div className="space-y-1 text-xs">
-                  {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
-                  <p className="text-gray-700">Delivery: <span className="capitalize">{(m.deliveryType || 'self-delivery').replace('-', ' ')}</span></p>
-                  {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
-                  {m.bankAccount && <p className="text-gray-500 font-mono">{m.bankAccount}</p>}
-                  {(m.contractStart || m.contractEnd) && <p className="text-gray-500 mt-1">Contract: {m.contractStart ? new Date(m.contractStart).toLocaleDateString('en-UG') : '—'} to {m.contractEnd ? new Date(m.contractEnd).toLocaleDateString('en-UG') : 'Open'}</p>}
-                </div>
-              </div>
-
-              {/* Financials */}
-              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Financials</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
                   <div className="flex justify-between"><span className="text-gray-500">Revenue</span><span className="font-mono font-medium text-gray-900">{formatCurrencyCompact(m.profitability.revenue, m.currency)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Commission</span><span className="font-mono font-medium text-orange-700">{formatCurrencyCompact(m.profitability.commission, m.currency)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Shrinkage</span><span className="font-mono font-medium text-red-600">{formatCurrencyCompact(m.profitability.shrinkage, m.currency)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Returns</span><span className="font-mono font-medium text-red-500">{formatCurrencyCompact(m.profitability.returns, m.currency)}</span></div>
-                  <div className="flex justify-between col-span-2 pt-1.5 border-t border-gray-200"><span className="text-gray-700 font-semibold">Net</span><span className={`font-mono font-bold ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Pending</span><span className="font-mono font-medium text-orange-600">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">Storage</span><span className="font-mono font-medium text-blue-600">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Commission</span><span className="font-mono font-medium text-orange-700">−{formatCurrencyCompact(m.profitability.commission, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Shrinkage</span><span className="font-mono font-medium text-red-600">−{formatCurrencyCompact(m.profitability.shrinkage, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Returns</span><span className="font-mono font-medium text-red-500">−{formatCurrencyCompact(m.profitability.returns, m.currency)}</span></div>
+                  <div className="flex justify-between pt-1.5 border-t border-gray-200"><span className="text-gray-700 font-semibold">Net</span><span className={`font-mono font-bold ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</span></div>
                 </div>
               </div>
 
-              {/* Recent statements */}
+              {/* Top products */}
               <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Recent Statements</p>
-                {m.statements && m.statements.length > 0 ? (
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Top Products by Revenue</p>
+                {topProductsLoading ? <p className="text-xs text-gray-400">Loading...</p> :
+                 topProducts.length > 0 ? (
                   <div className="space-y-1">
-                    {m.statements.map((s) => (
-                      <div key={s.id} className="flex items-center gap-2 text-[11px] py-1 border-b border-gray-200 last:border-0">
-                        <span className="font-mono text-gray-500">{s.period}</span>
-                        <span className="font-mono font-bold text-gray-900">{formatCurrency(s.netPayable, m.currency)}</span>
-                        <span className={`ml-auto inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.isPaid ? 'PAID' : s.status.toUpperCase()}</span>
+                    {topProducts.map((p, i) => (
+                      <div key={i} className="flex items-center gap-2 text-[11px]">
+                        <span className="font-mono text-gray-400 w-4">{i + 1}</span>
+                        <span className="text-gray-700 flex-1 truncate">{p.productName}</span>
+                        <span className="font-mono text-gray-500">{p.qty}u</span>
+                        <span className="font-mono font-semibold text-gray-900">{formatCurrencyCompact(p.revenue, m.currency)}</span>
                       </div>
                     ))}
                   </div>
-                ) : <p className="text-xs text-gray-400 text-center py-2">No statements</p>}
+                ) : (
+                  <div className="space-y-1">
+                    {m.statements.slice(0, 3).map(s => (
+                      <div key={s.id} className="flex items-center gap-2 text-[11px]">
+                        <span className="font-mono text-gray-400">{s.period}</span>
+                        <span className="text-gray-700 flex-1">{s.statementId}</span>
+                        <span className={`font-mono font-semibold ${s.isPaid ? 'text-green-700' : 'text-orange-700'}`}>{formatCurrencyCompact(s.netPayable, m.currency)}</span>
+                        <span className={`px-1 rounded text-[8px] font-semibold ${s.isPaid ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>{s.status}</span>
+                      </div>
+                    ))}
+                    {m.statements.length === 0 && <p className="text-xs text-gray-400">No statements generated yet.</p>}
+                  </div>
+                )}
               </div>
 
-              {/* Notes */}
-              {m.notes && (
+              {/* Contact + Business */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
-                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Notes</p>
-                  <p className="text-xs text-gray-600">{m.notes}</p>
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Phone size={10} /> Contact</p>
+                  <div className="space-y-0.5 text-xs">
+                    <p className="text-gray-900 font-medium">{m.contact}</p>
+                    <p className="text-gray-500">{m.email}</p>
+                    {m.contactPerson && <p className="text-gray-500">Attn: {m.contactPerson}</p>}
+                    {m.altPhone && <p className="text-gray-500">{m.altPhone}</p>}
+                    {channels.length > 0 && <p className="text-gray-400 text-[10px] mt-1">Prefers: {channels.join(', ')}</p>}
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><Building2 size={10} /> Business</p>
+                  <div className="space-y-0.5 text-xs">
+                    {m.taxId && <p className="text-gray-700">TIN: <span className="font-mono">{m.taxId}</span></p>}
+                    <p className="text-gray-700">Delivery: {deliveryLabel(m.deliveryType)}</p>
+                    <p className="text-gray-700">Currency: {m.currency}</p>
+                    {m.paymentTerms && <p className="text-gray-500">Terms: {PAYMENT_TERMS.find(p => p.value === m.paymentTerms)?.label || m.paymentTerms}</p>}
+                    {m.bankName && <p className="text-gray-500">{m.bankName}</p>}
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery addresses (self-delivery / drop-ship only) */}
+              {addresses.length > 0 && (m.deliveryType === 'self-delivery' || m.deliveryType === 'drop-ship') && (
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5 flex items-center gap-1"><MapPin size={10} /> Delivery Addresses</p>
+                  <div className="space-y-1 text-xs">
+                    {addresses.map((a, i) => (
+                      <div key={i}>
+                        <span className="text-gray-700 font-medium">{a.label}</span>
+                        <p className="text-gray-500 text-[11px]">{a.address}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
+
+              {/* Product categories */}
+              {cats.length > 0 && (
+                <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                  <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Categories Supplied</p>
+                  <div className="flex flex-wrap gap-1">
+                    {cats.map(c => <span key={c} className="px-2 py-0.5 bg-white border border-gray-200 rounded-full text-[10px] text-gray-700 font-medium">{c}</span>)}
+                  </div>
+                </div>
+              )}
+
+              {/* Financials */}
+              <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Financials</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div className="flex justify-between"><span className="text-gray-500">Pending</span><span className="font-mono text-orange-600">{formatCurrencyCompact(m.pendingPayment, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Storage</span><span className="font-mono text-blue-600">{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Paid</span><span className="font-mono text-green-700">{formatCurrencyCompact(m.actualPayment, m.currency)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Inbound Value</span><span className="font-mono text-gray-700">{formatCurrencyCompact(m.totalInboundValue, m.currency)}</span></div>
+                </div>
+              </div>
             </div>
           )
         })()}
       </DetailSlideOver>
 
-      {/* Edit / Create slide-over with onboarding fields */}
-      <DetailSlideOver
-        open={open}
-        onClose={() => { setOpen(false); setEditing(null); setForm({ businessName: '', contact: '', email: '', deliveryType: 'self-delivery', taxId: '', address: '', bankName: '', bankAccount: '', contactPerson: '', altPhone: '', contractStart: '', contractEnd: '', notes: '' }) }}
-        title={editing ? editing.businessName : 'New Merchant'}
-        subtitle={editing ? `ID: ${editing.merchantId}` : 'Fill in the details to create a new merchant'}
-        width="lg"
-        footer={
-          <div className="flex items-center justify-between">
-            {editing && <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}><Trash2 size={16} className="mr-2" /> Delete</Button>}
-            <div className="flex gap-3 ml-auto">
-              <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">{editing ? 'Update' : 'Create'}</Button>
-            </div>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          {/* Basic info */}
-          <div className="space-y-3">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Basic Information</p>
-            <div><Label className="text-xs font-medium mb-1 block">Business Name <span className="text-red-400">*</span></Label><Input value={form.businessName} onChange={e => setForm({ ...form, businessName: e.target.value })} className="rounded-xl" /></div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-medium mb-1 block">Contact (Phone) <span className="text-red-400">*</span></Label><Input value={form.contact} onChange={e => setForm({ ...form, contact: e.target.value })} className="rounded-xl" /></div>
-              <div><Label className="text-xs font-medium mb-1 block">Alt Phone</Label><Input value={form.altPhone} onChange={e => setForm({ ...form, altPhone: e.target.value })} className="rounded-xl" /></div>
-            </div>
-            <div><Label className="text-xs font-medium mb-1 block">Email <span className="text-red-400">*</span></Label><Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} className="rounded-xl" /></div>
-            <div><Label className="text-xs font-medium mb-1 block">Contact Person</Label><Input value={form.contactPerson} onChange={e => setForm({ ...form, contactPerson: e.target.value })} placeholder="Name" className="rounded-xl" /></div>
-            <div><Label className="text-xs font-medium mb-1 block">Address</Label><Input value={form.address} onChange={e => setForm({ ...form, address: e.target.value })} placeholder="Physical address" className="rounded-xl" /></div>
-          </div>
-
-          {/* Business details */}
-          <div className="space-y-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Business Details</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-medium mb-1 block">Tax ID (TIN)</Label><Input value={form.taxId} onChange={e => setForm({ ...form, taxId: e.target.value })} placeholder="TIN number" className="rounded-xl" /></div>
-              <div>
-                <Label className="text-xs font-medium mb-1 block flex items-center">Delivery Type <InfoTip term="deliveryType" size={13} className="ml-1" /></Label>
-                <select value={form.deliveryType} onChange={e => setForm({ ...form, deliveryType: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                  <option value="self-delivery">Self-Delivery</option>
-                  <option value="drop-ship">Drop-Ship</option>
-                  <option value="consignment">Consignment</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-medium mb-1 block">Contract Start</Label><Input type="date" value={form.contractStart} onChange={e => setForm({ ...form, contractStart: e.target.value })} className="rounded-xl" /></div>
-              <div><Label className="text-xs font-medium mb-1 block">Contract End</Label><Input type="date" value={form.contractEnd} onChange={e => setForm({ ...form, contractEnd: e.target.value })} className="rounded-xl" /></div>
-            </div>
-          </div>
-
-          {/* Banking */}
-          <div className="space-y-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Banking (for payouts)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label className="text-xs font-medium mb-1 block">Bank Name</Label><Input value={form.bankName} onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. Stanbic" className="rounded-xl" /></div>
-              <div><Label className="text-xs font-medium mb-1 block">Account Number</Label><Input value={form.bankAccount} onChange={e => setForm({ ...form, bankAccount: e.target.value })} placeholder="Account number" className="rounded-xl" /></div>
-            </div>
-          </div>
-
-          {/* Notes */}
-          <div className="space-y-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Notes</p>
-            <div><Label className="text-xs font-medium mb-1 block">Internal Notes</Label><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Notes" rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" /></div>
-          </div>
-        </div>
-      </DetailSlideOver>
-
-      {/* Rate card slide-over (unchanged) */}
-      <DetailSlideOver open={rateCardOpen} onClose={() => setRateCardOpen(false)} title={`Rate Card, ${selectedMerchant?.businessName || ''}`} subtitle={rateCard ? `Valid from ${new Date(rateCard.validFrom).toLocaleDateString()}` : 'Creating new rate card'} width="lg"
-        footer={<div className="flex gap-3 ml-auto"><Button variant="outline" onClick={() => setRateCardOpen(false)} className="rounded-xl">Cancel</Button><Button onClick={handleSaveRateCard} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Save</Button></div>}>
-        <div className="grid grid-cols-2 gap-3">
-          {[{ k: 'inboundReceivingPerUnit', l: 'Inbound Receiving (UGX/unit)' }, { k: 'storagePerUnitPerDay', l: 'Storage (UGX/unit/day)' }, { k: 'pickPerUnit', l: 'Pick (UGX/unit)' }, { k: 'packPerOrder', l: 'Pack (UGX/order)' }, { k: 'returnProcessingPerUnit', l: 'Return (UGX/unit)' }, { k: 'commissionPercent', l: 'Commission (%)' }, { k: 'codRemittanceFeePerOrder', l: 'COD Fee (UGX/order)' }, { k: 'codShortfallPenalty', l: 'COD Shortfall Penalty (UGX)' }].map(f => (
-            <div key={f.k}><Label className="text-xs font-medium mb-1 block">{f.l}</Label><Input type="number" value={String(rateForm[f.k as keyof typeof rateForm])} onChange={e => setRateForm({ ...rateForm, [f.k]: parseFloat(e.target.value) || 0 })} className="rounded-xl" /></div>
-          ))}
-        </div>
-
-        {/* #3: Rate card history */}
-        {rateCardHistory.length > 1 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Rate Card History</p>
-            <div className="space-y-1">
-              {rateCardHistory.map((rc, i) => (
-                <div key={rc.id || i} className={`flex items-center gap-2 text-[11px] py-1 px-2 rounded ${rc.isActive ? 'bg-orange-50 border border-orange-100' : ''}`}>
-                  <span className={`w-2 h-2 rounded-full ${rc.isActive ? 'bg-orange-500' : 'bg-gray-300'}`} />
-                  <span className="font-mono text-gray-500">{new Date(rc.validFrom).toLocaleDateString('en-UG')}</span>
-                  <span className="text-gray-400">→</span>
-                  <span className="font-mono text-gray-500">{rc.validTo ? new Date(rc.validTo).toLocaleDateString('en-UG') : 'Current'}</span>
-                  <span className="text-gray-400 ml-auto">
-                    Storage: {rc.storagePerUnitPerDay} | Pick: {rc.pickPerUnit} | Comm: {rc.commissionPercent}%
-                  </span>
-                  {rc.isActive && <span className="text-[9px] font-semibold text-orange-600 uppercase">Active</span>}
-                </div>
-              ))}
-            </div>
-            <p className="text-[10px] text-gray-400 mt-2">Saving changes creates a new rate card and supersedes the previous one. Historical cards are kept for audit.</p>
-          </div>
-        )}
-      </DetailSlideOver>
-
-      {/* Statement dialog (unchanged) */}
-      <AlertDialog open={statementOpen} onOpenChange={setStatementOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader><AlertDialogTitle className="flex items-center gap-2"><FileText size={18} /> Generate Statement, {selectedMerchant?.businessName}</AlertDialogTitle><AlertDialogDescription>Generates a monthly statement with all fees, sales, COD, and shrinkage.</AlertDialogDescription></AlertDialogHeader>
-          <div className="py-3"><Label className="text-sm font-medium mb-1.5 block">Period (YYYY-MM)</Label><Input type="month" value={statementPeriod} onChange={e => setStatementPeriod(e.target.value)} className="rounded-xl" /></div>
-          <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleGenerateStatement} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Generate</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader><AlertDialogTitle>Delete Merchant</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel><AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Place on Hold dialog */}
+      {/* ══ HOLD DIALOG ══ */}
       <AlertDialog open={holdDialogOpen} onOpenChange={setHoldDialogOpen}>
-        <AlertDialogContent className="rounded-2xl">
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><Pause size={18} /> Place {selectedMerchant?.businessName} on Hold</AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2"><Pause size={18} className="text-red-600" /> Place on Hold</AlertDialogTitle>
             <AlertDialogDescription>
-              The merchant will be blocked from receiving new inbounds or orders. Existing inventory stays put. You can release the hold at any time.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-3">
-            <Label className="text-sm font-medium mb-1.5 block">Reason for hold</Label>
-            <Input value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="e.g. Overdue June statement" className="rounded-xl" />
-            <p className="text-[10px] text-gray-400 mt-1">This reason is shown on the merchant's profile banner and logged in the audit trail.</p>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmHold} className="bg-red-500 hover:bg-red-600 rounded-xl">Place on Hold</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-      {/* #17: CSV Import dialog */}
-      <AlertDialog open={importOpen} onOpenChange={setImportOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><Upload size={18} /> Import Merchants from CSV</AlertDialogTitle>
-            <AlertDialogDescription>
-              Paste CSV data below. Required columns: businessName, contact, email.
-              Optional: deliveryType, taxId, bankName, bankAccount.
+              {holdMerchant?.businessName} will be blocked from receiving inbounds and creating orders until released.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="py-2">
-            <textarea
-              value={importText}
-              onChange={e => setImportText(e.target.value)}
-              placeholder={'businessName,contact,email,deliveryType,taxId,bankName,bankAccount\nAcme Ltd,0700123456,acme@gmail.com,consignment,TIN123456,Stanbic,9012345678\nBidco Africa,0700789012,bidco@gmail.com,self-delivery,TIN789012,MTN,2001234567'}
-              rows={8}
-              className="w-full rounded-xl border border-gray-200 px-3 py-2 text-xs font-mono"
-            />
-            <p className="text-[10px] text-gray-400 mt-1">
-              First line must be the header row. Each subsequent line is one merchant.
-              deliveryType options: self-delivery, drop-ship, consignment.
-            </p>
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Reason</Label>
+            <Input value={holdReason} onChange={e => setHoldReason(e.target.value)} placeholder="e.g., Overdue statement balance" className="rounded-xl" />
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImport} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Import</AlertDialogAction>
+            <AlertDialogAction onClick={handleHoldConfirm} className="rounded-xl bg-red-600 hover:bg-red-700">Place Hold</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Help Dialog */}
-      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+      {/* ══ RATE CARD SLIDE-OVER ══ */}
+      <DetailSlideOver
+        open={rateCardOpen}
+        onClose={() => setRateCardOpen(false)}
+        title="Rate Card"
+        subtitle={selectedMerchant?.businessName || ''}
+        width="md"
+        footer={
+          <div className="flex gap-3 ml-auto">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setRateCardOpen(false)}>Cancel</Button>
+            <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSaveRateCard}>Save</Button>
+          </div>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[11px] text-gray-500">Fees charged to this merchant per unit or per order. Changing these rates creates a new active rate card (the old one is superseded).</p>
+          <div className="grid grid-cols-2 gap-3">
+            {[
+              { key: 'inboundReceivingPerUnit', label: 'Receiving per unit' },
+              { key: 'storagePerUnitPerDay', label: 'Storage per unit/day' },
+              { key: 'pickPerUnit', label: 'Pick per unit' },
+              { key: 'packPerOrder', label: 'Pack per order' },
+              { key: 'returnProcessingPerUnit', label: 'Return processing' },
+              { key: 'commissionPercent', label: 'Commission %' },
+              { key: 'codRemittanceFeePerOrder', label: 'COD fee per order' },
+              { key: 'codShortfallPenalty', label: 'COD shortfall penalty' },
+            ].map(f => (
+              <div key={f.key}>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">{f.label}</Label>
+                <Input type="number" value={String((rateForm as Record<string, number>)[f.key] || 0)} onChange={e => setRateForm({ ...rateForm, [f.key]: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </DetailSlideOver>
+
+      {/* ══ STATEMENT DIALOG ══ */}
+      <AlertDialog open={statementOpen} onOpenChange={setStatementOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Merchants Module Works
-            </AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2"><FileText size={18} /> Generate Statement</AlertDialogTitle>
             <AlertDialogDescription>
-              The Merchants module is the financial hub of your warehouse operation. Every merchant (vendor) who stores products in your warehouse has a record here — with their cumulative financial position, rate card, communication log, and operational history. This module ties together inbound (stock received), outbound (orders shipped), payments (what they've been paid), returns (RTV + shrinkage), and statements (monthly settlements). It's where you answer "how much do we owe this merchant?" and "are they profitable?"
+              Generate a monthly statement for {selectedMerchant?.businessName}. This rolls up all fees, sales, returns, and shrinkage into a net payable figure.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="py-2">
+            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Period (YYYY-MM)</Label>
+            <Input type="month" value={statementPeriod} onChange={e => setStatementPeriod(e.target.value)} className="rounded-xl" />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleGenerateStatement} className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Generate</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this module is for:</strong> Merchants are your business partners — they supply the products you store and fulfill. This module tracks everything about each merchant: their contact details, delivery type (self-delivery or warehouse-fulfilled), bank details for payments, contracted rates (rate card), operational hold status, and cumulative financials (total inbound value, total sales, total returns, total shrinkage, total paid, pending balance). Without this module, you can't generate statements, create payment batches, or know whether a merchant is profitable.
-              </p>
-            </div>
-
+      {/* ══ HELP DIALOG ══ */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Merchants</AlertDialogTitle>
+            <AlertDialogDescription>
+              Onboard and manage vendor partners. Search for a merchant above, or click "View All" to see the full list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2 text-xs text-gray-700">
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>1. Create merchants.</strong> Click "Add Merchant". Fill in business name, contact, email, delivery type (self-delivery means the merchant fulfills their own orders; warehouse-fulfilled means you do it), bank details, and contract dates. Every creation is audited.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                  <p className="text-xs text-green-900 leading-relaxed">
-                    <strong>2. Rate cards.</strong> Each merchant has a rate card — the fees you charge them per unit for receiving, storage, picking, packing, returns, COD remittance, and your commission percentage. When you create a new rate card, the old one is automatically superseded (in a transaction — no race conditions). Rate cards drive the monthly statement calculations.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
-                  <p className="text-xs text-amber-900 leading-relaxed">
-                    <strong>3. Operational hold.</strong> If a merchant has an overdue balance or dispute, you can place them on hold. This blocks all inbound (stock receiving) and outbound (order creation) for that merchant — the system enforces it at the API level, not just in the UI. The hold records who set it, when, and why.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
-                  <p className="text-xs text-purple-900 leading-relaxed">
-                    <strong>4. Communication log.</strong> Every call, email, WhatsApp, or visit with a merchant is logged with follow-up reminders. Overdue follow-ups appear on the Operations Desk. This is your relationship management tool — you always know what was discussed, when, and what the next step is.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>5. Financial position.</strong> Each merchant card shows their cumulative financials: total inbound value (stock received), total sales value (orders delivered), total returns, total shrinkage, total paid, and pending balance. The profitability calculation shows revenue, commission, shrinkage, returns, and net. This is the data that drives the monthly statement.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>6. Statements.</strong> At month-end, you generate a statement for each merchant. The statement rolls up all fees (from the rate card), sales, returns, and shrinkage into a net payable figure. Statements go through an approval workflow (draft → pending approval → approved → issued → paid). Payment batches are created from issued statements.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>7. Deactivate vs Delete.</strong> To stop working with a merchant, deactivate them — they stay in the system with all their financial history. Deleting is blocked if they have ANY dependent records (products, inbound, outbound, payments, statements, RTV, shrinkage, charges, communication, storage liabilities). In most cases, deactivate is the right choice.
-                  </p>
-                </div>
-              </div>
+              <p className="font-semibold text-gray-900 mb-1">Onboarding</p>
+              <p>Click "Onboard Merchant" to start a 5-step wizard: business details, financial terms, delivery setup, product categories, and communication preferences.</p>
             </div>
-
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most warehouse systems treat merchants as just a name and a contact number. This module treats each merchant as a financial entity with a full lifecycle: contracted rates, operational hold enforcement, cumulative financial tracking, communication logging, monthly statements, and payment batches. You can answer any question: "How much do we owe this merchant?" (pending balance), "Are they profitable?" (profitability calculation), "What did we discuss last?" (communication log), "Why are they on hold?" (hold reason + who set it), and "What's their rate card?" (rate card history with superseded versions preserved). Every financial action — statement generation, payment batch, charge, dispute — flows back to this module and updates the merchant's cumulative position.
-              </p>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Search</p>
+              <p>Type a merchant name, ID, or contact to find them. Click a result to open their profile.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">View All</p>
+              <p>Click "View All" to open the full merchant table with all columns, filters, and inline actions.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Profile</p>
+              <p>Each merchant profile shows profitability breakdown, top products, contact details, delivery addresses, rate card access, and statement generation.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Hold</p>
+              <p>Placing a merchant on hold blocks all inbounds and orders. Requires a reason. Release from the profile or the table.</p>
             </div>
           </div>
-
           <AlertDialogFooter>
             <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+    </div>
   )
 }

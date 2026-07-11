@@ -41,6 +41,15 @@ model Merchant {
   bankAccount     String?
   contactPerson   String?
   altPhone        String?
+  /// Payment terms: "net_7", "net_14", "net_30", "net_60", "prepaid", "cod"
+  paymentTerms    String?
+  /// JSON array of preferred communication channels: ["whatsapp", "email", "phone"]
+  communicationChannels String?
+  /// JSON array of delivery addresses (for self-delivery + drop-ship merchants):
+  /// [{"label": "Main Warehouse", "address": "Plot 12, Kampala Rd", "type": "stock_delivery"}]
+  deliveryAddresses String?
+  /// JSON array of product category IDs this merchant supplies: ["Produce", "Dairy"]
+  productCategories  String?
   contractStart   DateTime?
   contractEnd     DateTime?
   notes           String?
