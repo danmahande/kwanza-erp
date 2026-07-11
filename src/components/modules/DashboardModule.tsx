@@ -61,7 +61,7 @@ function TrendArrow({ value }: { value: number }) {
 
 // ── Module Status Board (simplified: name + dot + action) ──
 function ModuleStatusBoard({ data, onNavigate }: { data: DashboardData; onNavigate?: (m: string) => void }) {
-  type Row = { key: string; name: string; module: string; status: 'critical' | 'warning' | 'ok' | 'quiet'; label: string; action: string }
+  type Row = { key: string; name: string; module: string; status: 'critical' | 'warning' | 'active' | 'ok' | 'quiet'; label: string; action: string }
 
   const rows: Row[] = []
 
@@ -70,30 +70,34 @@ function ModuleStatusBoard({ data, onNavigate }: { data: DashboardData; onNaviga
   else if (data.inventory.low > 0) rows.push({ key: 'inv', name: 'Inventory', module: 'inventory', status: 'warning', label: `${data.inventory.low} running low`, action: `Review →` })
   else rows.push({ key: 'inv', name: 'Inventory', module: 'inventory', status: 'ok', label: 'All healthy', action: '' })
 
-  // Outbound
-  rows.push({ key: 'ob', name: 'Outbound', module: 'outbound', status: data.orders.pending > 0 ? 'ok' : 'quiet', label: data.orders.pending > 0 ? `${data.orders.pending} pending` : 'No active orders', action: '' })
+  // Outbound — pending orders are 'active' (blue), not 'ok' (green)
+  if (data.orders.pending > 0) rows.push({ key: 'ob', name: 'Outbound', module: 'outbound', status: 'active', label: `${data.orders.pending} in progress`, action: '' })
+  else rows.push({ key: 'ob', name: 'Outbound', module: 'outbound', status: 'quiet', label: 'No active orders', action: '' })
 
-  // Payments
-  if (data.cod.pendingBankings > 0) rows.push({ key: 'pay', name: 'Payments', module: 'payments', status: 'warning', label: `${formatCurrencyCompact(data.cod.pendingBankings)} pending`, action: 'Verify →' })
-  else rows.push({ key: 'pay', name: 'Payments', module: 'payments', status: 'ok', label: 'All banked', action: '' })
+  // Payments — 'ok' only when COD was actually collected AND all banked
+  if (data.cod.pendingBankings > 0) rows.push({ key: 'pay', name: 'Payments', module: 'payments', status: 'warning', label: `${formatCurrencyCompact(data.cod.pendingBankings)} unbanked`, action: 'Verify →' })
+  else if (data.cod.collectedTotal > 0) rows.push({ key: 'pay', name: 'Payments', module: 'payments', status: 'ok', label: 'All banked', action: '' })
+  else rows.push({ key: 'pay', name: 'Payments', module: 'payments', status: 'quiet', label: 'No COD activity', action: '' })
 
   // Returns
   if (data.exceptionCount > 0) rows.push({ key: 'ret', name: 'Returns', module: 'returns', status: 'critical', label: `${data.exceptionCount} exceptions`, action: 'Process →' })
-  else rows.push({ key: 'ret', name: 'Returns', module: 'returns', status: 'ok', label: 'All clear', action: '' })
+  else rows.push({ key: 'ret', name: 'Returns', module: 'returns', status: 'ok', label: 'No exceptions', action: '' })
 
-  // Drivers
-  rows.push({ key: 'drv', name: 'Drivers', module: 'drivers', status: 'ok', label: `${data.stats.activeDrivers} active`, action: '' })
+  // Drivers — 'ok' only when there ARE active drivers
+  if (data.stats.activeDrivers > 0) rows.push({ key: 'drv', name: 'Drivers', module: 'drivers', status: 'ok', label: `${data.stats.activeDrivers} active`, action: '' })
+  else rows.push({ key: 'drv', name: 'Drivers', module: 'drivers', status: 'quiet', label: 'No active drivers', action: '' })
 
   // Merchants
   const lossMakers = data.merchantProfitability.filter(m => m.net < 0).length
   if (lossMakers > 0) rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'warning', label: `${lossMakers} at a loss`, action: 'Review →' })
-  else rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'ok', label: 'All profitable', action: '' })
+  else if (data.stats.totalMerchants > 0) rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'ok', label: `${data.stats.totalMerchants} profitable`, action: '' })
+  else rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'quiet', label: 'No merchants', action: '' })
 
-  const order = { critical: 0, warning: 1, ok: 2, quiet: 3 }
+  const order = { critical: 0, warning: 1, active: 2, ok: 3, quiet: 4 }
   rows.sort((a, b) => order[a.status] - order[b.status])
 
-  const dot: Record<string, string> = { critical: 'bg-red-500', warning: 'bg-orange-500', ok: 'bg-green-500', quiet: 'bg-gray-300' }
-  const text: Record<string, string> = { critical: 'text-red-700', warning: 'text-orange-700', ok: 'text-green-700', quiet: 'text-gray-400' }
+  const dot: Record<string, string> = { critical: 'bg-red-500', warning: 'bg-orange-500', active: 'bg-blue-400', ok: 'bg-green-500', quiet: 'bg-gray-300' }
+  const text: Record<string, string> = { critical: 'text-red-700', warning: 'text-orange-700', active: 'text-blue-700', ok: 'text-green-700', quiet: 'text-gray-400' }
 
   return (
     <div className="bg-white rounded-lg overflow-hidden border border-gray-200">
@@ -270,9 +274,9 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         ))}
       </div>
 
-      {/* ── Module health (simplified: name + dot + action) ── */}
+      {/* ── System Status ── */}
       <div>
-        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1 block">Module Health</span>
+        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1 block">System Status</span>
         <ModuleStatusBoard data={data} onNavigate={onNavigate} />
       </div>
 
@@ -313,7 +317,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} tickFormatter={(v) => formatCurrencyCompact(v)} />
+              <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} axisLine={false} tickLine={false} width={56} tickFormatter={(v) => { const abs = Math.abs(v); if (abs >= 1_000_000) return `${(abs / 1_000_000).toFixed(1)}M`; if (abs >= 1_000) return `${(abs / 1_000).toFixed(0)}K`; return String(abs) }} />
               <Tooltip contentStyle={tooltipStyle} formatter={(v) => formatCurrency(Number(v))} />
               <Area type="monotone" dataKey="revenue" stroke="#FF6B35" strokeWidth={2} fill="url(#revGrad)" name="Revenue" />
               <Area type="monotone" dataKey="commissions" stroke="#1B2A4A" strokeWidth={2} fill="url(#commGrad)" name="Commission" />
@@ -328,7 +332,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
           <AlertDialogHeader>
             <AlertDialogTitle>Dashboard</AlertDialogTitle>
             <AlertDialogDescription>
-              Strategic overview of your warehouse operation. Use the period selector to change the time range.
+              Strategic overview of your warehouse operation. Change the time range using the period selector.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-3 py-2 text-xs text-gray-700">
@@ -337,7 +341,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               <p>Six metrics: revenue, net profit, average order value, fulfillment rate, stock value, active merchants. Arrows show change vs last period.</p>
             </div>
             <div>
-              <p className="font-semibold text-gray-900 mb-1">Module Health</p>
+              <p className="font-semibold text-gray-900 mb-1">System Status</p>
               <p>One row per module with a status indicator. Click any row with an action link to jump to that module.</p>
             </div>
             <div>
