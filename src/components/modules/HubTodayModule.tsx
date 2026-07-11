@@ -10,284 +10,116 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   Search, ChevronRight, ChevronDown, Lock, RefreshCw,
-  AlertTriangle, CheckCircle2, X, HelpCircle, ArrowRight, Package,
-  Boxes, Truck, ClipboardList, RotateCcw,
+  AlertTriangle, CheckCircle2, HelpCircle, Package,
+  Boxes, Truck, ClipboardList, RotateCcw, ArrowRight, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 // ── Types ──
 
 interface SearchOrder {
-  id: string
-  customerName: string
-  customerAddress: string | null
-  qty: number
-  status: string
-  stage: string
-  stageKey: string
-  codCollected: number | null
-  saleAmount: number | null
-  assignedDriver: string | null
-  runsheetId: string | null
-  createdAt: string
-  dispatchedAt: string | null
-  deliveredAt: string | null
-  entryMinutes: number | null
-  isStale: boolean
-  matchedQuery: boolean
+  id: string; customerName: string; customerAddress: string | null; qty: number
+  status: string; stage: string; stageKey: string
+  codCollected: number | null; saleAmount: number | null
+  assignedDriver: string | null; runsheetId: string | null
+  createdAt: string; dispatchedAt: string | null; deliveredAt: string | null
+  entryMinutes: number | null; isStale: boolean; matchedQuery: boolean
 }
 
 interface SearchProduct {
-  productId: string
-  productName: string
-  brand: string | null
-  variant: string | null
-  merchantName: string
-  category: string
-  unit: string
-  currentStock: number
-  score?: number
-  totalActiveOrders: number
-  moreOrdersCount: number
-  orders: SearchOrder[]
+  productId: string; productName: string; brand: string | null; variant: string | null
+  merchantName: string; category: string; unit: string; currentStock: number
+  totalActiveOrders: number; moreOrdersCount: number; orders: SearchOrder[]
 }
 
-interface SearchResponse {
-  query: string
-  results: SearchProduct[]
-  totalOrders: number
-}
+interface SearchResponse { query: string; results: SearchProduct[]; totalOrders: number }
 
 interface StationItem {
-  id?: string
-  inboundId?: string
-  outboundId?: string
-  orderNumber?: string
-  afterSalesId?: string
-  name?: string  // rider name (used by riders list)
-  customerName?: string
-  productName?: string
-  merchantName?: string
-  customerAddress?: string
-  qty?: number
-  qtyIn?: number
-  status?: string
-  returnStatus?: string
-  runsheetId?: string | null
-  assignedDriver?: string | null
-  codCollected?: number | null
-  saleAmount?: number | null
-  deliveryNotes?: string | null
-  deliveryAttempts?: number
-  dispatchedAt?: string
-  deliveredAt?: string
-  createdAt?: string
-  bankedAt?: string
-  reason?: string
-  refundAmount?: number | null
-  shrinkageId?: string
-  bankingId?: string
-  driverName?: string
-  amount?: number
-  phone?: string
-  expectedBankings?: number
-  banked?: number
-  dispatchedToday?: number
-  deliveredToday?: number
-  pendingBankings?: number
+  id?: string; inboundId?: string; outboundId?: string; orderNumber?: string; afterSalesId?: string
+  name?: string; customerName?: string; productName?: string; merchantName?: string
+  customerAddress?: string; qty?: number; qtyIn?: number; status?: string; returnStatus?: string
+  runsheetId?: string | null; assignedDriver?: string | null
+  codCollected?: number | null; saleAmount?: number | null
+  deliveryNotes?: string | null; deliveryAttempts?: number
+  dispatchedAt?: string; deliveredAt?: string; createdAt?: string; bankedAt?: string
+  reason?: string; refundAmount?: number | null; shrinkageId?: string; bankingId?: string
+  driverName?: string; amount?: number; phone?: string
+  expectedBankings?: number; banked?: number
+  dispatchedToday?: number; deliveredToday?: number; pendingBankings?: number
 }
 
 interface Station {
-  count: number
-  items: StationItem[]
-  label: string
-  description: string
-  action: string
-  targetModule: string
-  avgDwellMinutes?: number | null
+  count: number; items: StationItem[]; label: string; description: string
+  action: string; targetModule: string; avgDwellMinutes?: number | null
 }
 
 interface HubData {
-  date: string
-  range: string
+  date: string; range: string
   stations: {
     intake: Station & { stockArrivals?: StationItem[]; orderIntake?: StationItem[] }
-    sort: Station
-    stage: Station
-    dispatch: Station
-    inTransit: Station
-    delivered: Station
-    returns: Station
+    sort: Station; stage: Station; dispatch: Station; inTransit: Station; delivered: Station; returns: Station
   }
-  exceptions: {
-    failedDeliveries: StationItem[]
-    pendingShrinkage: StationItem[]
-    count: number
-  }
+  exceptions: { failedDeliveries: StationItem[]; pendingShrinkage: StationItem[]; count: number }
   riders: StationItem[]
-  pendingBankings: {
-    count: number
-    items: StationItem[]
-    totalAmount: number
-  }
-  followUps: {
-    count: number
-    items: Array<{
-      id: string
-      merchantId: string
-      merchantName: string
-      merchantOnHold: boolean
-      type: string
-      subject: string
-      followUpAt: string
-      createdAt: string
-    }>
-  }
-  lateBankings: {
-    count: number
-    items: Array<{
-      driverId: string
-      driverName: string
-      phone: string
-      unbankedAmount: number
-      daysSinceBanking: number
-      isLate: boolean
-    }>
-    totalUnbanked: number
-  }
-  dayClose: {
-    canClose: boolean
-    unaccountedParcels: number
-    pendingBankingsCount: number
-    pipelineOrders: number
-    pendingShrinkageCount: number
-  }
-  totals: {
-    inboundToday: number
-    outboundToday: number
-    codCollectedToday: number
-    salesToday: number
-  }
+  pendingBankings: { count: number; items: StationItem[]; totalAmount: number }
+  followUps: { count: number; items: Array<{ id: string; merchantId: string; merchantName: string; merchantOnHold: boolean; type: string; subject: string; followUpAt: string; createdAt: string }> }
+  lateBankings: { count: number; items: Array<{ driverId: string; driverName: string; phone: string; unbankedAmount: number; daysSinceBanking: number; isLate: boolean }>; totalUnbanked: number }
+  dayClose: { canClose: boolean; unaccountedParcels: number; pendingBankingsCount: number; pipelineOrders: number; pendingShrinkageCount: number }
+  totals: { inboundToday: number; outboundToday: number; codCollectedToday: number; salesToday: number }
 }
 
 type StationKey = 'intake' | 'sort' | 'stage' | 'dispatch' | 'inTransit' | 'delivered' | 'returns'
 
-const STATIONS: { key: StationKey; label: string; shortLabel: string; description: string; icon: typeof Package; pillClass: string }[] = [
-  { key: 'intake',    label: 'INTAKE',         shortLabel: 'Intake',          description: 'Stock arrivals needing put-away (received → put away → stored) + new orders awaiting risk validation (pending → released)', icon: Package,       pillClass: 'text-blue-600' },
-  { key: 'sort',      label: 'SORT & PACK',    shortLabel: 'Sort & Pack',     description: 'Orders being prepared. picking from shelves, then packing into boxes (pending → picking → picked → packing → packed)', icon: Boxes,        pillClass: 'text-orange-600' },
-  { key: 'stage',     label: 'STAGING',        shortLabel: 'Staging',         description: 'Packed and ready. waiting for a rider to be assigned',   icon: ClipboardList, pillClass: 'text-purple-600' },
-  { key: 'dispatch',  label: 'DISPATCH',       shortLabel: 'Dispatch',        description: 'Assigned to a rider. ready to leave the warehouse', icon: Truck,     pillClass: 'text-yellow-700' },
-  { key: 'inTransit', label: 'IN TRANSIT',     shortLabel: 'In Transit',      description: 'Out for delivery. rider is on the road',        icon: ArrowRight,    pillClass: 'text-cyan-600' },
-  { key: 'delivered', label: 'DELIVERED',      shortLabel: 'Delivered',       description: 'Successfully delivered to the customer today', icon: CheckCircle2, pillClass: 'text-green-700' },
-  { key: 'returns',   label: 'RETURNS',        shortLabel: 'Returns',         description: 'Customer returns received. needs inspection and disposition',   icon: RotateCcw,     pillClass: 'text-red-600' },
+const STATIONS: { key: StationKey; label: string; shortLabel: string; icon: typeof Package }[] = [
+  { key: 'intake',    label: 'INTAKE',     shortLabel: 'Intake',     icon: Package },
+  { key: 'sort',      label: 'SORT & PACK',shortLabel: 'Sort',       icon: Boxes },
+  { key: 'stage',     label: 'STAGING',    shortLabel: 'Stage',      icon: ClipboardList },
+  { key: 'dispatch',  label: 'DISPATCH',   shortLabel: 'Dispatch',   icon: Truck },
+  { key: 'inTransit', label: 'IN TRANSIT', shortLabel: 'Transit',    icon: ArrowRight },
+  { key: 'delivered', label: 'DELIVERED',  shortLabel: 'Delivered',  icon: CheckCircle2 },
+  { key: 'returns',   label: 'RETURNS',    shortLabel: 'Returns',    icon: RotateCcw },
 ]
 
-// ── Workflow progress stages (for the Order Status visualizer) ──
-// Only the outbound flow is shown. Intake and Returns are separate flows.
-const STAGES_FLOW: { key: StationKey; shortLabel: string; color: string }[] = [
-  { key: 'sort',      shortLabel: 'Sort',     color: 'bg-orange-400' },
-  { key: 'stage',     shortLabel: 'Stage',    color: 'bg-purple-400' },
-  { key: 'dispatch',  shortLabel: 'Dispatch', color: 'bg-yellow-400' },
-  { key: 'inTransit', shortLabel: 'Transit',  color: 'bg-cyan-400' },
-  { key: 'delivered', shortLabel: 'Delivered',color: 'bg-green-500' },
-]
+const STALE_THRESHOLD_MINUTES: Record<string, number> = { sort: 120, stage: 240, dispatch: 120, inTransit: 360 }
 
-const STAGE_ORDER: Record<string, number> = {
-  sort: 0, stage: 1, dispatch: 2, inTransit: 3, delivered: 4,
-}
-
-const STAGE_CALLOUT_TINT: Record<string, string> = {
-  sort:      'bg-orange-50 border-orange-200',
-  stage:     'bg-purple-50 border-purple-200',
-  dispatch:  'bg-yellow-50 border-yellow-200',
-  inTransit: 'bg-cyan-50 border-cyan-200',
-  delivered: 'bg-green-50 border-green-200',
-  returns:   'bg-red-50 border-red-200',
-}
-
-// Maps a station key to the sidebar module the worker should jump to
-// to actually do work on that station's parcels.
 const STATION_MODULE: Record<string, string> = {
-  intake: 'inventory',
-  sort: 'outbound',
-  stage: 'outbound',
-  dispatch: 'outbound',
-  inTransit: 'outbound',
-  delivered: 'outbound',
-  returns: 'returns',
+  intake: 'inventory', sort: 'outbound', stage: 'outbound', dispatch: 'outbound',
+  inTransit: 'outbound', delivered: 'outbound', returns: 'returns',
 }
 
-// Format minutes as a compact "1h 14m" / "47m" / "—"
 function formatDwell(minutes: number | null | undefined): string {
   if (minutes == null) return '—'
   if (minutes < 1) return '<1m'
   if (minutes < 60) return `${minutes}m`
-  const h = Math.floor(minutes / 60)
-  const m = minutes % 60
+  const h = Math.floor(minutes / 60); const m = minutes % 60
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
-// Stage colors used in dropdown distribution chart + funnel
-const STAGE_BAR_COLOR: Record<string, string> = {
-  sort:      'bg-orange-400',
-  stage:     'bg-purple-400',
-  dispatch:  'bg-yellow-400',
-  inTransit: 'bg-cyan-400',
-  delivered: 'bg-green-500',
-  returns:   'bg-red-400',
-}
-
-// Same thresholds as backend STALE_THRESHOLDS, keep in sync.
-// Used to highlight a station tab when its avg dwell exceeds the threshold.
-const STALE_THRESHOLD_MINUTES: Record<string, number> = {
-  sort: 120,
-  stage: 240,
-  dispatch: 120,
-  inTransit: 360,
-}
-
-// ── Status pill: colored dot + plain English label ──
-// The 2-letter code is kept as a tiny subtitle for power users who've
-// memorized it, but the primary label is now the full word.
-function StatusPill({ status, station }: { status: string; station: StationKey }) {
-  const map: Record<string, { dot: string; code: string; label: string }> = {
-    // outbound statuses
-    pending:    { dot: 'bg-gray-400',   code: 'PN', label: 'Pending' },
-    released:   { dot: 'bg-amber-500',  code: 'RL', label: 'Released' },
-    picking:    { dot: 'bg-blue-500',   code: 'PK', label: 'Picking' },
-    picked:     { dot: 'bg-blue-600',   code: 'PC', label: 'Picked' },
-    packing:    { dot: 'bg-orange-500', code: 'PG', label: 'Packing' },
-    packed:     { dot: 'bg-orange-600', code: 'PD', label: 'Packed' },
-    staged:     { dot: 'bg-cyan-600',   code: 'SG', label: 'Staged' },
-    dispatched: { dot: 'bg-cyan-500',   code: 'DP', label: 'Dispatched' },
-    delivered:  { dot: 'bg-green-600',  code: 'DL', label: 'Delivered' },
-    failed:     { dot: 'bg-red-500',    code: 'FL', label: 'Failed' },
-    returned:   { dot: 'bg-red-600',    code: 'RT', label: 'Returned' },
-    cancelled:  { dot: 'bg-gray-500',   code: 'CL', label: 'Cancelled' },
-    // inbound
-    received:   { dot: 'bg-blue-500',   code: 'RC', label: 'Received' },
-    put_away:   { dot: 'bg-yellow-500', code: 'PA', label: 'Put Away' },
-    stored:     { dot: 'bg-green-600',  code: 'ST', label: 'Stored' },
-    // rma
-    initiated:  { dot: 'bg-blue-400',   code: 'IN', label: 'Initiated' },
-    in_review:  { dot: 'bg-yellow-500', code: 'RV', label: 'In Review' },
-    approved:   { dot: 'bg-green-500',  code: 'AP', label: 'Approved' },
-    rejected:   { dot: 'bg-red-500',    code: 'RJ', label: 'Rejected' },
-    processed:  { dot: 'bg-green-600',  code: 'PR', label: 'Processed' },
+// ── Status pill ──
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { dot: string; label: string }> = {
+    pending: { dot: 'bg-gray-400', label: 'Pending' }, released: { dot: 'bg-amber-500', label: 'Released' },
+    picking: { dot: 'bg-blue-500', label: 'Picking' }, picked: { dot: 'bg-blue-600', label: 'Picked' },
+    packing: { dot: 'bg-orange-500', label: 'Packing' }, packed: { dot: 'bg-orange-600', label: 'Packed' },
+    staged: { dot: 'bg-cyan-600', label: 'Staged' }, dispatched: { dot: 'bg-cyan-500', label: 'Dispatched' },
+    delivered: { dot: 'bg-green-600', label: 'Delivered' }, failed: { dot: 'bg-red-500', label: 'Failed' },
+    returned: { dot: 'bg-red-600', label: 'Returned' }, cancelled: { dot: 'bg-gray-500', label: 'Cancelled' },
+    received: { dot: 'bg-blue-500', label: 'Received' }, put_away: { dot: 'bg-yellow-500', label: 'Put Away' },
+    stored: { dot: 'bg-green-600', label: 'Stored' }, self_delivery: { dot: 'bg-purple-500', label: 'Self-Delivery' },
+    initiated: { dot: 'bg-blue-400', label: 'Initiated' }, in_review: { dot: 'bg-yellow-500', label: 'In Review' },
+    approved: { dot: 'bg-green-500', label: 'Approved' }, rejected: { dot: 'bg-red-500', label: 'Rejected' },
+    processed: { dot: 'bg-green-600', label: 'Processed' },
   }
-  const s = map[status] || { dot: 'bg-gray-400', code: '??', label: status }
+  const s = map[status] || { dot: 'bg-gray-400', label: status }
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-700" title={`${s.label} (${s.code})`}>
+    <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-gray-700">
       <span className={`w-2 h-2 rounded-full ${s.dot} shrink-0`} />
-      <span>{s.label}</span>
-      <span className="text-[9px] text-gray-400 font-mono">{s.code}</span>
+      {s.label}
     </span>
   )
 }
 
-// ── Row tint based on status ──
 function rowTint(status: string): string {
   if (['delivered', 'stored', 'processed'].includes(status)) return 'bg-green-50/40'
   if (['dispatched', 'staged'].includes(status)) return 'bg-cyan-50/40'
@@ -298,50 +130,9 @@ function rowTint(status: string): string {
   return ''
 }
 
-// ── KPI Ribbon ── (replaces the 4-card totals strip, single dense bar, no icons, no gradients)
-function KpiRibbon({ totals, exceptionsCount, ridersCount, codPending, deliveredCount }: {
-  totals: HubData['totals']
-  exceptionsCount: number
-  ridersCount: number
-  codPending: number
-  deliveredCount: number
-}) {
-  const cells = [
-    { label: 'INBOUND', value: String(totals.inboundToday) },
-    { label: 'OUTBOUND', value: String(totals.outboundToday) },
-    { label: 'DELIVERED', value: String(deliveredCount) },
-    { label: 'EXCEPTIONS', value: String(exceptionsCount), highlight: exceptionsCount > 0 },
-    { label: 'COD', value: formatCurrencyCompact(totals.codCollectedToday) },
-    { label: 'SALES', value: formatCurrencyCompact(totals.salesToday) },
-    { label: 'RIDERS', value: String(ridersCount) },
-    { label: 'COD PENDING', value: formatCurrencyCompact(codPending), highlight: codPending > 0 },
-  ]
-  return (
-    <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
-      {cells.map((c, i) => (
-        <div
-          key={c.label}
-          className={`flex-1 px-3 py-2 flex flex-col justify-center border-r border-white/10 ${c.highlight ? 'bg-red-500/20' : ''} ${i === cells.length - 1 ? 'border-r-0' : ''}`}
-        >
-          <span className="text-[9px] text-blue-200/60 uppercase tracking-wider font-medium">{c.label}</span>
-          <span className="font-mono font-bold text-base tabular-nums">{c.value}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-// ── Dense Table for a station ──
-function StationTable({
-  station,
-  stationKey,
-  expandedId,
-  onToggleExpand,
-}: {
-  station: Station
-  stationKey: StationKey
-  expandedId: string | null
-  onToggleExpand: (id: string) => void
+// ── Station Table ──
+function StationTable({ station, stationKey, expandedId, onToggleExpand }: {
+  station: Station; stationKey: StationKey; expandedId: string | null; onToggleExpand: (id: string) => void
 }) {
   const [search, setSearch] = useState('')
   const [sortBy, setSortBy] = useState<'time' | 'amount' | 'status'>('time')
@@ -358,13 +149,8 @@ function StationTable({
       )
     }
     items = [...items].sort((a, b) => {
-      if (sortBy === 'amount') {
-        return Number(b.codCollected || b.saleAmount || 0) - Number(a.codCollected || a.saleAmount || 0)
-      }
-      if (sortBy === 'status') {
-        return String(a.status || a.returnStatus || '').localeCompare(String(b.status || b.returnStatus || ''))
-      }
-      // time: newest first
+      if (sortBy === 'amount') return Number(b.codCollected || b.saleAmount || 0) - Number(a.codCollected || a.saleAmount || 0)
+      if (sortBy === 'status') return String(a.status || a.returnStatus || '').localeCompare(String(b.status || b.returnStatus || ''))
       const aTime = new Date(a.dispatchedAt || a.deliveredAt || a.createdAt || 0).getTime()
       const bTime = new Date(b.dispatchedAt || b.deliveredAt || b.createdAt || 0).getTime()
       return bTime - aTime
@@ -372,57 +158,33 @@ function StationTable({
     return items
   }, [station.items, search, sortBy])
 
-  if (filtered.length === 0) {
-    return (
-      <div className="py-12 text-center text-gray-400 text-sm">
-        No items in this queue.
-      </div>
-    )
-  }
+  if (filtered.length === 0) return <div className="py-12 text-center text-gray-400 text-sm">No items in this queue.</div>
 
   return (
     <div>
-      {/* Inline filters */}
       <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/50">
         <div className="relative flex-1 max-w-xs">
           <Search size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400" />
-          <Input
-            placeholder="Filter this queue..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="pl-7 h-7 text-xs rounded-md"
-          />
+          <Input placeholder="Filter..." value={search} onChange={e => setSearch(e.target.value)} className="pl-7 h-7 text-xs rounded-md" />
         </div>
         <div className="flex items-center gap-1 text-xs">
           <span className="text-gray-400">Sort:</span>
           {(['time', 'amount', 'status'] as const).map(s => (
-            <button
-              key={s}
-              onClick={() => setSortBy(s)}
-              className={`px-2 py-0.5 rounded text-[11px] ${sortBy === s ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'}`}
-            >
+            <button key={s} onClick={() => setSortBy(s)} className={`px-2 py-0.5 rounded text-[11px] ${sortBy === s ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>
               {s === 'time' ? 'Time' : s === 'amount' ? 'Amount' : 'Status'}
             </button>
           ))}
         </div>
-        <span className="ml-auto text-[11px] text-gray-400 font-mono">
-          {filtered.length} {filtered.length === 1 ? 'item' : 'items'}
-        </span>
+        <span className="ml-auto text-[11px] text-gray-400 font-mono">{filtered.length} {filtered.length === 1 ? 'item' : 'items'}</span>
       </div>
-
-      {/* Dense table */}
       <div className="overflow-x-auto">
         <table className="w-full text-xs">
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
               <th className="text-left px-3 py-1.5 font-semibold w-32">ID</th>
               <th className="text-left px-3 py-1.5 font-semibold">Customer / Product</th>
-              {stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch' ? (
-                <th className="text-left px-3 py-1.5 font-semibold w-28">Driver</th>
-              ) : null}
-              {stationKey === 'intake' ? (
-                <th className="text-left px-3 py-1.5 font-semibold w-28">Merchant</th>
-              ) : null}
+              {(stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch') && <th className="text-left px-3 py-1.5 font-semibold w-28">Driver</th>}
+              {stationKey === 'intake' && <th className="text-left px-3 py-1.5 font-semibold w-28">Merchant</th>}
               <th className="text-right px-3 py-1.5 font-semibold w-16">Qty</th>
               <th className="text-right px-3 py-1.5 font-semibold w-28">Amount</th>
               <th className="text-left px-3 py-1.5 font-semibold w-32">Status</th>
@@ -436,64 +198,25 @@ function StationTable({
               const status = String(item.status || item.returnStatus || '')
               const amount = Number(item.codCollected || item.saleAmount || item.refundAmount || 0)
               return (
-                <>
-                  <tr
-                    key={id}
-                    onClick={() => onToggleExpand(id)}
-                    className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${rowTint(status)} ${isExpanded ? 'bg-blue-50' : ''}`}
-                    style={{ height: '32px' }}
-                  >
-                    <td className="px-3 py-1 font-mono font-semibold text-gray-900 text-[11px]">
-                      {item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || '—'}
-                    </td>
-                    <td className="px-3 py-1 text-gray-700 truncate max-w-xs">
-                      {item.customerName || item.productName || '—'}
-                    </td>
-                    {(stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch') && (
-                      <td className="px-3 py-1 text-gray-600 text-[11px]">{item.assignedDriver || '—'}</td>
-                    )}
-                    {stationKey === 'intake' && (
-                      <td className="px-3 py-1 text-gray-600 text-[11px] truncate">{item.merchantName || '—'}</td>
-                    )}
-                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-700">
-                      {item.qty || item.qtyIn || '—'}
-                    </td>
-                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-900 font-medium">
-                      {amount > 0 ? formatCurrencyCompact(amount) : '—'}
-                    </td>
-                    <td className="px-3 py-1">
-                      <StatusPill status={status} station={stationKey} />
-                    </td>
-                    <td className="px-2 text-gray-400">
-                      {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                    </td>
+                <React.Fragment key={id}>
+                  <tr onClick={() => onToggleExpand(id)} className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${rowTint(status)} ${isExpanded ? 'bg-blue-50' : ''}`} style={{ height: '32px' }}>
+                    <td className="px-3 py-1 font-mono font-semibold text-gray-900 text-[11px]">{item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || '—'}</td>
+                    <td className="px-3 py-1 text-gray-700 truncate max-w-xs">{item.customerName || item.productName || '—'}</td>
+                    {(stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch') && <td className="px-3 py-1 text-gray-600 text-[11px]">{item.assignedDriver || '—'}</td>}
+                    {stationKey === 'intake' && <td className="px-3 py-1 text-gray-600 text-[11px] truncate">{item.merchantName || '—'}</td>}
+                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-700">{item.qty || item.qtyIn || '—'}</td>
+                    <td className="px-3 py-1 text-right font-mono tabular-nums text-gray-900 font-medium">{amount > 0 ? formatCurrencyCompact(amount) : '—'}</td>
+                    <td className="px-3 py-1"><StatusPill status={status} /></td>
+                    <td className="px-2 text-gray-400">{isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</td>
                   </tr>
                   {isExpanded && (
-                    <tr key={`${id}-detail`} className="bg-white border-b border-gray-200">
+                    <tr className="bg-white border-b border-gray-200">
                       <td colSpan={8} className="px-6 py-3">
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Customer</p>
-                            <p className="text-gray-900 font-medium">{item.customerName || '—'}</p>
-                            {item.customerAddress && <p className="text-gray-500 text-[11px] mt-0.5">{item.customerAddress}</p>}
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product / Item</p>
-                            <p className="text-gray-900">{item.productName || '—'}</p>
-                            {item.merchantName && <p className="text-gray-500 text-[11px] mt-0.5">{item.merchantName}</p>}
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Driver / Runsheet</p>
-                            <p className="text-gray-900">{item.assignedDriver || 'Unassigned'}</p>
-                            {item.runsheetId && <p className="text-gray-500 text-[11px] font-mono mt-0.5">{item.runsheetId}</p>}
-                          </div>
-                          <div>
-                            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Money</p>
-                            <p className="text-gray-900">
-                              {item.codCollected ? `COD ${formatCurrency(Number(item.codCollected))}` : item.saleAmount ? formatCurrency(Number(item.saleAmount)) : '—'}
-                            </p>
-                            {item.refundAmount && <p className="text-red-600 text-[11px] mt-0.5">Refund: {formatCurrency(Number(item.refundAmount))}</p>}
-                          </div>
+                          <div><p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Customer</p><p className="text-gray-900 font-medium">{item.customerName || '—'}</p>{item.customerAddress && <p className="text-gray-500 text-[11px] mt-0.5">{item.customerAddress}</p>}</div>
+                          <div><p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product</p><p className="text-gray-900">{item.productName || '—'}</p>{item.merchantName && <p className="text-gray-500 text-[11px] mt-0.5">{item.merchantName}</p>}</div>
+                          <div><p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Driver / Runsheet</p><p className="text-gray-900">{item.assignedDriver || 'Unassigned'}</p>{item.runsheetId && <p className="text-gray-500 text-[11px] font-mono mt-0.5">{item.runsheetId}</p>}</div>
+                          <div><p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Money</p><p className="text-gray-900">{item.codCollected ? `COD ${formatCurrency(Number(item.codCollected))}` : item.saleAmount ? formatCurrency(Number(item.saleAmount)) : '—'}</p>{item.refundAmount && <p className="text-red-600 text-[11px] mt-0.5">Refund: {formatCurrency(Number(item.refundAmount))}</p>}</div>
                         </div>
                         {(item.dispatchedAt || item.deliveredAt || item.createdAt) && (
                           <div className="mt-3 pt-3 border-t border-gray-100">
@@ -505,20 +228,12 @@ function StationTable({
                             </div>
                           </div>
                         )}
-                        {item.deliveryNotes && (
-                          <div className="mt-2 p-2 rounded bg-red-50 border border-red-100 text-[11px] text-red-700">
-                            ⚠ {item.deliveryNotes}
-                          </div>
-                        )}
-                        {item.reason && (
-                          <div className="mt-2 p-2 rounded bg-orange-50 border border-orange-100 text-[11px] text-orange-700">
-                            Reason: {item.reason}
-                          </div>
-                        )}
+                        {item.deliveryNotes && <div className="mt-2 p-2 rounded bg-red-50 border border-red-100 text-[11px] text-red-700">⚠ {item.deliveryNotes}</div>}
+                        {item.reason && <div className="mt-2 p-2 rounded bg-orange-50 border border-orange-100 text-[11px] text-orange-700">Reason: {item.reason}</div>}
                       </td>
                     </tr>
                   )}
-                </>
+                </React.Fragment>
               )
             })}
           </tbody>
@@ -528,516 +243,161 @@ function StationTable({
   )
 }
 
-// ── Right-rail mini-tables ──
-
-// Late Banking Panel — shows drivers with unbanked COD cash > 24h old.
-// Each row has a "Remind" button that creates a DriverCommunication record
-// so the office team has a visible action + audit trail.
-function LateBankingsPanel({
-  lateBankings,
-  onRemind,
-}: {
-  lateBankings: HubData['lateBankings']
-  onRemind: (driverId: string, driverName: string, phone: string, unbankedAmount: number) => void
-}) {
-  if (lateBankings.count === 0) {
-    return null  // don't render anything if no late bankings — keeps the rail clean
-  }
-  return (
-    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
-      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider flex items-center gap-1">
-          <AlertTriangle size={12} /> Late COD Bankings
-        </span>
-        <span className="text-[11px] text-red-700 font-mono font-bold">
-          {formatCurrencyCompact(lateBankings.totalUnbanked)}
-        </span>
-      </div>
-      <table className="w-full text-[11px]">
-        <tbody>
-          {lateBankings.items.slice(0, 8).map((d, i) => (
-            <tr key={i} className="border-t border-red-50 bg-red-50/20 hover:bg-red-50/40" style={{ height: '32px' }}>
-              <td className="px-3 py-1">
-                <p className="text-gray-900 font-medium truncate max-w-[100px]">{d.driverName}</p>
-                <p className="text-[9px] text-red-600 font-semibold">
-                  {d.daysSinceBanking}d · {formatCurrencyCompact(d.unbankedAmount)}
-                </p>
-              </td>
-              <td className="px-2 py-1 text-right">
-                <button
-                  onClick={() => onRemind(d.driverId, d.driverName, d.phone, d.unbankedAmount)}
-                  className="text-[9px] text-red-700 hover:text-red-900 font-semibold uppercase tracking-wider bg-red-100 hover:bg-red-200 px-2 py-0.5 rounded"
-                >
-                  Remind
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {lateBankings.count > 8 && (
-        <div className="px-3 py-1.5 border-t border-red-100 bg-red-50/50 text-center">
-          <span className="text-[10px] text-red-700 font-medium">
-            + {lateBankings.count - 8} more late driver{lateBankings.count - 8 !== 1 ? 's' : ''}
-          </span>
+// ── Driver Status Panel (at-a-glance, no clicking) ──
+function DriverStatusPanel({ riders }: { riders: StationItem[] }) {
+  if (riders.length === 0) {
+    return (
+      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+        <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+          <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">Drivers</span>
         </div>
-      )}
-    </div>
-  )
-}
+        <div className="py-6 text-center text-[11px] text-gray-400">No active drivers</div>
+      </div>
+    )
+  }
 
-function RidersPanel({ riders }: { riders: StationItem[] }) {
   return (
     <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
       <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">Riders</span>
-        <span className="text-[11px] text-gray-500 font-mono">{riders.length} active</span>
+        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">Drivers</span>
+        <span className="text-[10px] text-gray-400 font-mono">{riders.length} on shift</span>
       </div>
-      <table className="w-full text-[11px]">
-        <thead className="text-gray-400 text-[9px] uppercase">
-          <tr>
-            <th className="text-left px-3 py-1 font-semibold">Name</th>
-            <th className="text-right px-2 py-1 font-semibold">Disp</th>
-            <th className="text-right px-2 py-1 font-semibold">Del</th>
-            <th className="text-right px-3 py-1 font-semibold">Bank</th>
-          </tr>
-        </thead>
-        <tbody>
-          {riders.length === 0 ? (
-            <tr><td colSpan={4} className="px-3 py-3 text-center text-gray-400">No active riders</td></tr>
-          ) : riders.slice(0, 10).map((r, i) => (
-            <tr key={i} className="border-t border-gray-50 hover:bg-gray-50" style={{ height: '28px' }}>
-              <td className="px-3 py-1 text-gray-900 font-medium truncate max-w-[120px]">{r.name || '—'}</td>
-              <td className="px-2 py-1 text-right font-mono tabular-nums text-gray-700">{r.dispatchedToday ?? 0}</td>
-              <td className="px-2 py-1 text-right font-mono tabular-nums text-green-700">{r.deliveredToday ?? 0}</td>
-              <td className={`px-3 py-1 text-right font-mono tabular-nums ${(r.pendingBankings ?? 0) > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}`}>
-                {r.pendingBankings ?? 0}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <div className="divide-y divide-gray-50">
+        {riders.slice(0, 8).map((r, i) => {
+          const dispatched = r.dispatchedToday ?? 0
+          const delivered = r.deliveredToday ?? 0
+          const pendingBank = r.pendingBankings ?? 0
+          // Status dot: green = available, blue = delivering, orange = has pending banking
+          const dotColor = pendingBank > 0 ? 'bg-orange-400' : dispatched > 0 ? 'bg-blue-400' : 'bg-green-400'
+          const statusText = pendingBank > 0 ? 'pending bank' : dispatched > 0 ? 'delivering' : 'available'
+          return (
+            <div key={i} className="flex items-center gap-2 px-3 py-1.5" style={{ height: '28px' }}>
+              <span className={`w-2 h-2 rounded-full ${dotColor} shrink-0`} title={statusText} />
+              <span className="text-[11px] text-gray-900 font-medium truncate flex-1">{r.name || '—'}</span>
+              <span className="text-[10px] text-gray-400 font-mono shrink-0">{dispatched}→{delivered}</span>
+              {pendingBank > 0 && <span className="text-[9px] text-orange-600 font-semibold shrink-0">{pendingBank}b</span>}
+            </div>
+          )
+        })}
+      </div>
+      {riders.length > 8 && <div className="px-3 py-1 text-center text-[10px] text-gray-400 border-t border-gray-50">+ {riders.length - 8} more</div>}
     </div>
   )
 }
 
-function FollowUpsPanel({ followUps, onNavigate }: {
+// ── Alerts Panel (consolidated: exceptions + late bankings + follow-ups) ──
+function AlertsPanel({ exceptions, bankings, lateBankings, followUps, onNavigate }: {
+  exceptions: HubData['exceptions']
+  bankings: { count: number; totalAmount: number }
+  lateBankings: HubData['lateBankings']
   followUps: HubData['followUps']
   onNavigate?: (m: string) => void
 }) {
-  if (followUps.count === 0) {
-    return (
-      <div className="bg-white rounded-lg border border-green-200 px-3 py-2 flex items-center gap-2">
-        <CheckCircle2 size={14} className="text-green-600" />
-        <span className="text-[11px] text-green-700 font-medium">No merchant follow-ups due.</span>
-      </div>
-    )
-  }
-  return (
-    <div className="bg-white rounded-lg border border-orange-200 overflow-hidden">
-      <div className="px-3 py-2 border-b border-orange-100 bg-orange-50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-orange-700 uppercase tracking-wider flex items-center gap-1">
-          <AlertTriangle size={12} /> Follow-ups Due
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-orange-700 font-mono font-bold">{followUps.count}</span>
-          <button onClick={() => onNavigate?.('merchants')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Open →</button>
-        </div>
-      </div>
-      <table className="w-full text-[11px]">
-        <tbody>
-          {followUps.items.slice(0, 8).map((f, i) => {
-            const isOverdue = new Date(f.followUpAt) < new Date()
-            const typeColor: Record<string, string> = { call: 'bg-blue-100 text-blue-700', whatsapp: 'bg-green-100 text-green-700', email: 'bg-purple-100 text-purple-700', visit: 'bg-orange-100 text-orange-700', meeting: 'bg-pink-100 text-pink-700', other: 'bg-gray-100 text-gray-700' }
-            return (
-              <tr key={f.id} className={`border-t border-orange-50 hover:bg-orange-50/30 ${isOverdue ? 'bg-red-50/20' : ''}`} style={{ height: '32px' }}>
-                <td className="px-3 py-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`px-1 py-0.5 rounded text-[8px] uppercase font-semibold ${typeColor[f.type] || 'bg-gray-100 text-gray-700'}`}>{f.type}</span>
-                    {f.merchantOnHold && <span className="bg-red-100 text-red-700 text-[8px] px-1 py-0.5 rounded font-semibold uppercase">HOLD</span>}
-                  </div>
-                  <p className="text-gray-900 font-medium truncate max-w-[180px] mt-0.5">{f.subject}</p>
-                </td>
-                <td className="px-2 py-1 text-right">
-                  <p className="text-gray-700 truncate max-w-[80px]">{f.merchantName}</p>
-                  <p className={`text-[9px] ${isOverdue ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
-                    {isOverdue ? 'Overdue ' : 'Due '}{new Date(f.followUpAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}
-                  </p>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-      {followUps.count > 8 && (
-        <div className="px-3 py-1.5 border-t border-orange-100 bg-orange-50/50 text-center">
-          <button onClick={() => onNavigate?.('merchants')} className="text-[10px] text-orange-700 hover:text-orange-900 font-medium">
-            + {followUps.count - 8} more, view all in Merchants
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function CodPanel({ bankings, onNavigate }: { bankings: { count: number; items: StationItem[]; totalAmount: number }; onNavigate?: (m: string) => void }) {
-  return (
-    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">
-          Pending COD <InfoTip term="codBanked" size={11} />
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] font-mono font-bold text-orange-700">{formatCurrencyCompact(bankings.totalAmount)}</span>
-          {bankings.count > 0 && (
-            <button onClick={() => onNavigate?.('payments')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
-          )}
-        </div>
-      </div>
-      <table className="w-full text-[11px]">
-        <thead className="text-gray-400 text-[9px] uppercase">
-          <tr>
-            <th className="text-left px-3 py-1 font-semibold">Banking</th>
-            <th className="text-left px-2 py-1 font-semibold">Driver</th>
-            <th className="text-right px-3 py-1 font-semibold">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bankings.count === 0 ? (
-            <tr><td colSpan={3} className="px-3 py-3 text-center text-gray-400">All verified</td></tr>
-          ) : bankings.items.slice(0, 10).map((b, i) => (
-            <tr key={i} className="border-t border-gray-50 hover:bg-orange-50/30" style={{ height: '28px' }}>
-              <td className="px-3 py-1 font-mono text-gray-600">{b.bankingId || '—'}</td>
-              <td className="px-2 py-1 text-gray-700 truncate max-w-[80px]">{b.driverName || '—'}</td>
-              <td className="px-3 py-1 text-right font-mono tabular-nums font-bold text-orange-700">
-                {formatCurrencyCompact(Number(b.amount || 0))}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Today Headline ──
-// Plain-English summary of the day, generated from live data.
-// This is the FIRST thing the supervisor reads when they land on the desk.
-// It answers "what's happening today?" in 1-3 sentences.
-function TodayHeadline({ data }: { data: HubData }) {
-  const parts: string[] = []
-
-  // Parcels in motion
-  const inMotion =
-    data.stations.intake.count +
-    data.stations.sort.count +
-    data.stations.stage.count +
-    data.stations.dispatch.count +
-    data.stations.inTransit.count
-  if (inMotion > 0) {
-    const bits: string[] = []
-    if (data.stations.intake.count > 0) bits.push(`${data.stations.intake.count} in intake`)
-    if (data.stations.sort.count > 0) bits.push(`${data.stations.sort.count} in sort & pack`)
-    if (data.stations.stage.count > 0) bits.push(`${data.stations.stage.count} in staging`)
-    if (data.stations.dispatch.count > 0) bits.push(`${data.stations.dispatch.count} ready to dispatch`)
-    if (data.stations.inTransit.count > 0) bits.push(`${data.stations.inTransit.count} in transit`)
-    parts.push(`${inMotion} parcel${inMotion !== 1 ? 's' : ''} in motion, ${bits.join(', ')}`)
-  } else {
-    parts.push('No parcels in motion')
-  }
-
-  // Deliveries
-  if (data.stations.delivered.count > 0) {
-    parts.push(`${data.stations.delivered.count} delivered today`)
-  } else if (inMotion > 0) {
-    parts.push('nothing delivered ')
-  }
-
-  // Returns
-  if (data.stations.returns.count > 0) {
-    parts.push(`${data.stations.returns.count} return${data.stations.returns.count !== 1 ? 's' : ''} to process`)
-  }
-
-  // Exceptions
-  if (data.exceptions.count > 0) {
-    parts.push(`${data.exceptions.count} exception${data.exceptions.count !== 1 ? 's' : ''} need attention`)
-  }
-
-  // Riders
-  if (data.riders.length > 0) {
-    const totalDispatched = data.riders.reduce((s, r) => s + (r.dispatchedToday ?? 0), 0)
-    const totalDelivered = data.riders.reduce((s, r) => s + (r.deliveredToday ?? 0), 0)
-    if (totalDispatched === 0 && totalDelivered === 0) {
-      parts.push(`${data.riders.length} rider${data.riders.length !== 1 ? 's' : ''} on shift but nothing dispatched yet`)
-    } else if (totalDelivered > 0) {
-      // already covered by deliveries line above; skip
-    } else if (totalDispatched > 0) {
-      parts.push(`${data.riders.length} rider${data.riders.length !== 1 ? 's' : ''} on shift`)
-    }
-  }
-
-  // Pending COD
-  if (data.pendingBankings.count > 0) {
-    parts.push(`${data.pendingBankings.count} pending COD banking${data.pendingBankings.count !== 1 ? 's' : ''} to verify`)
-  }
-
-  // Compose, join with periods, max 3 sentences
-  let text: string
-  if (parts.length === 0) {
-    text = 'Nothing happening .'
-  } else if (parts.length === 1) {
-    text = parts[0] + '.'
-  } else {
-    // First sentence = motion + deliveries (the most important)
-    // Remaining sentences = exceptions / returns / riders / pending COD
-    const first = parts[0] + (parts[1] ? `, ${parts[1]}` : '') + '.'
-    const rest = parts.slice(2)
-    text = first + (rest.length > 0 ? ' ' + rest.join('. ') + '.' : '')
-  }
-
-  // Determine overall tone
-  const hasProblems = data.exceptions.count > 0 || data.pendingBankings.count > 0
-  const isQuiet = inMotion === 0 && data.stations.delivered.count === 0 && data.exceptions.count === 0
-
-  return (
-    <div className={`rounded-lg px-4 py-3 border ${
-      hasProblems ? 'bg-red-50 border-red-200' :
-      isQuiet ? 'bg-gray-50 border-gray-200' :
-      'bg-blue-50 border-blue-200'
-    }`}>
-      <div className="flex items-start gap-2">
-        {hasProblems ? (
-          <AlertTriangle size={14} className="text-red-600 mt-0.5 shrink-0" />
-        ) : isQuiet ? (
-          <CheckCircle2 size={14} className="text-gray-500 mt-0.5 shrink-0" />
-        ) : (
-          <CheckCircle2 size={14} className="text-blue-600 mt-0.5 shrink-0" />
-        )}
-        <div className="flex-1 min-w-0">
-          <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold mb-0.5">
-            Today, {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'long', month: 'short', day: 'numeric' })}
-          </p>
-          <p className={`text-sm font-medium ${
-            hasProblems ? 'text-red-900' : isQuiet ? 'text-gray-700' : 'text-blue-900'
-          }`}>
-            {text}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ── Status Strip ──
-// Consolidated health indicator for the right rail. Replaces the separate
-// "No exceptions" + "All verified" + (future) "No follow-ups" green panels.
-// When everything's clear: one green line.
-// When something's wrong: red/orange list of what's wrong, with inline detail.
-function StatusStrip({
-  exceptions,
-  bankings,
-  onNavigate,
-}: {
-  exceptions: HubData['exceptions']
-  bankings: { count: number; items: StationItem[]; totalAmount: number }
-  onNavigate?: (m: string) => void
-}) {
   const hasExceptions = exceptions.count > 0
-  const hasPendingCOD = bankings.count > 0
-  const allClear = !hasExceptions && !hasPendingCOD
+  const hasCOD = bankings.count > 0
+  const hasLate = lateBankings.count > 0
+  const hasFollowUps = followUps.count > 0
 
-  if (allClear) {
+  if (!hasExceptions && !hasCOD && !hasLate && !hasFollowUps) {
     return (
       <div className="bg-white rounded-lg border border-green-200 px-3 py-2.5 flex items-center gap-2">
         <CheckCircle2 size={14} className="text-green-600 shrink-0" />
-        <span className="text-[11px] text-green-700 font-medium">
-          All clear, no exceptions, no pending COD, all bankings verified.
-        </span>
+        <span className="text-[11px] text-green-700 font-medium">All clear</span>
       </div>
     )
   }
 
-  // Has issues. show a consolidated red-bordered card with detail sections
   return (
-    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
-      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center gap-2">
-        <AlertTriangle size={12} className="text-red-600" />
-        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider">
-          {exceptions.count + bankings.count} issue{(exceptions.count + bankings.count) !== 1 ? 's' : ''} need attention
-        </span>
+    <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="px-3 py-2 border-b border-gray-100 bg-gray-50">
+        <span className="text-[11px] font-semibold text-gray-700 uppercase tracking-wider">Alerts</span>
       </div>
-
-      {/* Exceptions detail */}
-      {hasExceptions && (
-        <div className="border-b border-red-50">
-          <div className="px-3 py-1.5 bg-red-50/30 flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-red-700 uppercase tracking-wider">
-              {exceptions.count} Exception{exceptions.count !== 1 ? 's' : ''}
-            </span>
-            <button onClick={() => onNavigate?.('returns')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">View →</button>
+      <div className="divide-y divide-gray-50">
+        {hasExceptions && (
+          <div className="px-3 py-2 hover:bg-red-50/30 cursor-pointer" onClick={() => onNavigate?.('returns')}>
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle size={11} className="text-red-500 shrink-0" />
+              <span className="text-[11px] text-red-700 font-semibold">{exceptions.count} exception{exceptions.count !== 1 ? 's' : ''}</span>
+              <button className="ml-auto text-[9px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Fix →</button>
+            </div>
+            <div className="space-y-0.5">
+              {exceptions.failedDeliveries.slice(0, 2).map((item, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px] text-gray-600">
+                  <span className="font-mono">{item.orderNumber || item.outboundId}</span>
+                  <span className="truncate">{item.customerName}</span>
+                  <span className="ml-auto px-1 rounded bg-red-100 text-red-700 text-[8px] font-semibold">FAILED</span>
+                </div>
+              ))}
+              {exceptions.pendingShrinkage.slice(0, 1).map((item, i) => (
+                <div key={`s-${i}`} className="flex items-center gap-2 text-[10px] text-gray-600">
+                  <span className="font-mono">{item.shrinkageId}</span>
+                  <span className="truncate">{item.productName} ×{item.qty}</span>
+                  <span className="ml-auto px-1 rounded bg-orange-100 text-orange-700 text-[8px] font-semibold">SHRINK</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <table className="w-full text-[11px]">
-            <tbody>
-              {exceptions.failedDeliveries.slice(0, 3).map((item, i) => (
-                <tr key={`f-${i}`} className="border-t border-red-50/50 bg-red-50/20" style={{ height: '26px' }}>
-                  <td className="px-3 py-1 font-mono text-gray-700">{item.orderNumber || item.outboundId}</td>
-                  <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.customerName}</td>
-                  <td className="px-3 py-1 text-right">
-                    <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-semibold">FAILED</span>
-                  </td>
-                </tr>
+        )}
+        {hasLate && (
+          <div className="px-3 py-2 bg-red-50/20">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="w-2 h-2 rounded-full bg-red-400" />
+              <span className="text-[11px] text-red-700 font-semibold">{lateBankings.count} late banking{lateBankings.count !== 1 ? 's' : ''}</span>
+              <span className="ml-auto text-[10px] text-red-600 font-mono font-bold">{formatCurrencyCompact(lateBankings.totalUnbanked)}</span>
+            </div>
+            <div className="space-y-0.5">
+              {lateBankings.items.slice(0, 3).map((d, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px] text-gray-600">
+                  <span className="truncate flex-1">{d.driverName}</span>
+                  <span className="text-red-600 font-mono">{d.daysSinceBanking}d</span>
+                  <span className="text-gray-500 font-mono">{formatCurrencyCompact(d.unbankedAmount)}</span>
+                </div>
               ))}
-              {exceptions.pendingShrinkage.slice(0, 2).map((item, i) => (
-                <tr key={`s-${i}`} className="border-t border-orange-50/50 bg-orange-50/20" style={{ height: '26px' }}>
-                  <td className="px-3 py-1 font-mono text-gray-700">{item.shrinkageId}</td>
-                  <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.productName} ×{item.qty}</td>
-                  <td className="px-3 py-1 text-right">
-                    <span className="inline-block px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-semibold">SHRINK</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Pending COD detail */}
-      {hasPendingCOD && (
-        <div>
-          <div className="px-3 py-1.5 bg-orange-50/30 flex items-center justify-between">
-            <span className="text-[10px] font-semibold text-orange-700 uppercase tracking-wider">
-              {bankings.count} Pending COD, {formatCurrencyCompact(bankings.totalAmount)}
-            </span>
-            <button onClick={() => onNavigate?.('payments')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
+            </div>
           </div>
-          <table className="w-full text-[11px]">
-            <tbody>
-              {bankings.items.slice(0, 5).map((b, i) => (
-                <tr key={i} className="border-t border-orange-50/50 bg-orange-50/10" style={{ height: '26px' }}>
-                  <td className="px-3 py-1 font-mono text-gray-600">{b.bankingId || '—'}</td>
-                  <td className="px-2 py-1 text-gray-700 truncate max-w-[80px]">{b.driverName || '—'}</td>
-                  <td className="px-3 py-1 text-right font-mono tabular-nums font-bold text-orange-700">
-                    {formatCurrencyCompact(Number(b.amount || 0))}
-                  </td>
-                </tr>
+        )}
+        {hasCOD && (
+          <div className="px-3 py-2 hover:bg-orange-50/30 cursor-pointer" onClick={() => onNavigate?.('payments')}>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-orange-400" />
+              <span className="text-[11px] text-orange-700 font-semibold">{bankings.count} COD pending</span>
+              <span className="ml-auto text-[10px] text-orange-600 font-mono font-bold">{formatCurrencyCompact(bankings.totalAmount)}</span>
+              <button className="text-[9px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Verify →</button>
+            </div>
+          </div>
+        )}
+        {hasFollowUps && (
+          <div className="px-3 py-2 hover:bg-orange-50/30 cursor-pointer" onClick={() => onNavigate?.('merchants')}>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-amber-400" />
+              <span className="text-[11px] text-amber-700 font-semibold">{followUps.count} follow-up{followUps.count !== 1 ? 's' : ''} due</span>
+              <button className="ml-auto text-[9px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Open →</button>
+            </div>
+            <div className="mt-1">
+              {followUps.items.slice(0, 2).map((f, i) => (
+                <div key={i} className="flex items-center gap-2 text-[10px] text-gray-600">
+                  <span className="truncate flex-1">{f.subject}</span>
+                  <span className="text-gray-400 truncate max-w-[80px]">{f.merchantName}</span>
+                  <span className={`text-[9px] ${new Date(f.followUpAt) < new Date() ? 'text-red-600 font-semibold' : 'text-gray-400'}`}>
+                    {new Date(f.followUpAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}
+                  </span>
+                </div>
               ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
 
-// ── Active station summary ──
-// Replaces the static "Orders being prepared, picking from shelves..."
-// tutorial text with a real status summary of what's in THIS station right now.
-function ActiveStationSummary({ station, stationKey }: { station: Station; stationKey: StationKey }) {
-  if (station.count === 0) {
-    return (
-      <p className="text-[11px] text-gray-400 italic">
-        Nothing in this station.
-      </p>
-    )
-  }
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
 
-  const dwell = station.avgDwellMinutes
-  const threshold = STALE_THRESHOLD_MINUTES[stationKey]
-  const isStale = dwell != null && threshold != null && dwell > threshold
+import React from 'react'
 
-  // Build a plain-English summary based on the station
-  const parts: string[] = []
-  parts.push(`${station.count} parcel${station.count !== 1 ? 's' : ''}`)
-
-  if (stationKey === 'sort') {
-    parts.push('being picked and packed')
-  } else if (stationKey === 'stage') {
-    parts.push('packed, waiting for a rider to be assigned')
-  } else if (stationKey === 'dispatch') {
-    parts.push('assigned to a rider, ready to leave')
-  } else if (stationKey === 'inTransit') {
-    parts.push('out for delivery')
-  } else if (stationKey === 'delivered') {
-    parts.push('delivered today')
-  } else if (stationKey === 'intake') {
-    parts.push('that arrived today, need to be put away on shelves')
-  } else if (stationKey === 'returns') {
-    parts.push('returned by customers, need inspection')
-  }
-
-  // Dwell time
-  let dwellText = ''
-  if (dwell != null) {
-    if (isStale) {
-      dwellText = `, avg ${formatDwell(dwell)} in stage, over the ${formatDwell(threshold)} threshold`
-    } else {
-      dwellText = `, avg ${formatDwell(dwell)} in stage`
-    }
-  }
-
-  return (
-    <p className="text-[11px] text-gray-600 flex items-center gap-2 flex-wrap">
-      <span>{parts.join(' ')}{dwellText}.</span>
-      {isStale && (
-        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold">
-          <AlertTriangle size={10} />
-          Bottleneck
-        </span>
-      )}
-    </p>
-  )
-}
-
-function ExceptionsPanel({ exceptions, onNavigate }: { exceptions: HubData['exceptions']; onNavigate?: (m: string) => void }) {
-  if (exceptions.count === 0) {
-    return (
-      <div className="bg-white rounded-lg border border-green-200 px-3 py-2 flex items-center gap-2">
-        <CheckCircle2 size={14} className="text-green-600" />
-        <span className="text-[11px] text-green-700 font-medium">No exceptions. All clear.</span>
-      </div>
-    )
-  }
-  return (
-    <div className="bg-white rounded-lg border border-red-200 overflow-hidden">
-      <div className="px-3 py-2 border-b border-red-100 bg-red-50 flex items-center justify-between">
-        <span className="text-[11px] font-semibold text-red-700 uppercase tracking-wider flex items-center gap-1">
-          <AlertTriangle size={12} /> Exceptions
-        </span>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] text-red-700 font-mono font-bold">{exceptions.count}</span>
-          <button onClick={() => onNavigate?.('returns')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">Fix →</button>
-        </div>
-      </div>
-      <table className="w-full text-[11px]">
-        <tbody>
-          {exceptions.failedDeliveries.slice(0, 5).map((item, i) => (
-            <tr key={`f-${i}`} className="border-t border-red-50 bg-red-50/20 hover:bg-red-50/40" style={{ height: '28px' }}>
-              <td className="px-3 py-1 font-mono text-gray-700">{item.orderNumber || item.outboundId}</td>
-              <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.customerName}</td>
-              <td className="px-3 py-1 text-right">
-                <span className="inline-block px-1.5 py-0.5 bg-red-100 text-red-700 rounded text-[9px] font-semibold">FAILED</span>
-              </td>
-            </tr>
-          ))}
-          {exceptions.pendingShrinkage.slice(0, 5).map((item, i) => (
-            <tr key={`s-${i}`} className="border-t border-red-50 bg-orange-50/20 hover:bg-orange-50/40" style={{ height: '28px' }}>
-              <td className="px-3 py-1 font-mono text-gray-700">{item.shrinkageId}</td>
-              <td className="px-2 py-1 text-gray-600 truncate max-w-[100px]">{item.productName} ×{item.qty}</td>
-              <td className="px-3 py-1 text-right">
-                <span className="inline-block px-1.5 py-0.5 bg-orange-100 text-orange-700 rounded text-[9px] font-semibold">SHRINK</span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ── Main Component ──
-interface HubTodayModuleProps {
-  onNavigate?: (module: string) => void
-}
+interface HubTodayModuleProps { onNavigate?: (module: string) => void }
 
 export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {}) {
   const [data, setData] = useState<HubData | null>(null)
@@ -1045,10 +405,16 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   const [error, setError] = useState<string | null>(null)
   const [activeStation, setActiveStation] = useState<StationKey>('sort')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [dateRange, setDateRange] = useState<'today' | '7d' | '30d' | 'all'>('today')
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [dayCloseOpen, setDayCloseOpen] = useState(false)
+  const [dayCloseData, setDayCloseData] = useState<{
+    canClose: boolean
+    blockers: { unaccountedParcels: Array<Record<string, unknown>>; pendingBankings: Array<Record<string, unknown>>; pendingShrinkage: Array<Record<string, unknown>>; pipelineOrders: Array<Record<string, unknown>> }
+    summary: Record<string, unknown>
+  } | null>(null)
 
-  // ── Product search state ──
+  // Search state
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<SearchResponse | null>(null)
   const [isSearching, setIsSearching] = useState(false)
@@ -1058,395 +424,210 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
-  const [dayCloseOpen, setDayCloseOpen] = useState(false)
-  const [helpOpen, setHelpOpen] = useState(false)
-  const [dayCloseData, setDayCloseData] = useState<{
-    canClose: boolean
-    blockers: {
-      unaccountedParcels: Array<Record<string, unknown>>
-      pendingBankings: Array<Record<string, unknown>>
-      pendingShrinkage: Array<Record<string, unknown>>
-      pipelineOrders: Array<Record<string, unknown>>
-    }
-    summary: Record<string, unknown>
-  } | null>(null)
-
+  // ── Fetch ──
   const fetchData = useCallback(async () => {
     try {
       setError(null)
-      const res = await fetch(`/api/hub-today?range=${dateRange}`)
+      const res = await fetch(`/api/hub-today?range=today`)
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const d = await res.json()
       setData(d)
       setLastRefreshed(new Date())
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load hub data')
-      toast.error('Failed to load hub data')
+      setError(err instanceof Error ? err.message : 'Failed to load')
+      toast.error('Failed to load operations desk')
     } finally {
       setLoading(false)
     }
-  }, [dateRange])
+  }, [])
 
   useEffect(() => {
     fetchData()
-    // Auto-refresh every 30s, but ONLY when the tab is visible.
-    // Saves bandwidth and server resources when the user is on another tab.
     const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') {
-        fetchData()
-      }
+      if (document.visibilityState === 'visible') fetchData()
     }, 30000)
     return () => clearInterval(interval)
   }, [fetchData])
 
-  // ── Debounced product search ──
+  // ── Search ──
   useEffect(() => {
     if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
     const q = searchQuery.trim()
-    if (!q) {
-      setSearchResults(null)
-      setIsSearching(false)
-      return
-    }
+    if (!q) { setSearchResults(null); setIsSearching(false); return }
     setIsSearching(true)
     searchDebounceRef.current = setTimeout(async () => {
       try {
         const res = await fetch(`/api/ops-search?q=${encodeURIComponent(q)}`)
         const d = await res.json()
         setSearchResults(d)
-      } catch {
-        toast.error('Search failed. network error')
-      } finally {
-        setIsSearching(false)
-      }
+      } catch { toast.error('Search failed') }
+      finally { setIsSearching(false) }
     }, 250)
-    return () => {
-      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current)
-    }
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current) }
   }, [searchQuery])
 
-  // Close dropdown on outside click / Escape
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setSearchOpen(false)
-      }
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setSearchOpen(false)
     }
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSearchOpen(false)
-    }
+    const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSearchOpen(false) }
     document.addEventListener('mousedown', handleClick)
     document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
+    return () => { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey) }
   }, [])
 
-  // Focus search input on mount only, NOT on every re-render
-  useEffect(() => {
-    searchInputRef.current?.focus()
-  }, [])
+  useEffect(() => { searchInputRef.current?.focus() }, [])
 
   const handleSelectOrder = (order: SearchOrder) => {
     setSelectedOrder(order)
     setSearchOpen(false)
-    // Jump the station tabs below to where this parcel is sitting, so the worker
-    // sees it in context in the dense table too.
     if (['sort', 'stage', 'dispatch', 'inTransit', 'delivered', 'returns'].includes(order.stageKey)) {
       setActiveStation(order.stageKey as StationKey)
       setExpandedId(order.id)
     }
   }
 
+  // ── Day close ──
   const handleDayCloseCheck = async () => {
     try {
       const res = await fetch('/api/day-close')
       const d = await res.json()
       setDayCloseData(d)
       setDayCloseOpen(true)
-    } catch {
-      toast.error('Failed to check day-close status')
-    }
-  }
-
-  // ── Remind Driver: creates a DriverCommunication record so the office team ──
-  // has a visible action and audit trail when a driver has unbanked COD cash.
-  const handleRemindDriver = async (driverId: string, driverName: string, phone: string, unbankedAmount: number) => {
-    try {
-      const res = await fetch('/api/driver-communication', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          driverId,
-          type: 'call',
-          subject: `Late COD banking reminder — ${formatCurrency(unbankedAmount)} unbanked`,
-          notes: `Driver ${driverName} (${phone}) has ${formatCurrency(unbankedAmount)} in unbanked COD cash. Call ${phone} to remind them to bank.`,
-          createdBy: 'operations-desk',
-        }),
-      })
-      if (res.ok) {
-        toast.success(`Reminder logged for ${driverName}. Call ${phone} to follow up.`)
-      } else {
-        toast.error('Failed to log reminder')
-      }
-    } catch {
-      toast.error('Failed to log reminder')
-    }
+    } catch { toast.error('Failed to check day-close status') }
   }
 
   const handleDayCloseConfirm = async () => {
     try {
-      const res = await fetch('/api/day-close', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ performedBy: 'admin' }),
-      })
+      const res = await fetch('/api/day-close', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ performedBy: 'admin' }) })
       const result = await res.json()
       if (res.ok) {
         toast.success(`Day closed: ${result.summary.deliveredCount} delivered, COD ${formatCurrency(result.summary.codCollected)}`)
         setDayCloseOpen(false)
         fetchData()
-      } else {
-        toast.error(result.error || 'Cannot close day, blockers exist')
-      }
-    } catch {
-      toast.error('Failed to close day')
-    }
+      } else { toast.error(result.error || 'Cannot close day') }
+    } catch { toast.error('Failed to close day') }
   }
 
-  if (error && !data) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-3">
-        <AlertTriangle size={32} className="text-red-500" />
-        <p className="text-sm text-gray-700 font-medium">Failed to load operations console</p>
-        <p className="text-xs text-gray-400">{error}</p>
-        <Button variant="outline" size="sm" onClick={fetchData} className="rounded-xl">
-          <RefreshCw size={12} className="mr-1.5" /> Retry
-        </Button>
-      </div>
-    )
+  // ── Remind driver ──
+  const handleRemindDriver = async (driverId: string, driverName: string, phone: string, unbankedAmount: number) => {
+    try {
+      const res = await fetch('/api/driver-communication', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ driverId, type: 'call', subject: `Late COD banking — ${formatCurrency(unbankedAmount)} unbanked`, notes: `Call ${phone} to remind ${driverName} to bank.`, createdBy: 'operations-desk' }),
+      })
+      if (res.ok) toast.success(`Reminder logged for ${driverName}`)
+      else toast.error('Failed to log reminder')
+    } catch { toast.error('Failed to log reminder') }
   }
 
-  if (loading || !data) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <RefreshCw size={24} className="animate-spin text-gray-400" />
-        <span className="ml-2 text-gray-500">Loading operations console...</span>
-      </div>
-    )
-  }
+  // ── Loading / Error ──
+  if (error && !data) return (
+    <div className="flex flex-col items-center justify-center py-20 gap-3">
+      <AlertTriangle size={32} className="text-red-500" />
+      <p className="text-sm text-gray-700 font-medium">Failed to load</p>
+      <Button variant="outline" size="sm" onClick={fetchData} className="rounded-xl"><RefreshCw size={12} className="mr-1.5" /> Retry</Button>
+    </div>
+  )
+  if (loading || !data) return (
+    <div className="flex items-center justify-center py-20">
+      <RefreshCw size={24} className="animate-spin text-gray-400" />
+      <span className="ml-2 text-gray-500">Loading...</span>
+    </div>
+  )
 
-  const codPendingAmount = data.pendingBankings.totalAmount
+  const dayCloseBlockers = data.dayClose.unaccountedParcels + data.dayClose.pendingBankingsCount + data.dayClose.pipelineOrders + data.dayClose.pendingShrinkageCount
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      {/* ── Header bar ── */}
+    <div className="space-y-3">
+      {/* ── Header ── */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-bold text-gray-900">Operations Desk</h1>
           <p className="text-[11px] text-gray-500">
-            {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-            {lastRefreshed && (
-              <span className="ml-2 text-gray-400">
-                · Updated {lastRefreshed.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-            )}
-            <span className="ml-2 text-gray-400">· Auto-refresh 30s (when tab is visible)</span>
+            {new Date(data.date).toLocaleDateString('en-UG', { weekday: 'short', month: 'short', day: 'numeric' })}
+            {lastRefreshed && <span className="ml-2 text-gray-400">· Updated {lastRefreshed.toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}</span>}
+            <span className="ml-2 text-gray-400">· 30s</span>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Date range filter */}
-          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-md p-0.5">
-            {(['today', '7d', '30d', 'all'] as const).map(r => (
-              <button
-                key={r}
-                onClick={() => setDateRange(r)}
-                className={`px-2 py-1 text-[10px] font-semibold rounded transition-colors ${
-                  dateRange === r ? 'bg-[#1B2A4A] text-white' : 'text-gray-500 hover:bg-gray-100'
-                }`}
-                title={
-                  r === 'today' ? "Today's activity + all in-flight items (default)" :
-                  r === '7d' ? 'Last 7 days' :
-                  r === '30d' ? 'Last 30 days' :
-                  'Full history (no date filter)'
-                }
-              >
-                {r === 'today' ? 'Today + In-flight' : r === '7d' ? '7 days' : r === '30d' ? '30 days' : 'All history'}
-              </button>
-            ))}
-          </div>
-          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-            <HelpCircle size={12} className="mr-1" /> How does this work?
-          </Button>
-          <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
-            <RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
-          </Button>
-          <Button
-            size="sm"
-            onClick={handleDayCloseCheck}
-            className={`h-7 text-xs rounded-md ${data.dayClose.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500'} text-white`}
-          >
-            <Lock size={12} className="mr-1" /> Close Day
+          <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md"><HelpCircle size={12} className="mr-1" /> Help</Button>
+          <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md"><RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh</Button>
+          <Button size="sm" onClick={handleDayCloseCheck} className={`h-7 text-xs rounded-md ${data.dayClose.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 hover:bg-gray-500'} text-white`}>
+            <Lock size={12} className="mr-1" /> Close Day{dayCloseBlockers > 0 ? ` (${dayCloseBlockers})` : ''}
           </Button>
         </div>
       </div>
 
-      {/* ════════════════════════════════════════════════════════════ */}
-      {/* LAYER 1: THE WORK LAYER, what a worker sees and uses          */}
-      {/* ════════════════════════════════════════════════════════════ */}
+      {/* ── Number strip (no charts, just counts) ── */}
+      <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
+        {[
+          { label: 'RECEIVED', value: data.totals.inboundToday },
+          { label: 'PROCESSED', value: data.totals.outboundToday },
+          { label: 'DELIVERED', value: data.stations.delivered.count },
+          { label: 'EXCEPTIONS', value: data.exceptions.count, highlight: data.exceptions.count > 0 },
+          { label: 'RIDERS', value: `${data.riders.length} active` },
+          { label: 'COD PENDING', value: formatCurrencyCompact(data.pendingBankings.totalAmount), highlight: data.pendingBankings.count > 0 },
+        ].map((c, i) => (
+          <div key={c.label} className={`flex-1 px-3 py-2 flex flex-col justify-center border-r border-white/10 ${c.highlight ? 'bg-red-500/20' : ''} ${i === 5 ? 'border-r-0' : ''}`}>
+            <span className="text-[9px] text-blue-200/60 uppercase tracking-wider font-medium">{c.label}</span>
+            <span className="font-mono font-bold text-base tabular-nums">{c.value}</span>
+          </div>
+        ))}
+      </div>
 
-      {/* ── HERO: Product search bar (big, obvious, can't miss it) ── */}
+      {/* ── Search (compact, single line) ── */}
       <div className="relative" ref={dropdownRef}>
-        <div className="rounded-xl px-4 py-4 bg-[#1B2A4A]">
-          <div className="flex items-center gap-3 mb-2">
-            <Search size={20} className="text-blue-300" />
-            <label className="text-white font-semibold text-sm">
-              Search for any order. by product, customer, merchant, or order ID
-            </label>
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true) }}
-              onFocus={() => setSearchOpen(true)}
-              placeholder="Type a product, customer, merchant, or order ID (e.g. bread, akinyi, DS-014)..."
-              ref={searchInputRef}
-              className="flex-1 bg-white/10 text-white placeholder-blue-200/40 text-base outline-none rounded-lg px-3 py-2.5 border border-white/20"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchQuery('')
-                  setSearchResults(null)
-                  setSelectedOrder(null)
-                  setSearchOpen(false)
-                  searchInputRef.current?.focus()
-                }}
-                className="bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-lg text-sm font-medium"
-              >
-                Clear
-              </button>
-            )}
-          </div>
-          <p className="text-blue-200/50 text-[11px] mt-2">
-            Type anything you remember about an order. a product name, the customer's name, the merchant, or the order ID. The system shows only active orders, with their current stage.
-          </p>
-        </div>
+        <form onSubmit={(e) => { e.preventDefault(); if (searchQuery.trim()) setSearchOpen(true) }} className="relative">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => { setSearchQuery(e.target.value); setSearchOpen(true) }}
+            onFocus={() => setSearchOpen(true)}
+            placeholder="Search by product, customer, or order ID..."
+            ref={searchInputRef}
+            className="w-full bg-white border border-gray-200 rounded-lg pl-10 pr-4 py-2 text-sm outline-none focus:border-[#FF6B35] focus:ring-1 focus:ring-[#FF6B35]/20"
+          />
+          {searchQuery && (
+            <button type="button" onClick={() => { setSearchQuery(''); setSearchResults(null); setSelectedOrder(null); setSearchOpen(false); searchInputRef.current?.focus() }} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              <X size={14} />
+            </button>
+          )}
+        </form>
 
-        {/* Dropdown results */}
+        {/* Search dropdown */}
         {searchOpen && searchQuery.trim() && (
           <div className="absolute z-30 left-0 right-0 mt-1 bg-white rounded-lg border border-gray-200 shadow-xl max-h-[480px] overflow-y-auto">
-            {isSearching && (
-              <div className="px-4 py-3 text-xs text-gray-400 flex items-center gap-2">
-                <RefreshCw size={12} className="animate-spin" /> Searching...
-              </div>
-            )}
+            {isSearching && <div className="px-4 py-3 text-xs text-gray-400 flex items-center gap-2"><RefreshCw size={12} className="animate-spin" /> Searching...</div>}
             {!isSearching && searchResults && searchResults.results.length === 0 && (
-              <div className="px-4 py-4 text-xs text-gray-500">
-                <p>
-                  No active orders match <span className="font-mono font-semibold">{searchQuery}</span> today.
-                </p>
-                <p className="text-[10px] text-gray-400 mt-1">
-                  Searched: product name, brand, merchant, customer name, and order ID (DS-xxx / OUTxxx).
-                </p>
-              </div>
+              <div className="px-4 py-4 text-xs text-gray-500"><p>No active orders match "{searchQuery}".</p></div>
             )}
             {!isSearching && searchResults && searchResults.results.length > 0 && (
               <div className="py-1">
-                {/* Stage distribution chart. answers "where are all my matching orders right now?" at a glance */}
-                {(() => {
-                  const allOrders = searchResults.results.flatMap(p => p.orders)
-                  const stageCounts: Record<string, number> = {}
-                  for (const o of allOrders) {
-                    stageCounts[o.stageKey] = (stageCounts[o.stageKey] || 0) + 1
-                  }
-                  const stages: { key: string; label: string }[] = [
-                    { key: 'sort', label: 'Sort' },
-                    { key: 'stage', label: 'Stage' },
-                    { key: 'dispatch', label: 'Dispatch' },
-                    { key: 'inTransit', label: 'Transit' },
-                    { key: 'delivered', label: 'Delivered' },
-                    { key: 'returns', label: 'Returns' },
-                  ]
-                  const total = allOrders.length || 1
-                  const presentStages = stages.filter(s => (stageCounts[s.key] || 0) > 0)
-                  if (presentStages.length === 0) return null
-                  return (
-                    <div className="px-3 py-2 border-b border-gray-100 bg-gray-50/40">
-                      <div className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1">
-                        Where these {allOrders.length} order{allOrders.length !== 1 ? 's' : ''} are
-                      </div>
-                      <div className="flex items-center h-3 rounded-full overflow-hidden bg-gray-100">
-                        {presentStages.map(s => {
-                          const count = stageCounts[s.key]
-                          const pct = (count / total) * 100
-                          return (
-                            <div
-                              key={s.key}
-                              className={`${STAGE_BAR_COLOR[s.key] || 'bg-gray-300'} h-full transition-all`}
-                              style={{ width: `${pct}%` }}
-                              title={`${s.label}: ${count}`}
-                            />
-                          )
-                        })}
-                      </div>
-                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                        {presentStages.map(s => (
-                          <span key={s.key} className="inline-flex items-center gap-1 text-[10px] text-gray-600">
-                            <span className={`w-2 h-2 rounded-full ${STAGE_BAR_COLOR[s.key] || 'bg-gray-300'}`} />
-                            {s.label} <strong className="font-mono">{stageCounts[s.key]}</strong>
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
                 <div className="px-3 py-1.5 text-[10px] uppercase tracking-wider text-gray-400 font-semibold border-b border-gray-100 sticky top-0 bg-white">
-                  {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''}, {searchResults.totalOrders} active order{searchResults.totalOrders !== 1 ? 's' : ''}
+                  {searchResults.results.length} product{searchResults.results.length !== 1 ? 's' : ''}, {searchResults.totalOrders} order{searchResults.totalOrders !== 1 ? 's' : ''}
                 </div>
                 {searchResults.results.map(product => (
                   <div key={product.productId} className="border-b border-gray-50 last:border-0">
                     <div className="px-3 py-1.5 bg-gray-50/60 flex items-center gap-2">
                       <Package size={12} className="text-gray-400 shrink-0" />
                       <span className="text-xs font-semibold text-gray-800 truncate">{product.productName}</span>
-                      {product.brand && <span className="text-[10px] text-gray-400">· {product.brand}</span>}
                       <span className="text-[10px] text-gray-400 ml-auto">{product.merchantName}</span>
-                      <span className="text-[10px] text-gray-400 shrink-0">· {product.currentStock} {product.unit} in stock</span>
                     </div>
                     {product.orders.map(order => (
-                      <button
-                        key={order.id}
-                        onClick={() => handleSelectOrder(order)}
-                        className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors ${
-                          order.matchedQuery
-                            ? 'bg-blue-50/80 hover:bg-blue-100/80'
-                            : 'hover:bg-gray-50'
-                        }`}
-                        title={order.matchedQuery ? 'Matches your search' : undefined}
-                      >
+                      <button key={order.id} onClick={() => handleSelectOrder(order)} className={`w-full px-3 py-2 flex items-center gap-2 text-left transition-colors ${order.matchedQuery ? 'bg-blue-50/80 hover:bg-blue-100/80' : 'hover:bg-gray-50'}`}>
                         <span className="font-mono text-xs font-bold text-[#1B2A4A] w-24 shrink-0">{order.id}</span>
                         <span className="text-xs text-gray-700 flex-1 truncate">{order.customerName}</span>
-                        <span className="text-[10px] text-gray-400 shrink-0">{order.qty} units</span>
+                        <span className="text-[10px] text-gray-400 shrink-0">{order.qty}u</span>
                         <span className="text-[10px] text-gray-500 shrink-0 w-24 text-right flex items-center justify-end gap-1">
-                          {order.isStale && (
-                            <span
-                              title={`Stuck here for ${formatDwell(order.entryMinutes)}, over threshold`}
-                              className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"
-                            />
-                          )}
+                          {order.isStale && <span title={`Stuck for ${formatDwell(order.entryMinutes)}`} className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />}
                           {order.stage}
                         </span>
                         <ChevronRight size={12} className="text-gray-300 shrink-0" />
                       </button>
                     ))}
-                    {product.moreOrdersCount > 0 && (
-                      <div className="px-3 py-1.5 text-[10px] text-gray-400 italic border-t border-gray-50">
-                        +{product.moreOrdersCount} more active order{product.moreOrdersCount !== 1 ? 's' : ''} not shown
-                      </div>
-                    )}
+                    {product.moreOrdersCount > 0 && <div className="px-3 py-1 text-[10px] text-gray-400 italic">+{product.moreOrdersCount} more</div>}
                   </div>
                 ))}
               </div>
@@ -1455,567 +636,167 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         )}
       </div>
 
-      {/* ── Today's progress bar ── */}
-      {data.totals.outboundToday > 0 && (
-        <div className="bg-white rounded-lg border border-gray-200 px-4 py-3">
-          <div className="flex items-center justify-between mb-1.5">
-            <span className="text-[11px] font-semibold text-gray-600 uppercase tracking-wider">Today's progress</span>
-            <span className="text-[11px] font-mono text-gray-500">
-              {data.stations.delivered.count} of {data.totals.outboundToday} delivered
-            </span>
+      {/* ── Selected order summary (only when an order is selected) ── */}
+      {selectedOrder && (
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-sm font-bold text-gray-900">{selectedOrder.id}</span>
+              <span className="text-xs text-gray-500">{selectedOrder.customerName}</span>
+              <span className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${selectedOrder.isStale ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                {selectedOrder.isStale ? 'STALE' : selectedOrder.stage}
+              </span>
+            </div>
+            <button onClick={() => onNavigate?.(STATION_MODULE[selectedOrder.stageKey] || 'outbound')} className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider">
+              Open in {STATIONS.find(s => s.key === selectedOrder.stageKey)?.shortLabel || 'Outbound'} →
+            </button>
+            <button onClick={() => setSelectedOrder(null)} className="text-gray-400 hover:text-gray-600 ml-2"><X size={14} /></button>
           </div>
-          <div className="h-3 bg-gray-100 rounded-full overflow-hidden flex">
-            {/* Delivered (green) */}
-            {data.stations.delivered.count > 0 && (
-              <div className="bg-green-500" style={{ width: `${(data.stations.delivered.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.delivered.count} delivered`} />
-            )}
-            {/* In transit (cyan) */}
-            {data.stations.inTransit.count > 0 && (
-              <div className="bg-cyan-400" style={{ width: `${(data.stations.inTransit.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.inTransit.count} in transit`} />
-            )}
-            {/* Dispatched (yellow) */}
-            {data.stations.dispatch.count > 0 && (
-              <div className="bg-yellow-400" style={{ width: `${(data.stations.dispatch.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.dispatch.count} dispatched`} />
-            )}
-            {/* Sort/Pack (orange) */}
-            {data.stations.sort.count > 0 && (
-              <div className="bg-orange-400" style={{ width: `${(data.stations.sort.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.sort.count} sorting/packing`} />
-            )}
-            {/* Stage (purple) */}
-            {data.stations.stage.count > 0 && (
-              <div className="bg-purple-400" style={{ width: `${(data.stations.stage.count / data.totals.outboundToday) * 100}%` }} title={`${data.stations.stage.count} staging`} />
-            )}
-            {/* Exceptions (red) */}
-            {data.exceptions.count > 0 && (
-              <div className="bg-red-400" style={{ width: `${(data.exceptions.count / data.totals.outboundToday) * 100}%` }} title={`${data.exceptions.count} exceptions`} />
-            )}
-          </div>
-          <div className="flex items-center gap-3 mt-1.5 text-[10px] text-gray-400 flex-wrap">
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span> Delivered</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-cyan-400"></span> In transit</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400"></span> Dispatched</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400"></span> Sorting</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-400"></span> Staging</span>
-            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400"></span> Exceptions</span>
+          <div className="flex items-center gap-4 text-[11px] text-gray-500">
+            <span>Qty: <strong className="font-mono text-gray-900">{selectedOrder.qty}</strong></span>
+            {selectedOrder.saleAmount != null && <span>Sale: <strong className="font-mono text-gray-900">{formatCurrencyCompact(selectedOrder.saleAmount)}</strong></span>}
+            {selectedOrder.codCollected != null && <span>COD: <strong className="font-mono text-gray-900">{formatCurrencyCompact(selectedOrder.codCollected)}</strong></span>}
+            {selectedOrder.assignedDriver && <span>Driver: <strong className="text-gray-900">{selectedOrder.assignedDriver}</strong></span>}
+            {selectedOrder.entryMinutes != null && <span>In stage: <strong className={`font-mono ${selectedOrder.isStale ? 'text-orange-700' : 'text-gray-900'}`}>{formatDwell(selectedOrder.entryMinutes)}</strong></span>}
           </div>
         </div>
       )}
 
-      {/* ── Order Status, shows the stage of the order selected from search ── */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-gray-700">
-            {selectedOrder ? `Order Status, ${selectedOrder.id}` : 'Order Status'}
-          </h2>
-          {selectedOrder && (
-            <button
-              onClick={() => onNavigate?.(STATION_MODULE[selectedOrder.stageKey] || 'outbound')}
-              className="text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider"
-            >
-              Open in {STATIONS.find(s => s.key === selectedOrder.stageKey)?.shortLabel || 'Outbound'} →
-            </button>
-          )}
-        </div>
-
-        {!selectedOrder ? (
-          <div className="px-4 py-8 text-center">
-            <Search size={28} className="text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 font-medium">Search for an order above</p>
-            <p className="text-[11px] text-gray-400 mt-1 max-w-md mx-auto">
-              Type a product name, customer, merchant, or order ID (like "bread", "akinyi", or "DS-014"), click an order to see its current stage here.
-            </p>
-          </div>
-        ) : (
-          <div className="p-4 space-y-4">
-            {/* Order header */}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-lg font-bold text-gray-900">{selectedOrder.id}</p>
-                <p className="text-xs text-gray-600 mt-0.5 truncate">{selectedOrder.customerName}</p>
-                {selectedOrder.customerAddress && (
-                  <p className="text-[11px] text-gray-400 truncate">{selectedOrder.customerAddress}</p>
-                )}
-              </div>
-              <div className="text-right shrink-0">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">Qty</p>
-                <p className="font-mono font-bold text-gray-900">{selectedOrder.qty}</p>
-              </div>
-            </div>
-
-            {/* Current stage callout */}
-            <div className={`rounded-lg px-4 py-3 border ${STAGE_CALLOUT_TINT[selectedOrder.stageKey] || 'bg-gray-50 border-gray-200'}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Currently at</p>
-                  <p className="text-base font-bold text-gray-900 mt-0.5 flex items-center gap-2">
-                    {selectedOrder.stage}
-                    {selectedOrder.isStale && (
-                      <span
-                        title={`Stuck here for ${formatDwell(selectedOrder.entryMinutes)}, past threshold`}
-                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 text-orange-700 text-[10px] font-semibold"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-                        Stale
-                      </span>
-                    )}
-                  </p>
-                </div>
-                {selectedOrder.entryMinutes != null && (
-                  <div className="text-right">
-                    <p className="text-[10px] uppercase tracking-wider text-gray-400">In stage</p>
-                    <p className={`text-sm font-mono font-bold ${selectedOrder.isStale ? 'text-orange-700' : 'text-gray-700'}`}>
-                      {formatDwell(selectedOrder.entryMinutes)}
-                    </p>
-                  </div>
-                )}
-              </div>
-              {selectedOrder.assignedDriver && (
-                <p className="text-[11px] text-gray-600 mt-2">Driver: {selectedOrder.assignedDriver}</p>
-              )}
-              {selectedOrder.runsheetId && (
-                <p className="text-[11px] text-gray-500">Runsheet: {selectedOrder.runsheetId}</p>
-              )}
-              {selectedOrder.dispatchedAt && (
-                <p className="text-[11px] text-gray-500">
-                  Dispatched: {new Date(selectedOrder.dispatchedAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-              {selectedOrder.deliveredAt && (
-                <p className="text-[11px] text-green-700 font-medium">
-                  Delivered: {new Date(selectedOrder.deliveredAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-            </div>
-
-            {/* Stage progress bar, shows where this order is in the outbound flow */}
-            {selectedOrder.stageKey !== 'returns' && (
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Workflow progress</p>
-                <div className="flex items-center gap-1">
-                  {STAGES_FLOW.map((stage, i) => {
-                    const currentIdx = STAGE_ORDER[selectedOrder.stageKey] ?? -1
-                    const isPast = currentIdx > i
-                    const isCurrent = selectedOrder.stageKey === stage.key
-                    return (
-                      <div
-                        key={stage.key}
-                        className={`flex-1 h-2 rounded-full transition-colors ${
-                          isCurrent ? stage.color :
-                          isPast ? stage.color.replace('400', '500').replace('500', '600') :
-                          'bg-gray-100'
-                        }`}
-                        title={stage.shortLabel}
-                      />
-                    )
-                  })}
-                </div>
-                <div className="flex items-center gap-1 mt-1">
-                  {STAGES_FLOW.map(stage => (
-                    <div key={stage.key} className="flex-1 text-center">
-                      <p className={`text-[9px] ${selectedOrder.stageKey === stage.key ? 'font-bold text-gray-900' : 'text-gray-400'}`}>
-                        {stage.shortLabel}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Money + timing */}
-            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">COD</p>
-                <p className="text-xs font-mono font-bold text-gray-900">
-                  {selectedOrder.codCollected != null ? formatCurrencyCompact(selectedOrder.codCollected) : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">Sale</p>
-                <p className="text-xs font-mono font-bold text-gray-900">
-                  {selectedOrder.saleAmount != null ? formatCurrencyCompact(selectedOrder.saleAmount) : '—'}
-                </p>
-              </div>
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-gray-400">Created</p>
-                <p className="text-xs font-mono text-gray-700">
-                  {new Date(selectedOrder.createdAt).toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ════════════════════════════════════════════════════════════ */}
-      {/* LAYER 2: THE SUPERVISOR LAYER, overview for the hub manager   */}
-      {/* ════════════════════════════════════════════════════════════ */}
-
-      {/* ── KPI Ribbon (supervisor overview. view only) ── */}
-      <div className="flex items-center gap-2 pt-2">
-        <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Supervisor Overview (view only)</span>
-        <div className="flex-1 h-px bg-gray-100"></div>
-      </div>
-      <TodayHeadline data={data} />
-      <KpiRibbon
-        totals={data.totals}
-        exceptionsCount={data.exceptions.count}
-        ridersCount={data.riders.length}
-        codPending={codPendingAmount}
-        deliveredCount={data.stations.delivered.count}
-      />
-
-      {/* ── Daily Flow Funnel. how today's parcels have moved through stages ── */}
-      {(() => {
-        const stations = [
-          { key: 'intake',    label: 'Intake',    count: data.stations.intake.count,    color: 'bg-blue-500' },
-          { key: 'sort',      label: 'Sort',      count: data.stations.sort.count,      color: 'bg-orange-500' },
-          { key: 'stage',     label: 'Stage',     count: data.stations.stage.count,     color: 'bg-purple-500' },
-          { key: 'dispatch',  label: 'Dispatch',  count: data.stations.dispatch.count,  color: 'bg-yellow-500' },
-          { key: 'inTransit', label: 'Transit',   count: data.stations.inTransit.count, color: 'bg-cyan-500' },
-          { key: 'delivered', label: 'Delivered', count: data.stations.delivered.count, color: 'bg-green-600' },
-        ]
-        const totalAll = stations.reduce((s, x) => s + x.count, 0)
-        if (totalAll === 0) return null
-        const maxCount = Math.max(...stations.map(s => s.count), 1)
-        return (
-          <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                Today's flow, {totalAll} parcel{totalAll !== 1 ? 's' : ''} in motion
-              </span>
-              <span className="text-[10px] text-gray-400 font-mono">
-                {data.stations.delivered.count} of {totalAll} delivered
-              </span>
-            </div>
-            <div className="flex items-stretch gap-1">
-              {stations.map((s, i) => {
-                const prevCount = i > 0 ? stations[i - 1].count : 0
-                const dropoff = i > 0 && prevCount > 0 ? prevCount - s.count : 0
-                const widthPct = (s.count / maxCount) * 100
-                return (
-                  <div key={s.key} className="flex-1 min-w-0 flex flex-col">
-                    <div className="h-2 rounded-full overflow-hidden bg-gray-100">
-                      <div
-                        className={`h-full ${s.color} transition-all`}
-                        style={{ width: `${Math.max(widthPct, s.count > 0 ? 8 : 0)}%` }}
-                        title={`${s.label}: ${s.count}`}
-                      />
-                    </div>
-                    <div className="mt-1 text-center">
-                      <p className="text-[9px] text-gray-400 uppercase tracking-wider truncate">{s.label}</p>
-                      <p className="text-xs font-mono font-bold text-gray-900">{s.count}</p>
-                      {dropoff > 0 && (
-                        <p className="text-[9px] text-gray-400 font-mono">−{dropoff}</p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-        )
-      })()}
-
-      {/* ── Station Tabs (with plain-English labels + attention dots + avg dwell) ── */}
+      {/* ── Station tabs ── */}
       <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
         {STATIONS.map(s => {
           const station = data.stations[s.key]
           const count = station?.count ?? 0
           const isActive = activeStation === s.key
-          const needsAttention = count > 0 && ['intake', 'sort', 'stage', 'dispatch', 'returns'].includes(s.key)
-          const Icon = s.icon
           const dwell = station?.avgDwellMinutes ?? null
           const threshold = STALE_THRESHOLD_MINUTES[s.key]
-          const isStaleStation = dwell != null && threshold != null && dwell > threshold && count > 0
+          const isStale = dwell != null && threshold != null && dwell > threshold && count > 0
+          const Icon = s.icon
           return (
-            <button
-              key={s.key}
-              onClick={() => { setActiveStation(s.key); setExpandedId(null) }}
-              className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
-                isActive
-                  ? 'border-[#FF6B35] text-[#FF6B35]'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-              }`}
-              title={dwell != null ? `Average time in this stage: ${formatDwell(dwell)}` : undefined}
-            >
+            <button key={s.key} onClick={() => { setActiveStation(s.key); setExpandedId(null) }} className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${isActive ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`} title={dwell != null ? `Avg: ${formatDwell(dwell)}` : undefined}>
               <Icon size={12} className={isActive ? 'text-[#FF6B35]' : 'text-gray-400'} />
               <span>{s.shortLabel}</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
-                isActive ? 'bg-[#FF6B35] text-white' : needsAttention ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'
-              }`}>
-                {count}
-              </span>
-              {count > 0 && dwell != null && (
-                <span className={`text-[9px] font-mono px-1 rounded ${isStaleStation ? 'text-orange-700 bg-orange-100' : 'text-gray-400'}`}>
-                  {isStaleStation ? '⚠ ' : ''}{formatDwell(dwell)}
-                </span>
-              )}
+              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-[#FF6B35] text-white' : count > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{count}</span>
+              {count > 0 && dwell != null && <span className={`text-[9px] font-mono px-1 rounded ${isStale ? 'text-orange-700 bg-orange-100' : 'text-gray-400'}`}>{isStale ? '⚠ ' : ''}{formatDwell(dwell)}</span>}
             </button>
           )
         })}
       </div>
 
-      {/* Active station summary, plain-English status of what's in this station right now */}
-      <ActiveStationSummary station={data.stations[activeStation]} stationKey={activeStation} />
-
-      {/* ── Main: Station Table + Right Rail ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-3">
-        {/* Left: dense table */}
+      {/* ── Main: table + right rail ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-3">
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <StationTable
-            station={data.stations[activeStation]}
-            stationKey={activeStation}
-            expandedId={expandedId}
-            onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)}
-          />
+          <StationTable station={data.stations[activeStation]} stationKey={activeStation} expandedId={expandedId} onToggleExpand={(id) => setExpandedId(expandedId === id ? null : id)} />
         </div>
-
-        {/* Right: rail with consolidated Status Strip + Late Bankings + Follow-ups + Riders */}
         <div className="space-y-3">
-          <StatusStrip
-            exceptions={data.exceptions}
-            bankings={data.pendingBankings}
-            onNavigate={onNavigate}
-          />
-          <LateBankingsPanel
-            lateBankings={data.lateBankings}
-            onRemind={handleRemindDriver}
-          />
-          <FollowUpsPanel followUps={data.followUps} onNavigate={onNavigate} />
-          <RidersPanel riders={data.riders} />
+          <DriverStatusPanel riders={data.riders} />
+          <AlertsPanel exceptions={data.exceptions} bankings={{ count: data.pendingBankings.count, totalAmount: data.pendingBankings.totalAmount }} lateBankings={data.lateBankings} followUps={data.followUps} onNavigate={onNavigate} />
         </div>
       </div>
-
-      {/* ── Help Dialog (plain-English workflow explanation) ── */}
-      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Operations Desk Works
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              The Operations Desk is your single starting point for everything that happens in the warehouse. Instead of jumping between twelve different screens to find out what needs doing, this one view shows you the entire journey of every parcel — from the moment stock arrives to the moment cash is banked. Here is how to use it.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* What this is */}
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this screen is for:</strong> Every parcel in your warehouse moves through seven stages. This screen shows you, in real time, exactly how many parcels are in each stage, how long they have been there, and what needs to happen next. You cannot do the actual work here — you do that in the specialized modules (Inventory, Outbound, Returns, Payments). What you do here is <strong>see the whole picture at once</strong>, find stuck parcels, and jump straight to where you need to act.
-              </p>
-            </div>
-
-            {/* The 7 stages */}
-            <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Seven Stages a Parcel Moves Through</p>
-              <div className="space-y-2">
-                {[
-                  { num: 1, title: 'Intake', color: 'bg-blue-500', desc: 'Two things happen here. First, stock arrives from merchants and needs to be put away on shelves (received → put away → stored). Second, new orders come in from your store or app and need to pass risk validation before they can be picked (pending → released). Both show in the Intake tab.' },
-                  { num: 2, title: 'Sort & Pack', color: 'bg-orange-500', desc: 'Orders that passed intake validation are released to the pick floor. A picker collects the items from shelves (released → picking → picked). Then a packer boxes them and seals the package (packing → packed).' },
-                  { num: 3, title: 'Staging', color: 'bg-purple-500', desc: 'Packed parcels sit at the outbound dock, waiting for a rider to be assigned. Once assigned, they move to Dispatch. If no rider is assigned, they stay here.' },
-                  { num: 4, title: 'Dispatch', color: 'bg-yellow-500', desc: 'A rider has been assigned their list of parcels (a runsheet). They are about to leave the warehouse. This is the handoff point between warehouse and delivery.' },
-                  { num: 5, title: 'In Transit', color: 'bg-cyan-500', desc: 'The rider is on the road, driving to each customer. You can track which parcels are out and which driver has them.' },
-                  { num: 6, title: 'Delivered', color: 'bg-green-600', desc: 'The customer received the parcel. If it was a Cash on Delivery order, the rider collected the cash. That cash needs to be banked (see Payments).' },
-                  { num: 7, title: 'Returns', color: 'bg-red-500', desc: 'A customer returned a parcel, or a delivery failed. These need inspection and a decision: restock, return to vendor, or dispose.' },
-                ].map(step => (
-                  <div key={step.num} className="flex items-start gap-3 p-2.5 rounded-lg bg-gray-50">
-                    <div className={`w-7 h-7 rounded-full ${step.color} text-white flex items-center justify-center font-bold text-sm shrink-0`}>
-                      {step.num}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{step.title}</p>
-                      <p className="text-xs text-gray-600 leading-relaxed mt-0.5">{step.desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* How to use this screen */}
-            <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Screen</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>1. The big search bar at the top.</strong> Type anything you remember about an order — a product name like "bread", a customer name like "akinyi", a merchant name, or an order ID like "DS-014". The dropdown shows only active orders (not delivered or cancelled), with their current stage shown inline. Orders that match your search are highlighted in light blue. Click any order to see its full status in the panel below the search bar.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
-                  <p className="text-xs text-orange-900 leading-relaxed">
-                    <strong>2. The "Order Status" panel.</strong> After you pick an order from search, this panel shows exactly where that order is right now — the stage, how long it has been there, whether it is stuck past the threshold, who the driver is, and the money involved. Use the "Open in →" link to jump straight to the module where the actual work happens.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>3. The station tabs (Intake, Sort & Pack, Staging, Dispatch, In Transit, Delivered, Returns).</strong> Click any tab to see every parcel currently in that stage. Each tab shows a count and the average time parcels have been sitting there. If a station has an orange "bottleneck" badge, parcels have been stuck too long — that stage needs attention.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>4. The date range filter (top right).</strong> "Today + In-flight" is the default — it shows today's activity plus anything still stuck in a stage from previous days. Switch to "7 days", "30 days", or "All history" to look further back. Use "All history" if you are hunting for an order that was never delivered and has gone missing.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                  <p className="text-xs text-red-900 leading-relaxed">
-                    <strong>5. The right rail (red and orange panels).</strong> This is where problems surface. Red panels mean something needs attention now: failed deliveries, unresolved shrinkage, pending COD cash, or late bankings (drivers with unbanked cash older than 24 hours). Click "Remind" on a late banking to log a call reminder for the office team. Click "Fix →" or "Verify →" to jump to the module where you can resolve it.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                  <p className="text-xs text-green-900 leading-relaxed">
-                    <strong>6. The supervisor overview (bottom section).</strong> A read-only summary of the day's flow: KPIs, a funnel chart showing how parcels moved through stages, and the "Today" headline in plain English. You cannot take action from here — it is for understanding the state of the warehouse at a glance.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>7. Close Day (top right).</strong> At the end of the day, the supervisor clicks this to finalize. The system checks that no parcels are unaccounted for, no cash is unbanked, and no orders are stuck in the pipeline. If everything is clear, it stamps a snapshot of the day's summary into the audit log for historical comparison. Closing does not freeze records — late activity continues and carries over naturally.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* The differentiator */}
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most warehouse systems make you open five different screens to find out what is happening today — one for inbound, one for orders, one for dispatch, one for drivers, one for cash. By the time you have checked all five, the situation has changed. This screen brings every stage into one view, updates every 30 seconds, and surfaces problems automatically. You spend your time acting, not searching.
-              </p>
-            </div>
-          </div>
-
-          <AlertDialogFooter>
-            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">
-              Got it
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* ── Day Close Dialog ── */}
       <AlertDialog open={dayCloseOpen} onOpenChange={setDayCloseOpen}>
         <AlertDialogContent className="rounded-2xl max-w-lg">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <Lock size={18} />
-              Close Day. {new Date().toLocaleDateString('en-UG')}
-            </AlertDialogTitle>
+            <AlertDialogTitle className="flex items-center gap-2"><Lock size={18} /> Close Day · {new Date().toLocaleDateString('en-UG')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Closing the day finalizes today's operations. All parcels must be delivered, returned, or staged. All driver COD must be banked. No orders can be stuck in the pick/pack pipeline. No unresolved shrinkage.
+              Closing finalizes today's operations. All parcels must be delivered or returned. All COD must be banked.
               <br />
               <span className="text-[11px] text-gray-400 mt-1 block">
-                Current time: {new Date().toLocaleTimeString('en-UG', { hour: '2-digit', minute: '2-digit' })}, {' '}{data.totals.outboundToday} orders processed today, {' '}{data.stations.delivered.count} delivered
+                {data.totals.outboundToday} orders today · {data.stations.delivered.count} delivered
               </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-
           {dayCloseData && (
             <div className="space-y-3 py-2 max-h-96 overflow-y-auto">
               {dayCloseData.blockers.unaccountedParcels.length > 0 && (
                 <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-                  <p className="text-sm font-medium text-red-900 mb-1">
-                    ⚠ {dayCloseData.blockers.unaccountedParcels.length} parcels unaccounted for
-                  </p>
-                  <p className="text-xs text-red-700 mb-2">
-                    Dispatched today but not yet marked delivered or returned.
-                  </p>
+                  <p className="text-sm font-medium text-red-900 mb-1">⚠ {dayCloseData.blockers.unaccountedParcels.length} parcels unaccounted for</p>
                   <div className="max-h-24 overflow-y-auto">
-                    {dayCloseData.blockers.unaccountedParcels.slice(0, 15).map((p, idx) => {
-                      const id = String(p.orderNumber || p.outboundId || '')
-                      const customer = String(p.customerName || '')
-                      const status = String(p.status || '')
-                      return (
-                        <p key={idx} className="text-[11px] text-red-700 font-mono">
-                          {id}. {customer} ({status})
-                        </p>
-                      )
-                    })}
+                    {dayCloseData.blockers.unaccountedParcels.slice(0, 15).map((p, idx) => (
+                      <p key={idx} className="text-[11px] text-red-700 font-mono">{String(p.orderNumber || p.outboundId || '')}. {String(p.customerName || '')} ({String(p.status || '')})</p>
+                    ))}
                   </div>
                 </div>
               )}
               {dayCloseData.blockers.pendingBankings.length > 0 && (
                 <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
-                  <p className="text-sm font-medium text-orange-900">
-                    ⚠ {dayCloseData.blockers.pendingBankings.length} pending COD bankings
-                  </p>
-                  <p className="text-xs text-orange-700 mt-1">
-                    Verify them in COD Reconciliation before closing.
-                  </p>
+                  <p className="text-sm font-medium text-orange-900">⚠ {dayCloseData.blockers.pendingBankings.length} pending COD bankings</p>
+                  <p className="text-xs text-orange-700 mt-1">Verify in COD Reconciliation before closing.</p>
                 </div>
               )}
               {dayCloseData.blockers.pipelineOrders && dayCloseData.blockers.pipelineOrders.length > 0 && (
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
-                  <p className="text-sm font-medium text-amber-900 mb-1">
-                    ⚠ {dayCloseData.blockers.pipelineOrders.length} orders still in the pipeline
-                  </p>
-                  <p className="text-xs text-amber-700 mb-2">
-                    Orders still being picked, packed, or staged. These will carry over to the next day if you close now.
-                  </p>
+                  <p className="text-sm font-medium text-amber-900 mb-1">⚠ {dayCloseData.blockers.pipelineOrders.length} orders in pipeline</p>
                   <div className="max-h-24 overflow-y-auto">
-                    {dayCloseData.blockers.pipelineOrders.slice(0, 10).map((p, idx) => {
-                      const id = String(p.orderNumber || p.outboundId || '')
-                      const status = String(p.status || '')
-                      return (
-                        <p key={idx} className="text-[11px] text-amber-700 font-mono">
-                          {id} ({status})
-                        </p>
-                      )
-                    })}
-                    {dayCloseData.blockers.pipelineOrders.length > 10 && (
-                      <p className="text-[10px] text-amber-600 italic mt-1">
-                        + {dayCloseData.blockers.pipelineOrders.length - 10} more
-                      </p>
-                    )}
+                    {dayCloseData.blockers.pipelineOrders.slice(0, 10).map((p, idx) => <p key={idx} className="text-[11px] text-amber-700 font-mono">{String(p.orderNumber || p.outboundId || '')} ({String(p.status || '')})</p>)}
+                    {dayCloseData.blockers.pipelineOrders.length > 10 && <p className="text-[10px] text-amber-600 italic mt-1">+ {dayCloseData.blockers.pipelineOrders.length - 10} more</p>}
                   </div>
                 </div>
               )}
               {dayCloseData.blockers.pendingShrinkage && dayCloseData.blockers.pendingShrinkage.length > 0 && (
                 <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
-                  <p className="text-sm font-medium text-orange-900">
-                    ⚠ {dayCloseData.blockers.pendingShrinkage.length} unresolved shrinkage records
-                  </p>
-                  <p className="text-xs text-orange-700 mt-1">
-                    Resolve or acknowledge them in Returns → Shrinkage before closing.
-                  </p>
+                  <p className="text-sm font-medium text-orange-900">⚠ {dayCloseData.blockers.pendingShrinkage.length} unresolved shrinkage</p>
                 </div>
               )}
               {dayCloseData.canClose && (
                 <div className="p-3 rounded-lg bg-green-50 border border-green-200">
                   <p className="text-sm font-medium text-green-900 mb-2">✓ Ready to close. Today's summary:</p>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <p className="text-gray-500">Delivered</p>
-                      <p className="font-bold text-gray-900">{String(dayCloseData.summary.deliveredCount)} parcels</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Sales value</p>
-                      <p className="font-bold text-gray-900">{formatCurrency(Number(dayCloseData.summary.deliveredValue))}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">COD collected</p>
-                      <p className="font-bold text-green-700">{formatCurrency(Number(dayCloseData.summary.codCollected))}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Returns</p>
-                      <p className="font-bold text-red-700">{String(dayCloseData.summary.returnedCount)}</p>
-                    </div>
+                    <div><p className="text-gray-500">Delivered</p><p className="font-bold text-gray-900">{String(dayCloseData.summary.deliveredCount)} parcels</p></div>
+                    <div><p className="text-gray-500">Sales value</p><p className="font-bold text-gray-900">{formatCurrency(Number(dayCloseData.summary.deliveredValue))}</p></div>
+                    <div><p className="text-gray-500">COD collected</p><p className="font-bold text-green-700">{formatCurrency(Number(dayCloseData.summary.codCollected))}</p></div>
+                    <div><p className="text-gray-500">Returns</p><p className="font-bold text-red-700">{String(dayCloseData.summary.returnedCount)}</p></div>
                   </div>
                 </div>
               )}
             </div>
           )}
-
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDayCloseConfirm}
-              disabled={!dayCloseData?.canClose}
-              className={`rounded-xl ${dayCloseData?.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300'}`}
-            >
-              {dayCloseData?.canClose ? 'Confirm Day Close' : 'Cannot Close, Blockers Exist'}
+            <AlertDialogAction onClick={handleDayCloseConfirm} disabled={!dayCloseData?.canClose} className={`rounded-xl ${dayCloseData?.canClose ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-300'}`}>
+              {dayCloseData?.canClose ? 'Confirm Close' : 'Cannot Close'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+
+      {/* ── Help Dialog (terse, professional) ── */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Operations Desk</AlertDialogTitle>
+            <AlertDialogDescription>
+              Real-time status of every parcel in your warehouse.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3 py-2 text-xs text-gray-700">
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Stations</p>
+              <p>Seven tabs show parcels at each stage of fulfillment — from intake to delivery. Counts update every 30 seconds. Orange dwell time indicates a bottleneck.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Search</p>
+              <p>Find any active order by product name, customer, or order ID. Click a result to jump to its station.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Drivers</p>
+              <p>The right panel shows who's on shift and their current load. <span className="inline-block w-2 h-2 rounded-full bg-green-400 align-middle" /> available, <span className="inline-block w-2 h-2 rounded-full bg-blue-400 align-middle" /> delivering, <span className="inline-block w-2 h-2 rounded-full bg-orange-400 align-middle" /> pending banking.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Alerts</p>
+              <p>The right panel flags failed deliveries, late COD bankings, and overdue follow-ups. Click to jump to the relevant module.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Close Day</p>
+              <p>Available when all parcels are delivered or returned and all COD cash is banked. The number in parentheses shows remaining blockers.</p>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   )
 }
