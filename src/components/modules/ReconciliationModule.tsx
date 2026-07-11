@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Scale, Banknote, Plus, X, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 
@@ -122,10 +122,10 @@ export default function ReconciliationModule() {
             </tr>
           </thead>
           <tbody>
-            {currentRecords.map(r => {
+            {currentRecords.map((r, i) => {
               const hasVariance = r.variance !== 0
               return (
-                <DenseTr key={r.id} onClick={() => { setSelectedRecord(r); setDetailOpen(true) }}
+                <AnimatedDenseTr key={r.id} index={i} onClick={() => { setSelectedRecord(r); setDetailOpen(true) }}
                   tint={hasVariance ? (r.variance > 0 ? 'bg-red-50/30' : 'bg-amber-50/30') : 'bg-green-50/20'}>
                   <DenseTd mono className="text-gray-500 text-[10px]">{r.referenceId || `#${r.id.slice(-6)}`}</DenseTd>
                   <DenseTd mono right className="text-gray-700">{fmt(r.expectedQty)}</DenseTd>
@@ -136,7 +136,7 @@ export default function ReconciliationModule() {
                   <DenseTd className="text-gray-500 text-[11px] truncate max-w-[150px]">{r.varianceReason || '—'}</DenseTd>
                   <DenseTd className="text-gray-500 text-[10px]">{r.reconciledBy}</DenseTd>
                   <DenseTd className="text-gray-500 text-[10px]">{new Date(r.date).toLocaleDateString('en-UG')}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>

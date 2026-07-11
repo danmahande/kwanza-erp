@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
-import { StatusPill, rowTint, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { StatusPill, rowTint, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import { getStage } from '@/lib/workflow'
 
 const MODULE = 'rtv'
@@ -248,8 +248,7 @@ export default function RTVModule() {
               const isExpanded = expandedId === item.id
               return (
                 <>
-                  <DenseTr
-                    key={item.id}
+                  <AnimatedDenseTr key={item.id} index={i}
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     tint={rowTint(item.status)}
                   >
@@ -272,7 +271,7 @@ export default function RTVModule() {
                     <DenseTd className="text-gray-400">
                       {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </DenseTd>
-                  </DenseTr>
+                  </AnimatedDenseTr>
                   {isExpanded && (
                     <tr key={`${item.id}-detail`} className="bg-white border-b border-gray-200">
                       <td colSpan={8} className="px-6 py-3">
@@ -405,8 +404,8 @@ export default function RTVModule() {
                     </tr>
                   </thead>
                   <tbody>
-                    {linkedShrinkage.map(s => (
-                      <DenseTr key={s.id} tint={s.status === 'resolved' ? 'bg-green-50/30' : 'bg-orange-50/30'}>
+                    {linkedShrinkage.map((s, i) => (
+                      <AnimatedDenseTr key={s.id} index={i} tint={s.status === 'resolved' ? 'bg-green-50/30' : 'bg-orange-50/30'}>
                         <DenseTd mono className="text-gray-500 text-[10px]">{s.shrinkageId}</DenseTd>
                         <DenseTd className="text-gray-900 text-[11px] truncate max-w-[120px]">{s.productName}</DenseTd>
                         <DenseTd mono right className="text-red-600 font-bold">{s.qty}</DenseTd>
@@ -423,7 +422,7 @@ export default function RTVModule() {
                             ? <span className="text-[9px] px-1 py-0.5 rounded bg-red-100 text-red-700 font-semibold">DEBIT</span>
                             : <span className="text-[9px] text-gray-400">—</span>}
                         </DenseTd>
-                      </DenseTr>
+                      </AnimatedDenseTr>
                     ))}
                   </tbody>
                 </DenseTable>

@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, StatusPill, rowTint, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, StatusPill, rowTint, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
@@ -206,8 +206,7 @@ export default function ShrinkageModule() {
               const isExpanded = expandedId === item.id
               return (
                 <>
-                  <DenseTr
-                    key={item.id}
+                  <AnimatedDenseTr key={item.id} index={i}
                     onClick={() => setExpandedId(isExpanded ? null : item.id)}
                     tint={rowTint(item.status)}
                   >
@@ -230,7 +229,7 @@ export default function ShrinkageModule() {
                     <DenseTd className="text-gray-400">
                       {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                     </DenseTd>
-                  </DenseTr>
+                  </AnimatedDenseTr>
                   {isExpanded && (
                     <tr key={`${item.id}-detail`} className="bg-white border-b border-gray-200">
                       <td colSpan={8} className="px-6 py-3">
@@ -366,7 +365,7 @@ export default function ShrinkageModule() {
             <Select value={form.productId} onValueChange={handleProductSelect}>
               <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
               <SelectContent>
-                {products.map(p => (
+                {products.map((p, i) => (
                   <SelectItem key={p.productId} value={p.productId}>
                     {p.productLabel} (Stock: {p.currentStock})
                   </SelectItem>

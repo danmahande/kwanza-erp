@@ -14,7 +14,7 @@ import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 interface Dispute {
   id: string
@@ -246,10 +246,10 @@ export default function DisputesModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map((d) => {
+            {data.map((d, i) => {
               const sp = statusPill(d.status)
               return (
-                <DenseTr key={d.id} onClick={() => openProfile(d)} tint={d.status === 'open' ? 'bg-orange-50/30' : d.status === 'credited' ? 'bg-green-50/30' : d.status === 'rejected' ? 'bg-red-50/30' : ''}>
+                <AnimatedDenseTr key={d.id} index={i} onClick={() => openProfile(d)} tint={d.status === 'open' ? 'bg-orange-50/30' : d.status === 'credited' ? 'bg-green-50/30' : d.status === 'rejected' ? 'bg-red-50/30' : ''}>
                   <DenseTd mono className="text-gray-500">{d.disputeId}</DenseTd>
                   <DenseTd className="text-gray-900 font-medium">{d.merchantName}</DenseTd>
                   <DenseTd>
@@ -267,7 +267,7 @@ export default function DisputesModule() {
                   <DenseTd className="text-center">
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${sp.cls}`}>{sp.label}</span>
                   </DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>

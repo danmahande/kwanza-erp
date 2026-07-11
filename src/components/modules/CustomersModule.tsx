@@ -15,7 +15,7 @@ import {
   Edit, Trash2, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
@@ -238,8 +238,8 @@ export default function CustomersModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map(c => (
-              <DenseTr key={c.id} onClick={() => handleView(c)} tint={c.isBlocklisted ? 'bg-red-50/50' : c.totalOrders === 0 ? 'bg-gray-50/50' : ''}>
+            {data.map((c, i) => (
+              <AnimatedDenseTr key={c.id} index={i} onClick={() => handleView(c)} tint={c.isBlocklisted ? 'bg-red-50/50' : c.totalOrders === 0 ? 'bg-gray-50/50' : ''}>
                 <DenseTd mono className="text-gray-500 text-[10px]">{c.customerId}</DenseTd>
                 <DenseTd className="text-gray-900 font-medium">
                   {c.name}
@@ -264,7 +264,7 @@ export default function CustomersModule() {
                   )}
                 </DenseTd>
                 <DenseTd className="text-gray-500 text-[10px]">{new Date(c.createdAt).toLocaleDateString('en-UG')}</DenseTd>
-              </DenseTr>
+              </AnimatedDenseTr>
             ))}
           </tbody>
         </DenseTable>

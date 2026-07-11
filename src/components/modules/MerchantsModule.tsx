@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -19,8 +19,9 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 // ── Types ──
 
@@ -587,7 +588,7 @@ function ProfitabilityView({ data, onBack, onSelect }: {
             </thead>
             <tbody>
               {ranked.map((m, i) => (
-                <DenseTr key={m.id} onClick={() => onSelect(m)} tint={m.profitability.net < 0 ? 'bg-red-50/60' : i === 0 ? 'bg-orange-50/40' : ''}>
+                <AnimatedDenseTr key={m.id} index={i} onClick={() => onSelect(m)} tint={m.profitability.net < 0 ? 'bg-red-50/60' : i === 0 ? 'bg-orange-50/40' : ''}>
                   <DenseTd mono className="text-gray-400">
                     {i === 0 && m.profitability.net > 0 ? <Crown size={12} className="text-orange-500" /> : <span className="font-mono text-[11px]">{i + 1}</span>}
                   </DenseTd>
@@ -606,7 +607,7 @@ function ProfitabilityView({ data, onBack, onSelect }: {
                   <DenseTd mono right className={m.profitability.returns > 0 ? 'text-red-500' : 'text-gray-400'}>−{formatCurrencyCompact(m.profitability.returns, m.currency)}</DenseTd>
                   <DenseTd mono right className={`font-bold ${m.profitability.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{formatCurrencyCompact(m.profitability.net, m.currency)}</DenseTd>
                   <DenseTd mono right className={m.marginPct >= 0 ? 'text-green-700' : 'text-red-700'}>{m.marginPct.toFixed(1)}%</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               ))}
               {ranked.length === 0 && (
                 <tr><td colSpan={9} className="py-8 text-center text-gray-400 text-sm">No merchants to analyze.</td></tr>
@@ -812,31 +813,41 @@ export default function MerchantsModule() {
     }
   }
 
-  // ── Render: Onboarding wizard (full-page) ──
+  // ── Render: Onboarding wizard (full-page, animated) ──
   if (view === 'onboard') {
     return (
-      <OnboardingWizard
-        editing={editing}
-        onComplete={handleWizardComplete}
-        onCancel={() => { setView('list'); setEditing(null) }}
-      />
+      <AnimatePresence mode="wait">
+        <PageTransition key="onboard">
+          <OnboardingWizard
+            editing={editing}
+            onComplete={handleWizardComplete}
+            onCancel={() => { setView('list'); setEditing(null) }}
+          />
+        </PageTransition>
+      </AnimatePresence>
     )
   }
 
-  // ── Render: Profitability view (full-page) ──
+  // ── Render: Profitability view (full-page, animated) ──
   if (view === 'profitability') {
     return (
-      <ProfitabilityView
-        data={data}
-        onBack={() => setView('list')}
-        onSelect={(m) => { setView('list'); handleExpand(m) }}
-      />
+      <AnimatePresence mode="wait">
+        <PageTransition key="profitability">
+          <ProfitabilityView
+            data={data}
+            onBack={() => setView('list')}
+            onSelect={(m) => { setView('list'); handleExpand(m) }}
+          />
+        </PageTransition>
+      </AnimatePresence>
     )
   }
 
-  // ── Render: Main list view ──
+  // ── Render: Main list view (animated) ──
   return (
-    <div className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       {/* ── Header (no action button — action bar is below) ── */}
       <OpsHeader
         title="Merchants"
@@ -1002,8 +1013,8 @@ export default function MerchantsModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map(m => (
-              <DenseTr key={m.id} onClick={() => { setTableOpen(false); handleExpand(m) }} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
+            {data.map((m, i) => (
+              <AnimatedDenseTr key={m.id} index={i} onClick={() => { setTableOpen(false); handleExpand(m) }} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
                 <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
                 <DenseTd className="text-gray-900 font-medium">
                   <div className="flex items-center gap-1.5">
@@ -1030,7 +1041,7 @@ export default function MerchantsModule() {
                     <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
                   </div>
                 </DenseTd>
-              </DenseTr>
+              </AnimatedDenseTr>
             ))}
           </tbody>
         </DenseTable>
@@ -1397,6 +1408,8 @@ export default function MerchantsModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

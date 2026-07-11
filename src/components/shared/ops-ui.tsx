@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RefreshCw, Plus, Search } from 'lucide-react'
 import { ReactNode } from 'react'
+import { motion } from 'framer-motion'
 
 /**
  * Shared Operations Console UI components
@@ -234,6 +235,46 @@ export function DenseTr({
     >
       {children}
     </tr>
+  )
+}
+
+/**
+ * AnimatedDenseTr — DenseTr with staggered enter animation.
+ *
+ * Pass an `index` (0-based) and rows will fade+slide-in with a 15ms stagger.
+ * Use in place of <DenseTr> when you want the table to feel alive on load.
+ *
+ * Example:
+ *   {data.map((m, i) => (
+ *     <AnimatedDenseTr key={m.id} index={i} onClick={...}>
+ *       <DenseTd>...</DenseTd>
+ *     </AnimatedDenseTr>
+ *   ))}
+ *
+ * Stagger caps at 12 rows (180ms) so large tables don't feel sluggish.
+ */
+export function AnimatedDenseTr({
+  children, onClick, tint = '', selected = false, style, index = 0,
+}: {
+  children: ReactNode
+  onClick?: () => void
+  tint?: string
+  selected?: boolean
+  style?: React.CSSProperties
+  index?: number
+}) {
+  const delay = Math.min(index, 12) * 0.015 // 15ms per row, capped at 180ms
+  return (
+    <motion.tr
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.18, ease: 'easeOut', delay }}
+      onClick={onClick}
+      className={`border-b border-gray-100 ${onClick ? 'cursor-pointer hover:bg-gray-50' : ''} ${tint} ${selected ? 'bg-orange-50' : ''}`}
+      style={{ height: '32px', ...style }}
+    >
+      {children}
+    </motion.tr>
   )
 }
 

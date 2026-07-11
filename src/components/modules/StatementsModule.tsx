@@ -11,7 +11,7 @@ import {
   Send, Check, X, AlertTriangle, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -224,7 +224,7 @@ export default function StatementsModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map((stmt) => {
+            {data.map((stmt, i) => {
               const totalFees = stmt.inboundFees + stmt.storageFees + stmt.outboundFees + stmt.returnFees + stmt.shrinkageDebits + stmt.codFees + stmt.commissions
               const statusCls = stmt.isPaid ? 'bg-green-100 text-green-700'
                 : stmt.status === 'issued' ? 'bg-blue-100 text-blue-700'
@@ -234,7 +234,7 @@ export default function StatementsModule() {
                 : 'bg-gray-100 text-gray-700'
               const statusLabel = stmt.isPaid ? 'PAID' : stmt.status === 'pending_approval' ? 'PEND APPR' : stmt.status.toUpperCase()
               return (
-                <DenseTr key={stmt.id} onClick={() => openView(stmt)} tint={stmt.status === 'rejected' ? 'bg-red-50/30' : stmt.isPaid ? 'bg-green-50/30' : ''}>
+                <AnimatedDenseTr key={stmt.id} index={i} onClick={() => openView(stmt)} tint={stmt.status === 'rejected' ? 'bg-red-50/30' : stmt.isPaid ? 'bg-green-50/30' : ''}>
                   <DenseTd mono className="text-gray-500">{stmt.statementId}</DenseTd>
                   <DenseTd className="text-gray-900 font-medium">{stmt.merchantName}</DenseTd>
                   <DenseTd mono className="text-gray-500">{stmt.period}</DenseTd>
@@ -258,7 +258,7 @@ export default function StatementsModule() {
                       <button onClick={() => handleDownload(stmt, 'pdf')} title="PDF" className="p-1 text-gray-400 hover:text-red-600"><FileText size={11} /></button>
                     </div>
                   </DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>
@@ -415,7 +415,7 @@ export default function StatementsModule() {
                 className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
               >
                 <option value="">Select a merchant...</option>
-                {merchants.map(m => (
+                {merchants.map((m, i) => (
                   <option key={m.merchantId} value={m.merchantId}>{m.businessName} ({m.merchantId})</option>
                 ))}
               </select>

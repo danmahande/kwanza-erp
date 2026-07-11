@@ -5,6 +5,11 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
+// Snappy & modern transition config (220ms spring, slight scale)
+// Used by all slide-overs and full-page transitions for uniformity.
+const SPRING = { type: 'spring' as const, damping: 32, stiffness: 340 }
+const PAGE_SPRING = { type: 'spring' as const, damping: 34, stiffness: 320 }
+
 interface DetailSlideOverProps {
   open: boolean
   onClose: () => void
@@ -41,21 +46,21 @@ export default function DetailSlideOver({ open, onClose, title, subtitle, childr
     <AnimatePresence>
       {open && (
         <>
-          {/* Backdrop */}
+          {/* Backdrop — scales in slightly for depth */}
           <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
+            initial={{ opacity: 0, scale: 1.02 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 1.01 }}
+            transition={{ duration: 0.18, ease: 'easeOut' }}
             className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50"
             onClick={onClose}
           />
-          {/* Panel */}
+          {/* Panel — snappier spring */}
           <motion.div
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            transition={SPRING}
             className={`fixed right-0 top-0 bottom-0 ${widthMap[width]} w-full bg-white shadow-2xl z-50 flex flex-col overflow-hidden`}
           >
             {/* Header */}

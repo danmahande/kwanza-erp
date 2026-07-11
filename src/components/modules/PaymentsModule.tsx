@@ -13,7 +13,7 @@ import { Trash2, Filter, CreditCard, Banknote, Calendar, Upload } from 'lucide-r
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 interface Merchant { id: string; merchantId: string; businessName: string }
 
@@ -275,8 +275,8 @@ export default function PaymentsModule() {
             </tr>
           </thead>
           <tbody>
-            {filteredData.map((p) => (
-              <DenseTr key={p.id} onClick={() => handleEdit(p)} tint={p.amount < 0 ? 'bg-red-50/40' : ''}>
+            {filteredData.map((p, i) => (
+              <AnimatedDenseTr key={p.id} index={i} onClick={() => handleEdit(p)} tint={p.amount < 0 ? 'bg-red-50/40' : ''}>
                 <DenseTd mono className="text-gray-500">{p.paymentId}</DenseTd>
                 <DenseTd className="text-gray-900 font-medium">{p.merchantName}</DenseTd>
                 <DenseTd>
@@ -297,7 +297,7 @@ export default function PaymentsModule() {
                 </DenseTd>
                 <DenseTd className="text-gray-500">{new Date(p.createdAt).toLocaleDateString('en-UG')}</DenseTd>
                 <DenseTd className="text-gray-500 text-[10px]">{p.recordedBy}</DenseTd>
-              </DenseTr>
+              </AnimatedDenseTr>
             ))}
           </tbody>
         </DenseTable>

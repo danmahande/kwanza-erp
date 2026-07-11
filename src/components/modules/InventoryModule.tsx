@@ -17,7 +17,7 @@ import {
   ArrowDownRight, ArrowUpRight, RotateCcw, TrendingDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
@@ -163,7 +163,7 @@ function StatusFilter({ selected, onSelect, statuses, counts }: {
         <button onClick={() => onSelect(null)} className={`w-full text-left px-2.5 py-1.5 rounded text-xs font-medium transition-colors flex items-center ${!selected ? 'bg-[#FF6B35]/10 text-[#FF6B35]' : 'text-gray-600 hover:bg-gray-50'}`}>
           <span className="flex-1">All Statuses</span>
         </button>
-        {statuses.map(s => (
+        {statuses.map((s, i) => (
           <button key={s.key} onClick={() => onSelect(selected === s.key ? null : s.key)} className={`w-full text-left px-2.5 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-2 ${selected === s.key ? 'bg-[#FF6B35]/10 text-[#FF6B35]' : 'text-gray-600 hover:bg-gray-50'}`}>
             <span className={`w-2 h-2 rounded-full ${s.dot}`} />
             <span className="flex-1">{s.label}</span>
@@ -249,7 +249,7 @@ function FilterChips({ chips, onClearAll }: { chips: Array<{ key: string; label:
   if (chips.length === 0) return null
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {chips.map(chip => (
+      {chips.map((chip, i) => (
         <button key={chip.key} onClick={chip.onRemove} className="bg-[#FF6B35]/10 text-[#FF6B35] border border-[#FF6B35]/20 rounded-full px-2.5 py-1 text-xs font-medium flex items-center gap-1.5 hover:bg-[#FF6B35]/20 transition-colors">
           {chip.label} <X size={12} className="hover:text-red-500" />
         </button>
@@ -716,13 +716,13 @@ export default function InventoryModule() {
             </tr>
           </thead>
           <tbody>
-            {paginatedData.map(p => {
+            {paginatedData.map((p, i) => {
               const status = stockStatus(p)
               const qty = safe(p.computedCurrentQty)
               const inQty = safe(p.inQty)
               const outQty = safe(p.outQty)
               return (
-                <DenseTr key={p.id} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
+                <AnimatedDenseTr key={p.id} index={i} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
                   tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
                   <DenseTd mono className="text-gray-400 text-[10px]">{p.productId}</DenseTd>
                   <DenseTd>
@@ -746,7 +746,7 @@ export default function InventoryModule() {
                   <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
                     {fmt(safe(p.currentStockValue))}
                   </DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>

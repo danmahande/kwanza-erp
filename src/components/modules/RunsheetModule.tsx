@@ -17,7 +17,7 @@ import {
   ScanBarcode, Ban, CalendarClock, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 // ── Types ──
 interface Driver { id: string; driverId: string; name: string; phone: string; vehicleNumber: string | null; status: string }
@@ -473,7 +473,7 @@ export default function RunsheetModule() {
             { label: 'Failed', val: rs.failed, color: '#EF4444' },
             { label: 'Cancelled', val: rs.cancelled ?? 0, color: '#6B7280' },
             { label: 'COD', val: fmtUGX(rs.totalCOD), color: '#8B5CF6' },
-          ].map(item => (
+          ].map((item, i) => (
             <div key={item.label} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white border border-gray-100">
               <div className="text-sm font-bold text-gray-900">{item.val}</div>
               <div className="text-[11px] text-gray-400 uppercase tracking-wider font-medium">{item.label}</div>
@@ -757,11 +757,11 @@ export default function RunsheetModule() {
             </tr>
           </thead>
           <tbody>
-            {data.runsheets.map(rs => {
+            {data.runsheets.map((rs, i) => {
               const deliveryRate = rs.totalStops > 0 ? Math.round((rs.delivered / rs.totalStops) * 100) : 0
               const st = rsStatusStyle(rs.status)
               return (
-                <DenseTr key={rs.runsheetId} onClick={() => setView(rs)}
+                <AnimatedDenseTr key={rs.runsheetId} index={i} onClick={() => setView(rs)}
                   tint={rs.status === 'completed' ? 'bg-green-50/30' : rs.status === 'in_progress' ? 'bg-blue-50/30' : ''}>
                   <DenseTd mono className="text-gray-500 text-[10px]">{rs.runsheetId}</DenseTd>
                   <DenseTd>
@@ -776,7 +776,7 @@ export default function RunsheetModule() {
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${st.bg} ${st.text} ${st.border}`}>{rs.status.replace(/_/g, ' ').toUpperCase()}</span>
                   </DenseTd>
                   <DenseTd className="text-gray-500 text-[10px]">{new Date(rs.date).toLocaleDateString('en-UG')}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>
@@ -802,13 +802,13 @@ export default function RunsheetModule() {
               </tr>
             </thead>
             <tbody>
-              {data.unassigned.map(order => (
-                <DenseTr key={order.id} tint="bg-amber-50/20">
+              {data.unassigned.map((order, i) => (
+                <AnimatedDenseTr key={order.id} index={i} tint="bg-amber-50/20">
                   <DenseTd mono className="text-gray-500 text-[10px]">{order.outboundId}</DenseTd>
                   <DenseTd className="text-gray-900 text-xs font-medium">{order.customerName}</DenseTd>
                   <DenseTd className="text-gray-600 text-[11px] truncate max-w-[150px]">{order.productName}</DenseTd>
                   <DenseTd mono right className="text-gray-700">{order.qty}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               ))}
             </tbody>
           </DenseTable>
@@ -930,7 +930,7 @@ export default function RunsheetModule() {
                       {data.unassigned.length === 0 ? 'All orders have been assigned' : 'No orders match your filter'}
                     </p>
                   ) : (
-                    filteredUnassigned.map(order => (
+                    filteredUnassigned.map((order, i) => (
                       <label
                         key={order.id}
                         className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-sm ${

@@ -14,7 +14,7 @@ import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 interface Charge {
   id: string
@@ -267,11 +267,11 @@ export default function ChargesModule() {
             </tr>
           </thead>
           <tbody>
-            {data.map((c) => {
+            {data.map((c, i) => {
               const sp = statusPill(c.status)
               const isSelected = selectedIds.has(c.id)
               return (
-                <DenseTr key={c.id} onClick={() => openProfile(c)} tint={c.status === 'rejected' ? 'bg-red-50/30' : c.status === 'approved' ? 'bg-green-50/30' : ''}>
+                <AnimatedDenseTr key={c.id} index={i} onClick={() => openProfile(c)} tint={c.status === 'rejected' ? 'bg-red-50/30' : c.status === 'approved' ? 'bg-green-50/30' : ''}>
                   <DenseTd>
                     {c.status === 'pending' && (
                       <div onClick={(e) => { e.stopPropagation(); toggleSelect(c.id) }}>
@@ -293,7 +293,7 @@ export default function ChargesModule() {
                   <DenseTd className="text-center">
                     <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-semibold ${sp.cls}`}>{sp.label}</span>
                   </DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>

@@ -11,7 +11,7 @@ import {
   ChevronRight, MapPin, Calendar,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -561,10 +561,10 @@ export default function ItemTrackerModule() {
             </tr>
           </thead>
           <tbody>
-            {items.slice(0, 100).map(item => {
+            {items.slice(0, 100).map((item, i) => {
               const sc = statusColor(item.status)
               return (
-                <DenseTr key={item.id} onClick={() => fetchItem(item.itemId)}>
+                <AnimatedDenseTr key={item.id} index={i} onClick={() => fetchItem(item.itemId)}>
                   <DenseTd mono className="text-gray-900 font-semibold text-[10px]">{item.itemId}</DenseTd>
                   <DenseTd>
                     <p className="text-gray-900 text-xs font-medium truncate max-w-[150px]">{item.productName}</p>
@@ -577,7 +577,7 @@ export default function ItemTrackerModule() {
                     <span className={`text-[9px] font-medium ${item.condition === 'good' ? 'text-green-600' : item.condition === 'damaged' ? 'text-red-600' : 'text-gray-400'}`}>{item.condition}</span>
                   </DenseTd>
                   <DenseTd mono className="text-gray-400 text-[10px]">{item.outboundId || '—'}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               )
             })}
           </tbody>

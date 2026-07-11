@@ -10,7 +10,7 @@ import {
   Wallet, AlertTriangle, CheckCircle2, Banknote, Search, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -187,8 +187,8 @@ export default function CODReconciliationModule() {
             </tr>
           </thead>
           <tbody>
-            {filteredDrivers.map(d => (
-              <DenseTr key={d.driverId} tint={d.outstanding > 0 ? 'bg-orange-50/30' : d.shortfallBankingsAmount > 0 ? 'bg-red-50/30' : ''}>
+            {filteredDrivers.map((d, i) => (
+              <AnimatedDenseTr key={d.driverId} index={i} tint={d.outstanding > 0 ? 'bg-orange-50/30' : d.shortfallBankingsAmount > 0 ? 'bg-red-50/30' : ''}>
                 <DenseTd>
                   <p className="text-gray-900 font-medium">{d.driverName}</p>
                   <p className="text-[10px] text-gray-400 font-mono">{d.driverId}</p>
@@ -205,7 +205,7 @@ export default function CODReconciliationModule() {
                     View Bankings
                   </button>
                 </DenseTd>
-              </DenseTr>
+              </AnimatedDenseTr>
             ))}
           </tbody>
         </DenseTable>
@@ -233,7 +233,7 @@ export default function CODReconciliationModule() {
               className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
             >
               <option value="">Select a driver...</option>
-              {driverList.map(d => (
+              {driverList.map((d, i) => (
                 <option key={d.driverId} value={d.driverId}>{d.name} ({d.driverId})</option>
               ))}
             </select>
@@ -352,8 +352,8 @@ export default function CODReconciliationModule() {
                 <tbody>
                   {bankings
                     .filter(b => !selectedDriver || b.driverId === selectedDriver.driverId)
-                    .map(b => (
-                      <DenseTr key={b.id} tint={b.status === 'shortfall' ? 'bg-red-50/30' : b.status === 'pending' ? 'bg-orange-50/30' : ''}>
+                    .map((b, i) => (
+                      <AnimatedDenseTr key={b.id} index={i} tint={b.status === 'shortfall' ? 'bg-red-50/30' : b.status === 'pending' ? 'bg-orange-50/30' : ''}>
                         <DenseTd mono className="text-gray-500 text-[10px]">{b.bankingId}</DenseTd>
                         <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(b.amount)}</DenseTd>
                         <DenseTd className="text-gray-600 text-[10px] truncate max-w-[100px]">
@@ -377,7 +377,7 @@ export default function CODReconciliationModule() {
                             <span className="text-gray-300 text-[10px]">{new Date(b.bankedAt).toLocaleDateString('en-UG', { month: 'short', day: 'numeric' })}</span>
                           )}
                         </DenseTd>
-                      </DenseTr>
+                      </AnimatedDenseTr>
                     ))}
                 </tbody>
               </DenseTable>

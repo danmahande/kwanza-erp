@@ -15,7 +15,7 @@ import {
   CreditCard, Wallet, CheckCircle2, Clock, Search, Layers, Banknote, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, DenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -205,14 +205,14 @@ export default function PaymentBatchesModule() {
               </tr>
             </thead>
             <tbody>
-              {filteredUnpaid.map(s => (
-                <DenseTr key={s.id} onClick={() => toggleSelect(s.id)} selected={selectedIds.has(s.id)}>
+              {filteredUnpaid.map((s, i) => (
+                <AnimatedDenseTr key={s.id} index={i} onClick={() => toggleSelect(s.id)} selected={selectedIds.has(s.id)}>
                   <DenseTd><input type="checkbox" checked={selectedIds.has(s.id)} onChange={() => toggleSelect(s.id)} className="rounded" /></DenseTd>
                   <DenseTd mono className="text-gray-500">{s.statementId}</DenseTd>
                   <DenseTd className="text-gray-900 font-medium">{s.merchantName}</DenseTd>
                   <DenseTd mono className="text-gray-500">{s.period}</DenseTd>
                   <DenseTd mono right className="text-gray-900 font-bold">{formatCurrencyCompact(s.netPayable)}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               ))}
             </tbody>
             {selectedIds.size > 0 && (
@@ -245,8 +245,8 @@ export default function PaymentBatchesModule() {
               </tr>
             </thead>
             <tbody>
-              {filteredBatches.map(b => (
-                <DenseTr key={b.id} onClick={() => setViewBatch(b)} tint={b.status === 'disbursed' ? 'bg-green-50/30' : ''}>
+              {filteredBatches.map((b, i) => (
+                <AnimatedDenseTr key={b.id} index={i} onClick={() => setViewBatch(b)} tint={b.status === 'disbursed' ? 'bg-green-50/30' : ''}>
                   <DenseTd mono className="text-gray-500">{b.batchId}</DenseTd>
                   <DenseTd className="text-gray-600">{b.paymentMethod}</DenseTd>
                   <DenseTd mono right className="text-gray-700">{b.merchantCount}</DenseTd>
@@ -260,7 +260,7 @@ export default function PaymentBatchesModule() {
                     }`}>{b.status.toUpperCase()}</span>
                   </DenseTd>
                   <DenseTd className="text-gray-500 text-[10px]">{new Date(b.createdAt).toLocaleDateString('en-UG')}</DenseTd>
-                </DenseTr>
+                </AnimatedDenseTr>
               ))}
             </tbody>
           </DenseTable>
