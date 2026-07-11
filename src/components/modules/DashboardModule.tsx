@@ -10,10 +10,14 @@ import {
 import {
   AlertTriangle, CheckCircle2,
   TrendingUp, ChevronDown, Download,
-  Activity, Clock, Flame, Zap,
+  Activity, Clock, Flame, Zap, HelpCircle,
 } from 'lucide-react'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { InfoTip } from '@/components/ui/info-tip'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 interface DashboardData {
   stats: {
@@ -970,6 +974,7 @@ function topMerchantsTakeaway(data: DashboardData): { text: string; tone: 'neutr
 export default function DashboardModule({ onNavigate }: DashboardModuleProps = {}) {
   const [data, setData] = useState<DashboardData | null>(null)
   const [period, setPeriod] = useState('This Month')
+  const [helpOpen, setHelpOpen] = useState(false)
   const [showPeriodMenu, setShowPeriodMenu] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [showOnlyProblems, setShowOnlyProblems] = useState(false)
@@ -1103,6 +1108,17 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               )}
             </AnimatePresence>
           </div>
+
+          {/* Help button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setHelpOpen(true)}
+            className="h-7 text-xs rounded-md"
+          >
+            <HelpCircle size={12} className="mr-1" />
+            How does this work?
+          </Button>
 
           {/* Export button (#14) */}
           <Button
@@ -1377,6 +1393,76 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
       })()}
 
       {/* Old chart rows removed. */}
+      {/* Old chart rows removed. */}
+
+      {/* Help Dialog */}
+      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <HelpCircle size={18} />
+              How the Dashboard Works
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              The Dashboard is your business overview — a single screen that shows the health of your entire warehouse operation. It pulls data from every module (merchants, products, inventory, outbound, payments, returns, drivers) and presents it as KPIs, charts, alerts, and a real-time "Pulse" that tells you what needs attention right now. Use it to spot problems before they become emergencies, track trends over time, and answer "how is the business doing?" without opening five different screens.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">What this module is for:</strong> The Dashboard is the strategic view — where the operations manager or business owner checks the overall health of the operation. It's not for doing work (that's the Operations Desk); it's for understanding trends, spotting problems, and making decisions. Should you reorder that product? Is COD cash piling up? Are deliveries slowing down? Is this your best week this quarter? The Dashboard answers these questions with real data, not gut feeling.
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">What You'll See</p>
+              <div className="space-y-2">
+                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
+                  <p className="text-xs text-red-900 leading-relaxed">
+                    <strong>Emergency strip.</strong> Red alerts at the top — out of stock products, overdue parcels, aged COD cash. These need attention now. Click any alert to jump to the relevant module.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
+                  <p className="text-xs text-blue-900 leading-relaxed">
+                    <strong>KPIs + trends.</strong> Core metrics: revenue, orders, stock value, fulfillment rate, COD banking rate, on-time rate, cycle time. Each shows a comparison vs last period (↑ or ↓ with percentage). Switch the period selector (Today, This Week, This Month, This Quarter) to change the time window.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
+                  <p className="text-xs text-green-900 leading-relaxed">
+                    <strong>Revenue trend.</strong> 6-month area chart showing monthly revenue and commission. Spot seasonal patterns, growth trends, or sudden drops.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
+                  <p className="text-xs text-purple-900 leading-relaxed">
+                    <strong>The Pulse.</strong> The real-time heartbeat: money at risk (overdue parcels, unbanked COD), momentum (today's pace vs yesterday), predictions (will orders go stale? will you finish late?), time awareness (where you are in the delivery window), and streaks (days without stockout, hours since last failure). This is what makes the dashboard feel alive.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>What needs attention.</strong> Stuck orders (2+ hours in picking/packing), aged COD bankings (24+ hours pending), unresolved shrinkage (3+ days), out-of-stock products. Each item links to the relevant module for action.
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
+                  <p className="text-xs text-gray-700 leading-relaxed">
+                    <strong>Export.</strong> Click "Export CSV" to download all the dashboard data as a spreadsheet. Useful for monthly reports, board meetings, or sharing with stakeholders who don't have system access.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+              <p className="text-xs leading-relaxed">
+                <strong className="text-sm">Why this is different:</strong> Most ERP dashboards are static reports — yesterday's data in a PDF. This dashboard is alive. It auto-refreshes every 30 seconds. The Pulse feature predicts what's about to go wrong in the next 30-60 minutes (orders about to go stale, estimated finish time, whether you'll finish before the delivery window closes). It compares today's pace against yesterday's at the same time. It tracks streaks (days without stockout, hours since last failure). It's not just a report — it's an early warning system that helps you catch problems before they become emergencies.
+              </p>
+            </div>
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </motion.div>
   )
 }

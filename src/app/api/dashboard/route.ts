@@ -65,9 +65,20 @@ export async function GET(request: NextRequest) {
     // ── Financial (filtered by period) ──
     const payments = await db.merchantPayment.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' } })
     const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0)
-    const totalCommission = allProducts.reduce((sum, p) => sum + (p.currentStock * p.unitSellingPrice * p.commissionPercent / 100), 0)
-    const avgOrderValue = deliveredCount > 0 ? Math.round((totalRevenue || 0) / deliveredCount) : 0
-    const revenuePerMerchant = totalMerchants > 0 ? Math.round((totalRevenue || 0) / totalMerchants) : 0
+    // Commission: earned on DELIVERED orders, not on stock sitting on shelves.
+    // Was: allProducts.reduce(... currentStock * unitSellingPrice * commissionPercent)
+    // That computed commission on unsold inventory — meaningless.
+    const deliveredSalesAgg = await db.outboundRecord.aggregate({
+      where: { status: 'delivered', deliveredAt: { gte: startDate } },
+      _sum: { saleAmount: true },
+    })
+    const deliveredSalesValue = deliveredSalesAgg._sum.saleAmount ?? 0
+    const avgCommissionPercent = allProducts.length > 0
+      ? allProducts.reduce((s, p) => s + p.commissionPercent, 0) / allProducts.length / 100
+      : 0
+    const totalCommission = Math.round(deliveredSalesValue * avgCommissionPercent)
+    const avgOrderValue = deliveredCount > 0 ? Math.round(deliveredSalesValue / deliveredCount) : 0
+    const revenuePerMerchant = totalMerchants > 0 ? Math.round(deliveredSalesValue / totalMerchants) : 0
 
     // ── COD Metrics (filtered by period) ──
     const codCollectedAgg = await db.outboundRecord.aggregate({
@@ -140,11 +151,12 @@ export async function GET(request: NextRequest) {
       : 0
 
     // ── What Needs Attention (stale items) ──
-    // 1. Orders stuck in picking/packing for > 2 hours
+    // 1. Orders stuck in picking/packing/pending/released for > 2 hours
+    // Include 'released' (passed intake, on the floor) + exclude 'self_delivery'
     const twoHoursAgo = new Date(now.getTime() - 2 * 60 * 60 * 1000)
     const stuckOrders = await db.outboundRecord.findMany({
       where: {
-        status: { in: ['picking', 'packing', 'pending'] },
+        status: { in: ['picking', 'packing', 'pending', 'released', 'picked'] },
         createdAt: { lt: twoHoursAgo },
       },
       select: { id: true, orderNumber: true, outboundId: true, customerName: true, status: true, createdAt: true },
@@ -406,18 +418,23 @@ export async function GET(request: NextRequest) {
     })
     const stockoutDaySet = new Set(stockoutDays.map(s => s.createdAt.toDateString()))
     let daysWithoutStockout = 0
-    for (let i = 0; i < 30; i++) {
-      const checkDay = new Date(now); checkDay.setDate(checkDay.getDate() - i)
-      if (!stockoutDaySet.has(checkDay.toDateString())) {
-        daysWithoutStockout++
-      } else {
-        break
+    // If there are out-of-stock products right now, streak is 0
+    if (criticalStockProducts > 0) {
+      daysWithoutStockout = 0
+    } else {
+      for (let i = 0; i < 30; i++) {
+        const checkDay = new Date(now); checkDay.setDate(checkDay.getDate() - i)
+        if (!stockoutDaySet.has(checkDay.toDateString())) {
+          daysWithoutStockout++
+        } else {
+          break
+        }
       }
     }
     // Check if there are ANY shrinkage records at all — if not, the streak
     // is "no data" not "30 days clean"
     const totalShrinkageRecordCount = await db.shrinkageRecord.count()
-    const stockoutStreakHasData = totalShrinkageRecordCount > 0
+    const stockoutStreakHasData = totalShrinkageRecordCount > 0 || criticalStockProducts === 0
     const lastFailure = await db.outboundRecord.findFirst({
       where: { status: 'failed' },
       orderBy: { createdAt: 'desc' },
