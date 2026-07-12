@@ -625,6 +625,119 @@ function ProfitabilityView({ data, onBack, onSelect }: {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ALL MERCHANTS VIEW — FULL-PAGE TABLE
+// ═══════════════════════════════════════════════════════════════
+
+function AllMerchantsView({
+  data, activeFilter, onFilterChange, onBack, onSelect,
+  onToggleActive, onHoldToggle, onOpenRateCard, onOpenStatement,
+}: {
+  data: Merchant[]
+  activeFilter: string
+  onFilterChange: (f: string) => void
+  onBack: () => void
+  onSelect: (m: Merchant) => void
+  onToggleActive: (m: Merchant) => void
+  onHoldToggle: (m: Merchant) => void
+  onOpenRateCard: (m: Merchant) => void
+  onOpenStatement: (m: Merchant) => void
+}) {
+  return (
+    <div className="min-h-full flex flex-col">
+      {/* Top bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onBack}>
+              <BackIcon size={14} className="mr-1" /> Back to overview
+            </Button>
+            <div className="h-5 w-px bg-gray-200" />
+            <div>
+              <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Layers size={16} className="text-[#FF6B35]" /> All Merchants</h1>
+              <p className="text-[11px] text-gray-500">{data.length} total · Click any row to open the merchant profile</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-7xl mx-auto space-y-3">
+          {/* Filter chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Filter size={12} className="text-gray-400" />
+            {FILTER_CHIPS.map(chip => (
+              <button key={chip.key} onClick={() => onFilterChange(chip.key)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                {chip.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Table */}
+          <DenseTable>
+            <thead>
+              <tr>
+                <DenseTh className="w-24">ID</DenseTh>
+                <DenseTh>Business Name</DenseTh>
+                <DenseTh className="w-16">Type</DenseTh>
+                <DenseTh className="w-16 text-right">SKUs</DenseTh>
+                <DenseTh className="w-16 text-right">Orders</DenseTh>
+                <DenseTh className="w-28 text-right">Sales</DenseTh>
+                <DenseTh className="w-28 text-right">Pending</DenseTh>
+                <DenseTh className="w-28 text-right">Storage</DenseTh>
+                <DenseTh className="w-28 text-right">Shrinkage</DenseTh>
+                <DenseTh className="w-16 text-center">Status</DenseTh>
+                <DenseTh className="w-28 text-right">Actions</DenseTh>
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((m, i) => (
+                <AnimatedDenseTr key={m.id} index={i} onClick={() => onSelect(m)} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
+                  <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
+                  <DenseTd className="text-gray-900 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      {m.isOnHold && <Pause size={11} className="text-red-500" />}
+                      {m.businessName}
+                    </div>
+                  </DenseTd>
+                  <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
+                  <DenseTd mono right className={m.productCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.productCount}</DenseTd>
+                  <DenseTd mono right className={m.orderCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.orderCount}</DenseTd>
+                  <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
+                  <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>{formatCurrencyCompact(m.pendingPayment, m.currency)}</DenseTd>
+                  <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</DenseTd>
+                  <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
+                  <DenseTd className="text-center">
+                    <button onClick={(e) => { e.stopPropagation(); onToggleActive(m) }} title={m.isActive ? 'Deactivate' : 'Activate'}>
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    </button>
+                  </DenseTd>
+                  <DenseTd right>
+                    <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => onHoldToggle(m)} title={m.isOnHold ? 'Release' : 'Hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>Hold</button>
+                      <button onClick={() => onOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
+                      <button onClick={() => onOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
+                    </div>
+                  </DenseTd>
+                </AnimatedDenseTr>
+              ))}
+              {data.length === 0 && (
+                <tr><td colSpan={11} className="py-8 text-center text-gray-400 text-sm">No merchants found.</td></tr>
+              )}
+            </tbody>
+          </DenseTable>
+
+          <p className="text-[10px] text-gray-400 px-1">
+            {data.length} merchant(s). Click a row to open the profile. Use the status dot to activate/deactivate. Hold, rate card, and statement actions are in the rightmost column.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 
@@ -633,11 +746,10 @@ export default function MerchantsModule() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [loading, setLoading] = useState(true)
-  const [view, setView] = useState<'list' | 'onboard' | 'profitability'>('list')
+  const [view, setView] = useState<'list' | 'onboard' | 'profitability' | 'table'>('list')
   const [editing, setEditing] = useState<Merchant | null>(null)
   const [profileOpen, setProfileOpen] = useState(false)
   const [selectedMerchant, setSelectedMerchant] = useState<Merchant | null>(null)
-  const [tableOpen, setTableOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [holdDialogOpen, setHoldDialogOpen] = useState(false)
   const [holdReason, setHoldReason] = useState('')
@@ -843,6 +955,27 @@ export default function MerchantsModule() {
     )
   }
 
+  // ── Render: All Merchants table (full-page, animated) ──
+  if (view === 'table') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="table">
+          <AllMerchantsView
+            data={data}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            onBack={() => setView('list')}
+            onSelect={(m) => { setView('list'); handleExpand(m) }}
+            onToggleActive={handleToggleActive}
+            onHoldToggle={handleHoldToggle}
+            onOpenRateCard={handleOpenRateCard}
+            onOpenStatement={handleOpenStatement}
+          />
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   // ── Render: Main list view (animated) ──
   return (
     <AnimatePresence mode="wait">
@@ -869,7 +1002,7 @@ export default function MerchantsModule() {
         <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => { setEditing(null); setView('onboard') }}>
           <Plus size={12} className="mr-1" /> Onboard Merchant
         </Button>
-        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setTableOpen(true)}>
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setView('table')}>
           <Layers size={12} className="mr-1" /> View All
         </Button>
         <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setBulkStmtOpen(true)} disabled={data.length === 0}>
@@ -966,7 +1099,7 @@ export default function MerchantsModule() {
                 </div>
               ))}
               {data.length > 10 && (
-                <button onClick={() => setTableOpen(true)} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
+                <button onClick={() => setView('table')} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
                   View all {data.length} merchants →
                 </button>
               )}
@@ -977,75 +1110,6 @@ export default function MerchantsModule() {
 
       {/* ── Loading ── */}
       {loading && <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-300" /></div>}
-
-      {/* ══ TABLE SLIDE-OVER (View All) ══ */}
-      <DetailSlideOver
-        open={tableOpen}
-        onClose={() => setTableOpen(false)}
-        title="All Merchants"
-        subtitle={`${data.length} total`}
-        width="xl"
-      >
-        {/* Filter chips */}
-        <div className="flex items-center gap-1.5 flex-wrap mb-3">
-          <Filter size={12} className="text-gray-400" />
-          {FILTER_CHIPS.map(chip => (
-            <button key={chip.key} onClick={() => setActiveFilter(chip.key)}
-              className={`px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {chip.label}
-            </button>
-          ))}
-        </div>
-        <DenseTable>
-          <thead>
-            <tr>
-              <DenseTh className="w-24">ID</DenseTh>
-              <DenseTh>Business Name</DenseTh>
-              <DenseTh className="w-16">Type</DenseTh>
-              <DenseTh className="w-16 text-right">SKUs</DenseTh>
-              <DenseTh className="w-16 text-right">Orders</DenseTh>
-              <DenseTh className="w-28 text-right">Sales</DenseTh>
-              <DenseTh className="w-28 text-right">Pending</DenseTh>
-              <DenseTh className="w-28 text-right">Storage</DenseTh>
-              <DenseTh className="w-28 text-right">Shrinkage</DenseTh>
-              <DenseTh className="w-16 text-center">Status</DenseTh>
-              <DenseTh className="w-28 text-right">Actions</DenseTh>
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((m, i) => (
-              <AnimatedDenseTr key={m.id} index={i} onClick={() => { setTableOpen(false); handleExpand(m) }} tint={m.isOnHold ? 'bg-red-50/60' : m.isActive ? '' : 'bg-gray-50/50'}>
-                <DenseTd mono className="text-gray-500">{m.merchantId}</DenseTd>
-                <DenseTd className="text-gray-900 font-medium">
-                  <div className="flex items-center gap-1.5">
-                    {m.isOnHold && <Pause size={11} className="text-red-500" />}
-                    {m.businessName}
-                  </div>
-                </DenseTd>
-                <DenseTd mono className="text-gray-600">{deliveryCode(m.deliveryType)}</DenseTd>
-                <DenseTd mono right className={m.productCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.productCount}</DenseTd>
-                <DenseTd mono right className={m.orderCount > 0 ? 'text-gray-700' : 'text-gray-300'}>{m.orderCount}</DenseTd>
-                <DenseTd mono right className="text-gray-700">{formatCurrencyCompact(m.totalSalesValue, m.currency)}</DenseTd>
-                <DenseTd mono right className={m.pendingPayment > 0 ? 'text-orange-700 font-bold' : 'text-gray-400'}>{formatCurrencyCompact(m.pendingPayment, m.currency)}</DenseTd>
-                <DenseTd mono right className={m.storageLiabilityBalance > 0 ? 'text-blue-700' : 'text-gray-400'}>{formatCurrencyCompact(m.storageLiabilityBalance, m.currency)}</DenseTd>
-                <DenseTd mono right className={m.totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}>{formatCurrencyCompact(m.totalShrinkageValue, m.currency)}</DenseTd>
-                <DenseTd className="text-center">
-                  <button onClick={(e) => { e.stopPropagation(); handleToggleActive(m) }} title={m.isActive ? 'Deactivate' : 'Activate'}>
-                    <span className={`inline-block w-2.5 h-2.5 rounded-full ${m.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  </button>
-                </DenseTd>
-                <DenseTd right>
-                  <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                    <button onClick={() => handleHoldToggle(m)} title={m.isOnHold ? 'Release' : 'Hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>Hold</button>
-                    <button onClick={() => handleOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
-                    <button onClick={() => handleOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
-                  </div>
-                </DenseTd>
-              </AnimatedDenseTr>
-            ))}
-          </tbody>
-        </DenseTable>
-      </DetailSlideOver>
 
       {/* ══ PROFILE SLIDE-OVER ══ */}
       <DetailSlideOver
@@ -1384,7 +1448,7 @@ export default function MerchantsModule() {
             </div>
             <div>
               <p className="font-semibold text-gray-900 mb-1">View All</p>
-              <p>Opens the full merchant table with all 11 columns, filters, and inline actions (hold, rate card, statement).</p>
+              <p>Opens a full-page table with all 11 columns, filter chips, and inline actions (hold, rate card, statement). Click any row to open the merchant profile.</p>
             </div>
             <div>
               <p className="font-semibold text-gray-900 mb-1">Bulk Statements</p>
