@@ -192,7 +192,7 @@ function OnboardingWizard({ editing, onComplete, onCancel }: {
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onCancel}>
-              <BackIcon size={14} className="mr-1" /> Back to list
+              <BackIcon size={14} className="mr-1" /> Back
             </Button>
             <div className="h-5 w-px bg-gray-200" />
             <div>
@@ -498,7 +498,7 @@ function ProfitabilityView({ data, onBack, onSelect }: {
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onBack}>
-              <BackIcon size={14} className="mr-1" /> Back to list
+              <BackIcon size={14} className="mr-1" /> Back
             </Button>
             <div className="h-5 w-px bg-gray-200" />
             <div>
@@ -649,7 +649,7 @@ function AllMerchantsView({
         <div className="px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onBack}>
-              <BackIcon size={14} className="mr-1" /> Back to overview
+              <BackIcon size={14} className="mr-1" /> Back
             </Button>
             <div className="h-5 w-px bg-gray-200" />
             <div>
