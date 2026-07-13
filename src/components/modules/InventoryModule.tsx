@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,10 +15,12 @@ import {
   ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
   Loader2, Building2, SlidersHorizontal, Warehouse,
   ArrowDownRight, ArrowUpRight, RotateCcw, TrendingDown,
+  HelpCircle, Layers, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
 
@@ -303,7 +305,8 @@ export default function InventoryModule() {
   const [importText, setImportText] = useState('')
 
   // ── View Mode ──
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card')
+  const [view, setView] = useState<'list' | 'table'>('list')
+  const [helpOpen, setHelpOpen] = useState(false)
 
   // ── Keyboard shortcut ──
   useEffect(() => {
@@ -533,13 +536,6 @@ export default function InventoryModule() {
   const lowStockCount = data.filter(p => safe(p.computedCurrentQty) <= p.minStock && safe(p.computedCurrentQty) > 0).length
   const outOfStockCount = data.filter(p => safe(p.computedCurrentQty) <= 0).length
 
-  const stats = [
-    { label: 'Total Products', value: data.length, icon: Package, color: '#1B2A4A', bg: 'bg-slate-500/15', border: 'border-slate-500/20', gradient: 'from-slate-500/10 to-slate-500/5' },
-    { label: 'Total Value', value: `UGX ${fmt(totalStockValue)}`, icon: BarChart3, color: '#22C55E', bg: 'bg-green-500/15', border: 'border-green-500/20', gradient: 'from-green-500/10 to-green-500/5' },
-    { label: 'Low Stock', value: lowStockCount, icon: AlertTriangle, color: '#F59E0B', bg: 'bg-amber-500/15', border: 'border-amber-500/20', gradient: 'from-amber-500/10 to-amber-500/5' },
-    { label: 'Out of Stock', value: outOfStockCount, icon: Warehouse, color: '#EF4444', bg: 'bg-red-500/15', border: 'border-red-500/20', gradient: 'from-red-500/10 to-red-500/5' },
-  ]
-
   // ── Range presets ──
   const qtyPresets = [
     { label: '< 0', min: null, max: 0 },
@@ -611,79 +607,44 @@ export default function InventoryModule() {
   ], [])
 
   // ════════════════════════════════════════
-  // ── RENDER ──
+  // ── RENDER: FULL-PAGE TABLE ──
   // ════════════════════════════════════════
-  return (
-    <div className="space-y-3">
-      <OpsHeader
-        title="Stock"
-        description="What's on the shelves"
-        kpiCells={[
-          { label: 'STOCK VALUE', value: `UGX ${fmt(totalStockValue)}` },
-          { label: 'LOW STOCK', value: lowStockCount, highlight: lowStockCount > 0, highlightColor: 'orange' as const },
-          { label: 'OUT OF STOCK', value: outOfStockCount, highlight: outOfStockCount > 0, highlightColor: 'red' as const },
-        ]}
-        searchValue={search}
-        onSearchChange={handleSearchChange}
-        searchPlaceholder="Search products, vendors, IDs..."
-      >
-        <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} className="h-7 text-xs rounded-md">
-          <Upload size={12} className="mr-1" /> Import
-        </Button>
-        <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" onChange={handleCSVUpload} className="hidden" />
-        <Button variant="outline" size="sm" onClick={handleExportAll} className="h-7 text-xs rounded-md">
-          <Upload size={12} className="mr-1" /> Export
-        </Button>
-      </OpsHeader>
+  if (view === 'table') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="table">
+          <div className="min-h-full flex flex-col">
+            {/* Top bar */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                    <BackIcon size={14} className="mr-1" /> Back
+                  </Button>
+                  <div className="h-5 w-px bg-gray-200" />
+                  <div>
+                    <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Layers size={16} className="text-[#FF6B35]" /> All Stock</h1>
+                    <p className="text-[11px] text-gray-500">{data.length} products · Click any row for details</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={handleExportAll}>
+                    <Upload size={12} className="mr-1" /> Export
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => fileInputRef.current?.click()}>
+                    <Upload size={12} className="mr-1" /> Import
+                  </Button>
+                  <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" onChange={handleCSVUpload} className="hidden" />
+                </div>
+              </div>
+            </div>
 
-      {/* Reorder alert banner */}
-      {(lowStockCount > 0 || outOfStockCount > 0) && (
-        <div className={`rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap ${outOfStockCount > 0 ? 'bg-red-50' : 'bg-orange-50'}`}>
-          <AlertTriangle size={14} className={outOfStockCount > 0 ? 'text-red-600 shrink-0' : 'text-orange-600 shrink-0'} />
-          <span className="text-xs text-gray-700 font-medium">
-            {outOfStockCount > 0 && `${outOfStockCount} product${outOfStockCount !== 1 ? 's' : ''} out of stock`}
-            {outOfStockCount > 0 && lowStockCount > 0 && ', '}
-            {lowStockCount > 0 && `${lowStockCount} product${lowStockCount !== 1 ? 's' : ''} below min stock`}
-            . Reorder now to avoid fulfillment delays.
-          </span>
-          <button
-            onClick={() => handleFilterStatusChange('out-of-stock')}
-            className="ml-auto text-[10px] text-[#FF6B35] hover:text-[#E55A25] font-semibold uppercase tracking-wider"
-          >
-            View low stock →
-          </button>
-        </div>
-      )}
-
-      {/* Dense table with inline filters in header */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
-      ) : paginatedData.length === 0 ? (
-        <div className="py-12 text-center text-gray-400 text-sm">
-          <Package size={32} className="mx-auto mb-3 text-gray-300" />
-          No products. Adjust filters or add products in the Products tab.
-        </div>
-      ) : (
-        <DenseTable>
-          <thead>
-            {/* Row 1: column headers */}
-            <tr>
-              <DenseTh className="w-20">SKU</DenseTh>
-              <DenseTh>Product</DenseTh>
-              <DenseTh>Merchant</DenseTh>
-              <DenseTh className="w-16 text-right">On Hand</DenseTh>
-              <DenseTh className="w-16 text-right">In</DenseTh>
-              <DenseTh className="w-16 text-right">Out</DenseTh>
-              <DenseTh className="w-16 text-right">Min</DenseTh>
-              <DenseTh className="w-20 text-center">Status</DenseTh>
-              <DenseTh className="w-12 text-center">ABC</DenseTh>
-              <DenseTh className="w-12 text-right">Age</DenseTh>
-              <DenseTh className="w-24 text-right">Stock Value</DenseTh>
-            </tr>
-            {/* Row 2: inline filters */}
-            <tr className="bg-gray-50/50 border-b border-gray-100">
-              <td colSpan={2} className="px-3 py-1.5">
-                <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-7xl mx-auto space-y-3">
+                {/* Filter chips + vendor dropdown */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Filter size={12} className="text-gray-400" />
                   {[
                     { key: '', label: 'All' },
                     { key: 'in-stock', label: 'In Stock' },
@@ -695,220 +656,405 @@ export default function InventoryModule() {
                     const isActive = filterStatus === chip.key || (chip.key === '' && !filterStatus)
                     return (
                       <button key={chip.key || 'all'} onClick={() => handleFilterStatusChange(chip.key || null)}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                         {chip.label}
                         <span className={`px-1 rounded-full text-[9px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
                       </button>
                     )
                   })}
+                  <div className="h-4 w-px bg-gray-200 mx-1" />
+                  {vendors.length > 0 && (
+                    <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
+                      className="px-2 py-1 rounded-md text-[11px] border border-gray-200 text-gray-600 bg-white">
+                      <option value="">All Vendors</option>
+                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  )}
+                  {categories.length > 0 && (
+                    <select value={filterCategory[0] || ''} onChange={e => handleFilterCategoryChange(e.target.value || null)}
+                      className="px-2 py-1 rounded-md text-[11px] border border-gray-200 text-gray-600 bg-white">
+                      <option value="">All Categories</option>
+                      {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  )}
+                  {(filterStatus || filterVendor.length > 0 || filterCategory.length > 0) && (
+                    <button onClick={handleClearFilters} className="text-[10px] text-gray-400 hover:text-red-500 font-medium">Clear</button>
+                  )}
                 </div>
-              </td>
-              <td className="px-3 py-1.5">
-                {vendors.length > 0 && (
-                  <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
-                    className="px-1.5 py-0.5 rounded-md text-[10px] border border-gray-200 text-gray-600 bg-white max-w-[100px]">
-                    <option value="">All Vendors</option>
-                    {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
+
+                {/* Table */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
+                ) : paginatedData.length === 0 ? (
+                  <div className="py-12 text-center text-gray-400 text-sm">
+                    <Package size={32} className="mx-auto mb-3 text-gray-300" />
+                    No products match these filters.
+                  </div>
+                ) : (
+                  <DenseTable>
+                    <thead>
+                      <tr>
+                        <DenseTh className="w-20">SKU</DenseTh>
+                        <DenseTh>Product</DenseTh>
+                        <DenseTh>Merchant</DenseTh>
+                        <DenseTh className="w-16 text-right">On Hand</DenseTh>
+                        <DenseTh className="w-16 text-right">In</DenseTh>
+                        <DenseTh className="w-16 text-right">Out</DenseTh>
+                        <DenseTh className="w-16 text-right">Min</DenseTh>
+                        <DenseTh className="w-20 text-center">Status</DenseTh>
+                        <DenseTh className="w-12 text-center">ABC</DenseTh>
+                        <DenseTh className="w-12 text-right">Age</DenseTh>
+                        <DenseTh className="w-24 text-right">Stock Value</DenseTh>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedData.map((p, i) => {
+                        const status = stockStatus(p)
+                        const qty = safe(p.computedCurrentQty)
+                        const inQty = safe(p.inQty)
+                        const outQty = safe(p.outQty)
+                        return (
+                          <AnimatedDenseTr key={p.id} index={i} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
+                            tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
+                            <DenseTd mono className="text-gray-400 text-[10px]">{p.productId}</DenseTd>
+                            <DenseTd>
+                              <p className="text-gray-900 font-medium text-xs truncate max-w-[200px]">{p.productLabel}</p>
+                              {p.brand && <p className="text-[10px] text-gray-400">{p.brand}{p.variant ? `, ${p.variant}` : ''}</p>}
+                            </DenseTd>
+                            <DenseTd className="text-gray-600 text-[11px]">{p.merchantName}</DenseTd>
+                            <DenseTd mono right className={qty < 0 ? 'text-red-600 font-bold' : qty === 0 ? 'text-gray-400' : 'text-gray-900 font-bold'}>
+                              {fmt(qty)}
+                            </DenseTd>
+                            <DenseTd mono right className="text-blue-600 text-[11px]">{inQty > 0 ? `+${fmt(inQty)}` : '—'}</DenseTd>
+                            <DenseTd mono right className="text-orange-600 text-[11px]">{outQty > 0 ? `-${fmt(outQty)}` : '—'}</DenseTd>
+                            <DenseTd mono right className="text-gray-400">{p.minStock}</DenseTd>
+                            <DenseTd className="text-center">
+                              <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
+                            </DenseTd>
+                            <DenseTd className="text-center">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${abcClass[p.id] === 'A' ? 'bg-red-100 text-red-700' : abcClass[p.id] === 'B' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`} title={`ABC Class ${abcClass[p.id] || 'C'}`}>{abcClass[p.id] || 'C'}</span>
+                            </DenseTd>
+                            <DenseTd mono right className="text-gray-400 text-[10px]">{stockAge(p.createdAt)}</DenseTd>
+                            <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
+                              {fmt(safe(p.currentStockValue))}
+                            </DenseTd>
+                          </AnimatedDenseTr>
+                        )
+                      })}
+                    </tbody>
+                  </DenseTable>
                 )}
-              </td>
-              <td colSpan={6}></td>
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedData.map((p, i) => {
-              const status = stockStatus(p)
-              const qty = safe(p.computedCurrentQty)
-              const inQty = safe(p.inQty)
-              const outQty = safe(p.outQty)
-              return (
-                <AnimatedDenseTr key={p.id} index={i} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
-                  tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
-                  <DenseTd mono className="text-gray-400 text-[10px]">{p.productId}</DenseTd>
-                  <DenseTd>
-                    <p className="text-gray-900 font-medium text-xs truncate max-w-[200px]">{p.productLabel}</p>
-                    {p.brand && <p className="text-[10px] text-gray-400">{p.brand}{p.variant ? `, ${p.variant}` : ''}</p>}
-                  </DenseTd>
-                  <DenseTd className="text-gray-600 text-[11px]">{p.merchantName}</DenseTd>
-                  <DenseTd mono right className={qty < 0 ? 'text-red-600 font-bold' : qty === 0 ? 'text-gray-400' : 'text-gray-900 font-bold'}>
-                    {fmt(qty)}
-                  </DenseTd>
-                  <DenseTd mono right className="text-blue-600 text-[11px]">{inQty > 0 ? `+${fmt(inQty)}` : '—'}</DenseTd>
-                  <DenseTd mono right className="text-orange-600 text-[11px]">{outQty > 0 ? `-${fmt(outQty)}` : '—'}</DenseTd>
-                  <DenseTd mono right className="text-gray-400">{p.minStock}</DenseTd>
-                  <DenseTd className="text-center">
-                    <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
-                  </DenseTd>
-                  <DenseTd className="text-center">
-                    <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${abcClass[p.id] === 'A' ? 'bg-red-100 text-red-700' : abcClass[p.id] === 'B' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`} title={`ABC Class ${abcClass[p.id] || 'C'}: ${abcClass[p.id] === 'A' ? 'Top 20% by value' : abcClass[p.id] === 'B' ? 'Next 30%' : 'Bottom 50%'}`}>{abcClass[p.id] || 'C'}</span>
-                  </DenseTd>
-                  <DenseTd mono right className="text-gray-400 text-[10px]">{stockAge(p.createdAt)}</DenseTd>
-                  <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
-                    {fmt(safe(p.currentStockValue))}
-                  </DenseTd>
-                </AnimatedDenseTr>
-              )
-            })}
-          </tbody>
-        </DenseTable>
-      )}
 
-      {/* Pagination */}
-      {sortedData.length > pageSize && (
-        <div className="flex items-center justify-between text-xs text-gray-500">
-          <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length}</span>
-          <div className="flex items-center gap-1">
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
-            <span className="px-2 text-gray-600">{page} / {totalPages}</span>
-            <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
-          </div>
-        </div>
-      )}
-
-      {/* Detail slide-over */}
-      <DetailSlideOver
-        open={detailOpen}
-        onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
-        title={selectedRecord?.productLabel || ''}
-        subtitle={selectedRecord?.productId || ''}
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl">Close</Button>
-          </div>
-        }
-      >
-        {selectedRecord && (
-          <div className="space-y-3">
-            {/* Product details */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Product Details</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Product ID</span>
-                  <span className="font-mono text-gray-700">{selectedRecord.productId}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Product</span>
-                  <span className="font-medium text-gray-900">{selectedRecord.productLabel}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Brand / Variant</span>
-                  <span className="text-gray-700">{selectedRecord.brand || '—'}{selectedRecord.variant ? `, ${selectedRecord.variant}` : ''}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Category</span>
-                  <span className="text-gray-700">{selectedRecord.category}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Merchant</span>
-                  <span className="text-gray-900 font-medium">{selectedRecord.merchantName}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Unit / Weight</span>
-                  <span className="text-gray-700">{selectedRecord.unit}{selectedRecord.weight ? `, ${selectedRecord.weight}` : ''}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Status</span>
-                  <span className={`inline-flex items-center gap-1 text-xs font-semibold ${statusBadge(stockStatus(selectedRecord)).props.className || ''}`}>
-                    <span className={`w-2 h-2 rounded-full ${stockStatus(selectedRecord).dot}`} />
-                    {stockStatus(selectedRecord).label}
-                  </span>
-                </div>
+                {/* Pagination */}
+                {sortedData.length > pageSize && (
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>Showing {(page - 1) * pageSize + 1}–{Math.min(page * pageSize, sortedData.length)} of {sortedData.length}</span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page <= 1} onClick={() => setPage(page - 1)}><ChevronLeft size={14} /></Button>
+                      <span className="px-2 text-gray-600">{page} / {totalPages}</span>
+                      <Button variant="outline" size="icon" className="h-7 w-7 rounded-md" disabled={page >= totalPages} onClick={() => setPage(page + 1)}><ChevronRight size={14} /></Button>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-
-            {/* Stock + pricing */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Stock & Pricing</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Current Stock</span>
-                  <span className={`font-mono font-bold text-lg ${safe(selectedRecord.computedCurrentQty) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                    {fmt(safe(selectedRecord.computedCurrentQty))} <span className="text-[10px] text-gray-400">{selectedRecord.unit}</span>
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Min Stock Level</span>
-                  <span className="font-mono text-gray-700">{selectedRecord.minStock} {selectedRecord.unit}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Stock Value</span>
-                  <span className={`font-mono font-bold ${safe(selectedRecord.currentStockValue) < 0 ? 'text-red-600' : 'text-gray-900'}`}>UGX {fmt(safe(selectedRecord.currentStockValue))}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Unit Cost</span>
-                  <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitCost)}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Selling Price</span>
-                  <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitSellingPrice)}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500">Margin</span>
-                  <span className={`font-mono font-bold ${(selectedRecord.unitSellingPrice - selectedRecord.unitCost) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                    UGX {fmt(selectedRecord.unitSellingPrice - selectedRecord.unitCost)}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-gray-500">Commission</span>
-                  <span className="font-mono text-gray-700">{selectedRecord.commissionPercent}%</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Movement summary */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
-              <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement Summary</h3>
-              <div className="space-y-2 text-xs">
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500 flex items-center gap-1"><ArrowDownRight size={11} className="text-green-600" /> Received (In)</span>
-                  <span className="font-mono font-bold text-green-700">{fmt(safe(selectedRecord.inQty))}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500 flex items-center gap-1"><ArrowUpRight size={11} className="text-orange-600" /> Sent Out</span>
-                  <span className="font-mono font-bold text-orange-700">{fmt(safe(selectedRecord.outQty))}</span>
-                </div>
-                <div className="flex items-center justify-between py-1 border-b border-gray-100">
-                  <span className="text-gray-500 flex items-center gap-1"><TrendingDown size={11} className="text-red-500" /> Shrinkage</span>
-                  <span className="font-mono font-bold text-red-600">{fmt(safe(selectedRecord.shrinkQty))}</span>
-                </div>
-                <div className="flex items-center justify-between py-1">
-                  <span className="text-gray-500 flex items-center gap-1"><RotateCcw size={11} className="text-purple-500" /> RTV</span>
-                  <span className="font-mono font-bold text-purple-700">{fmt(safe(selectedRecord.rtvQty))}</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
-              Product details and stock can be edited in the Products tab. Use Inbound tab to receive new stock.
             </div>
           </div>
-        )}
-      </DetailSlideOver>
-
-      {/* CSV Import Dialog */}
-      <AnimatePresence>
-        {importOpen && (
-          <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setImportOpen(false)} />
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} transition={{ duration: 0.2 }}
-              className="fixed inset-0 z-50 flex items-center justify-center p-4">
-              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-                <h2 className="text-lg font-bold text-gray-900 mb-1">Import Products</h2>
-                <p className="text-xs text-gray-400 mb-4">Paste tab-separated data (TSV) with headers. Required: product label, unit cost, selling price.</p>
-                <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8} placeholder="Paste your data here..."
-                  className="w-full h-32 text-xs font-mono border border-gray-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] resize-none" />
-                <div className="flex justify-end gap-2 mt-3">
-                  <Button variant="outline" size="sm" onClick={() => { setImportOpen(false); setImportText('') }} className="rounded-lg text-xs">Cancel</Button>
-                  <Button size="sm" onClick={parseAndImport} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-lg text-xs">Import</Button>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
+        </PageTransition>
       </AnimatePresence>
-    </div>
+    )
+  }
+
+  // ════════════════════════════════════════
+  // ── RENDER: OVERVIEW ──
+  // ════════════════════════════════════════
+  return (
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          {/* ── Header ── */}
+          <OpsHeader
+            title="Stock"
+            description="What's on the shelves"
+            kpiCells={[
+              { label: 'STOCK VALUE', value: `UGX ${fmt(totalStockValue)}` },
+              { label: 'LOW STOCK', value: lowStockCount, highlight: lowStockCount > 0, highlightColor: 'orange' as const },
+              { label: 'OUT OF STOCK', value: outOfStockCount, highlight: outOfStockCount > 0, highlightColor: 'red' as const },
+            ]}
+            searchValue={search}
+            onSearchChange={handleSearchChange}
+            searchPlaceholder="Search products, vendors, IDs..."
+          />
+
+          {/* ── Action bar (below KPI, left-aligned) ── */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => setView('table')} disabled={data.length === 0}>
+              <Layers size={12} className="mr-1" /> View All
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={handleExportAll} disabled={data.length === 0}>
+              <Upload size={12} className="mr-1" /> Export
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => fileInputRef.current?.click()}>
+              <Upload size={12} className="mr-1" /> Import
+            </Button>
+            <input ref={fileInputRef} type="file" accept=".csv,.tsv,.txt" onChange={handleCSVUpload} className="hidden" />
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+              <HelpCircle size={12} className="mr-1" /> Help
+            </Button>
+          </div>
+
+          {/* ── Reorder alert banner ── */}
+          {(lowStockCount > 0 || outOfStockCount > 0) && (
+            <div className={`rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap ${outOfStockCount > 0 ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
+              <AlertTriangle size={16} className={outOfStockCount > 0 ? 'text-red-600 shrink-0' : 'text-orange-600 shrink-0'} />
+              <span className="text-xs text-gray-700 font-medium flex-1">
+                {outOfStockCount > 0 && `${outOfStockCount} product${outOfStockCount !== 1 ? 's' : ''} out of stock`}
+                {outOfStockCount > 0 && lowStockCount > 0 && ', '}
+                {lowStockCount > 0 && `${lowStockCount} product${lowStockCount !== 1 ? 's' : ''} below min stock`}
+                . Reorder now to avoid fulfillment delays.
+              </span>
+              <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-md bg-white" onClick={() => setView('table')}>
+                View All <ChevronRight size={11} className="ml-1" />
+              </Button>
+            </div>
+          )}
+
+          {/* ── Empty state ── */}
+          {data.length === 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+                <Package size={28} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">No products in stock</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
+                Products appear here once they're added in the Products tab and stock is received via Inbound. Use Import to bulk-add products from a CSV/TSV file.
+              </p>
+              <Button variant="outline" className="rounded-xl" onClick={() => fileInputRef.current?.click()}>
+                <Upload size={14} className="mr-1.5" /> Import CSV
+              </Button>
+            </div>
+          )}
+
+          {/* ── Search results (inline) ── */}
+          {search && data.length > 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {data.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">No products match &quot;{search}&quot;</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {data.slice(0, 10).map(p => {
+                    const status = stockStatus(p)
+                    const qty = safe(p.computedCurrentQty)
+                    return (
+                      <div key={p.id} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${status.dot}`} />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-semibold text-gray-900">{p.productLabel}</span>
+                          <span className="text-[10px] text-gray-400 ml-2">{p.productId}</span>
+                        </div>
+                        <span className="text-[10px] text-gray-500 shrink-0">{p.merchantName}</span>
+                        <span className={`text-[11px] font-mono font-bold shrink-0 ${qty < 0 ? 'text-red-600' : qty === 0 ? 'text-gray-400' : 'text-gray-900'}`}>{fmt(qty)}</span>
+                        <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                      </div>
+                    )
+                  })}
+                  {data.length > 10 && (
+                    <button onClick={() => setView('table')} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
+                      View all {data.length} products →
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Loading ── */}
+          {loading && <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-[#FF6B35] animate-spin" /></div>}
+
+          {/* ══ DETAIL SLIDE-OVER ══ */}
+          <DetailSlideOver
+            open={detailOpen}
+            onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
+            title={selectedRecord?.productLabel || ''}
+            subtitle={selectedRecord?.productId || ''}
+            width="lg"
+            footer={
+              <div className="flex gap-3 ml-auto">
+                <Button variant="outline" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl">Close</Button>
+              </div>
+            }
+          >
+            {selectedRecord && (
+              <div className="space-y-3">
+                {/* Product details */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Product Details</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Product ID</span>
+                      <span className="font-mono text-gray-700">{selectedRecord.productId}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Product</span>
+                      <span className="font-medium text-gray-900">{selectedRecord.productLabel}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Brand / Variant</span>
+                      <span className="text-gray-700">{selectedRecord.brand || '—'}{selectedRecord.variant ? `, ${selectedRecord.variant}` : ''}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Category</span>
+                      <span className="text-gray-700">{selectedRecord.category}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Merchant</span>
+                      <span className="text-gray-900 font-medium">{selectedRecord.merchantName}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Unit / Weight</span>
+                      <span className="text-gray-700">{selectedRecord.unit}{selectedRecord.weight ? `, ${selectedRecord.weight}` : ''}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Status</span>
+                      <span className={`inline-flex items-center gap-1 text-xs font-semibold`}>
+                        <span className={`w-2 h-2 rounded-full ${stockStatus(selectedRecord).dot}`} />
+                        {stockStatus(selectedRecord).label}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stock + pricing */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Stock & Pricing</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Current Stock</span>
+                      <span className={`font-mono font-bold text-lg ${safe(selectedRecord.computedCurrentQty) < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        {fmt(safe(selectedRecord.computedCurrentQty))} <span className="text-[10px] text-gray-400">{selectedRecord.unit}</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Min Stock Level</span>
+                      <span className="font-mono text-gray-700">{selectedRecord.minStock} {selectedRecord.unit}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Stock Value</span>
+                      <span className={`font-mono font-bold ${safe(selectedRecord.currentStockValue) < 0 ? 'text-red-600' : 'text-gray-900'}`}>UGX {fmt(safe(selectedRecord.currentStockValue))}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Unit Cost</span>
+                      <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitCost)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Selling Price</span>
+                      <span className="font-mono text-gray-700">UGX {fmt(selectedRecord.unitSellingPrice)}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Margin</span>
+                      <span className={`font-mono font-bold ${(selectedRecord.unitSellingPrice - selectedRecord.unitCost) >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                        UGX {fmt(selectedRecord.unitSellingPrice - selectedRecord.unitCost)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-gray-500">Commission</span>
+                      <span className="font-mono text-gray-700">{selectedRecord.commissionPercent}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Movement summary */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement Summary</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500 flex items-center gap-1"><ArrowDownRight size={11} className="text-green-600" /> Received (In)</span>
+                      <span className="font-mono font-bold text-green-700">{fmt(safe(selectedRecord.inQty))}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500 flex items-center gap-1"><ArrowUpRight size={11} className="text-orange-600" /> Sent Out</span>
+                      <span className="font-mono font-bold text-orange-700">{fmt(safe(selectedRecord.outQty))}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500 flex items-center gap-1"><TrendingDown size={11} className="text-red-500" /> Shrinkage</span>
+                      <span className="font-mono font-bold text-red-600">{fmt(safe(selectedRecord.shrinkQty))}</span>
+                    </div>
+                    <div className="flex items-center justify-between py-1">
+                      <span className="text-gray-500 flex items-center gap-1"><RotateCcw size={11} className="text-purple-500" /> RTV</span>
+                      <span className="font-mono font-bold text-purple-700">{fmt(safe(selectedRecord.rtvQty))}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs text-blue-700">
+                  Product details and stock can be edited in the Products tab. Use Inbound tab to receive new stock.
+                </div>
+              </div>
+            )}
+          </DetailSlideOver>
+
+          {/* ══ HELP DIALOG ══ */}
+          <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Stock</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Real-time view of what's on the shelves. Stock is computed from inbound, outbound, shrinkage, and RTV movements.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-3 py-2 text-xs text-gray-700">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">View All</p>
+                  <p>Opens a full-page table with all products, filter chips (In Stock, Low, Out, Negative), vendor and category dropdowns, ABC classification, stock age, and pagination.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Export</p>
+                  <p>Download the current stock list as a CSV file. Includes product ID, label, category, vendor, quantity, cost, price, and status.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Import</p>
+                  <p>Bulk-import products from a TSV/CSV file. Paste tab-separated data with headers: product label, unit cost, selling price (required).</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Stock Indicators</p>
+                  <p>Colored dots show stock health: green = in stock, amber = low (at or below min), gray = out of stock, red = negative (data error).</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">ABC Classification</p>
+                  <p>Top 20% by stock value = A (high value), next 30% = B, bottom 50% = C. Helps prioritize cycle counts and reorder decisions.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Profile</p>
+                  <p>Click any row to see product details, stock and pricing breakdown, and movement summary (received, sent, shrinkage, RTV).</p>
+                </div>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* ══ CSV IMPORT DIALOG ══ */}
+          <AnimatePresence>
+            {importOpen && (
+              <>
+                <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50" onClick={() => setImportOpen(false)} />
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+                    <h2 className="text-lg font-bold text-gray-900 mb-1">Import Products</h2>
+                    <p className="text-xs text-gray-400 mb-4">Paste tab-separated data (TSV) with headers. Required: product label, unit cost, selling price.</p>
+                    <textarea value={importText} onChange={e => setImportText(e.target.value)} rows={8} placeholder="Paste your data here..."
+                      className="w-full h-32 text-xs font-mono border border-gray-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-[#FF6B35]/30 focus:border-[#FF6B35] resize-none" />
+                    <div className="flex justify-end gap-2 mt-3">
+                      <Button variant="outline" size="sm" onClick={() => { setImportOpen(false); setImportText('') }} className="rounded-lg text-xs">Cancel</Button>
+                      <Button size="sm" onClick={parseAndImport} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-lg text-xs">Import</Button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </AnimatePresence>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
