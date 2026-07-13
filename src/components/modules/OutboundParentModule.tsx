@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
   AlertTriangle, ChevronRight, X, Inbox, Upload, Layers, ShieldAlert,
-  HelpCircle,
+  HelpCircle, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -149,7 +151,7 @@ export default function OutboundParentModule({ onNavigate }: OutboundParentModul
   const [products, setProducts] = useState<Product[]>([])
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<OutboundRecord | null>(null)
   const [showCompleted, setShowCompleted] = useState(false)
@@ -299,7 +301,7 @@ export default function OutboundParentModule({ onNavigate }: OutboundParentModul
       })
       if (res.ok) {
         toast.success('Order created. It appears in the Intake Inbox for validation.')
-        setCreateOpen(false)
+        setView('list')
         setForm({ merchantId: '', productId: '', customerName: '', customerContact: '', customerEmail: '', customerAddress: '', qty: '1', paymentMethod: 'Cash', createdBy: 'admin' })
         setActiveTab('intake')
         fetchData()
@@ -352,26 +354,129 @@ export default function OutboundParentModule({ onNavigate }: OutboundParentModul
     else setSelectedIds(new Set())
   }
 
+  // ── Render: New Order (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">New Order</h1>
+                  <p className="text-[11px] text-gray-500">Creates an order in the Intake Inbox for validation before release</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Order Details</h2>
+                  <p className="text-xs text-gray-500">Select merchant and product, then enter customer and payment information. The order enters the Intake Inbox for risk validation before release.</p>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
+                  <select
+                    value={form.merchantId}
+                    onChange={e => setForm({ ...form, merchantId: e.target.value, productId: '' })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                  >
+                    <option value="">Select merchant...</option>
+                    {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product <span className="text-red-400">*</span></Label>
+                  <select
+                    value={form.productId}
+                    onChange={e => setForm({ ...form, productId: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                    disabled={!form.merchantId}
+                  >
+                    <option value="">{form.merchantId ? 'Select product...' : 'Select merchant first'}</option>
+                    {filteredProducts.map(p => <option key={p.productId} value={p.productId}>{p.productLabel} ({formatCurrency(p.unitSellingPrice)})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Customer Name <span className="text-red-400">*</span></Label>
+                    <Input value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Contact <span className="text-red-400">*</span></Label>
+                    <Input value={form.customerContact} onChange={e => setForm({ ...form, customerContact: e.target.value })} className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Email</Label>
+                    <Input value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address</Label>
+                    <Input value={form.customerAddress} onChange={e => setForm({ ...form, customerAddress: e.target.value })} className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Qty</Label>
+                    <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Payment Method</Label>
+                    <select
+                      value={form.paymentMethod}
+                      onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <option value="Cash">Cash (COD)</option>
+                      <option value="M-Pesa">M-Pesa</option>
+                      <option value="Airtel Money">Airtel Money</option>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSubmit}>Create Order</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <div className="space-y-3">
-      {/* Header */}
-      <OpsHeader
-        title="Outbound"
-        description="Intake → Pick → Pack → Stage → Dispatch"
-        kpiCells={[
-          { label: 'INTAKE', value: intakeItems.length, highlight: intakeItems.length > 0, highlightColor: 'orange' as const },
-          { label: 'TO PICK', value: laneData[0].items.length, highlight: laneData[0].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'TO PACK', value: laneData[1].items.length, highlight: laneData[1].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'TO STAGE', value: laneData[2].items.length, highlight: laneData[2].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'TO DISPATCH', value: laneData[3].items.length, highlight: laneData[3].items.length > 0, highlightColor: 'orange' as const },
-          { label: 'DELIVERED', value: completedItems.filter(r => r.status === 'delivered').length },
-        ]}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by order, customer, or product..."
-        actionLabel="New Order"
-        onAction={() => setCreateOpen(true)}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          {/* Header */}
+          <OpsHeader
+            title="Outbound"
+            description="Intake → Pick → Pack → Stage → Dispatch"
+            kpiCells={[
+              { label: 'INTAKE', value: intakeItems.length, highlight: intakeItems.length > 0, highlightColor: 'orange' as const },
+              { label: 'TO PICK', value: laneData[0].items.length, highlight: laneData[0].items.length > 0, highlightColor: 'orange' as const },
+              { label: 'TO PACK', value: laneData[1].items.length, highlight: laneData[1].items.length > 0, highlightColor: 'orange' as const },
+              { label: 'TO STAGE', value: laneData[2].items.length, highlight: laneData[2].items.length > 0, highlightColor: 'orange' as const },
+              { label: 'TO DISPATCH', value: laneData[3].items.length, highlight: laneData[3].items.length > 0, highlightColor: 'orange' as const },
+              { label: 'DELIVERED', value: completedItems.filter(r => r.status === 'delivered').length },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by order, customer, or product..."
+          />
+
+          {/* Action bar (below KPI, left-aligned) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => setView('add')}>
+              <Plus size={12} className="mr-1" /> New Order
+            </Button>
+          </div>
 
       {/* Tab switcher */}
       <div className="flex items-center gap-1 border-b border-gray-200">
@@ -740,82 +845,6 @@ export default function OutboundParentModule({ onNavigate }: OutboundParentModul
         </div>
       )}
 
-      {/* Create order slide-over */}
-      <DetailSlideOver
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="New Order"
-        subtitle="Creates an order in the Intake Inbox for validation before release"
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Create Order</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
-            <select
-              value={form.merchantId}
-              onChange={e => setForm({ ...form, merchantId: e.target.value, productId: '' })}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">Select merchant...</option>
-              {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>)}
-            </select>
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product <span className="text-red-400">*</span></Label>
-            <select
-              value={form.productId}
-              onChange={e => setForm({ ...form, productId: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-              disabled={!form.merchantId}
-            >
-              <option value="">{form.merchantId ? 'Select product...' : 'Select merchant first'}</option>
-              {filteredProducts.map(p => <option key={p.productId} value={p.productId}>{p.productLabel} ({formatCurrency(p.unitSellingPrice)})</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Customer Name <span className="text-red-400">*</span></Label>
-              <Input value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Contact <span className="text-red-400">*</span></Label>
-              <Input value={form.customerContact} onChange={e => setForm({ ...form, customerContact: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Email</Label>
-              <Input value={form.customerEmail} onChange={e => setForm({ ...form, customerEmail: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address</Label>
-              <Input value={form.customerAddress} onChange={e => setForm({ ...form, customerAddress: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Qty</Label>
-              <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Payment Method</Label>
-              <select
-                value={form.paymentMethod}
-                onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="Cash">Cash (COD)</option>
-                <option value="M-Pesa">M-Pesa</option>
-                <option value="Airtel Money">Airtel Money</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      </DetailSlideOver>
-
       {/* Order detail slide-over */}
       <DetailSlideOver
         open={detailOpen}
@@ -1109,6 +1138,8 @@ export default function OutboundParentModule({ onNavigate }: OutboundParentModul
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
