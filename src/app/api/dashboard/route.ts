@@ -63,22 +63,29 @@ export async function GET(request: NextRequest) {
     const exceptionRate = totalOrders > 0 ? Math.round((exceptionCount / totalOrders) * 100) : 0
 
     // ── Financial (filtered by period) ──
-    const payments = await db.merchantPayment.findMany({ where: { createdAt: { gte: startDate } }, orderBy: { createdAt: 'desc' } })
-    const totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0)
-    // Commission: earned on DELIVERED orders, not on stock sitting on shelves.
-    // Was: allProducts.reduce(... currentStock * unitSellingPrice * commissionPercent)
-    // That computed commission on unsold inventory — meaningless.
+    // Revenue = delivered sales value (money flowing through the system from customers)
     const deliveredSalesAgg = await db.outboundRecord.aggregate({
       where: { status: 'delivered', deliveredAt: { gte: startDate } },
       _sum: { saleAmount: true },
     })
     const deliveredSalesValue = deliveredSalesAgg._sum.saleAmount ?? 0
+    // Commission: our cut of delivered sales
     const avgCommissionPercent = allProducts.length > 0
       ? allProducts.reduce((s, p) => s + p.commissionPercent, 0) / allProducts.length / 100
       : 0
     const totalCommission = Math.round(deliveredSalesValue * avgCommissionPercent)
     const avgOrderValue = deliveredCount > 0 ? Math.round(deliveredSalesValue / deliveredCount) : 0
     const revenuePerMerchant = totalMerchants > 0 ? Math.round(deliveredSalesValue / totalMerchants) : 0
+
+    // Shrinkage and returns costs (our losses, filtered by period)
+    const shrinkageValueAgg = await db.shrinkageRecord.aggregate({ where: { createdAt: { gte: startDate } }, _sum: { totalValue: true } })
+    const totalShrinkageValue = shrinkageValueAgg._sum.totalValue ?? 0
+    const returnsValueAgg = await db.rTVRecord.aggregate({ where: { createdAt: { gte: startDate } }, _sum: { qty: true } })
+    const totalReturnQty = returnsValueAgg._sum.qty ?? 0
+    const avgProductCost = allProducts.length > 0 ? allProducts.reduce((s, p) => s + p.unitCost, 0) / allProducts.length : 0
+    const totalReturnValue = Math.round(totalReturnQty * avgProductCost)
+    // Net profit = our commission earnings minus our losses
+    const netProfit = totalCommission - totalShrinkageValue - totalReturnValue
 
     // ── COD Metrics (filtered by period) ──
     const codCollectedAgg = await db.outboundRecord.aggregate({
@@ -276,30 +283,30 @@ export async function GET(request: NextRequest) {
     const totalShrinkageQty = await db.shrinkageRecord.aggregate({ where: { createdAt: { gte: startDate } }, _sum: { qty: true } })
     const shrinkageByReason = await db.shrinkageRecord.groupBy({ by: ['reason'], where: { createdAt: { gte: startDate } }, _sum: { qty: true }, _count: { reason: true } })
 
-    // ── Merchant Profitability (revenue - commission - shrinkage - returns) ──
+    // ── Merchant Profitability (revenue = delivered sales, net = what merchant earns after our cut) ──
     const merchantProfitability: Array<{ name: string; revenue: number; commission: number; shrinkage: number; returns: number; net: number }> = []
     const allMerchants = await db.merchant.findMany({ where: { isActive: true }, select: { merchantId: true, businessName: true } })
     for (const m of allMerchants.slice(0, 10)) {
-      const mPayments = await db.merchantPayment.aggregate({ where: { merchantId: m.merchantId }, _sum: { amount: true } })
-      const mRevenue = mPayments._sum.amount ?? 0
-      // Commission: sum of (saleAmount * product.commissionPercent / 100) for this merchant's products
-      const mProducts = await db.product.findMany({ where: { merchantId: m.merchantId }, select: { commissionPercent: true, productId: true } })
+      // Revenue = delivered sales value for this merchant's products
       const mOutbound = await db.outboundRecord.aggregate({
-        where: { businessName: m.businessName, status: 'delivered' },
+        where: { vendorId: m.merchantId, status: 'delivered' },
         _sum: { saleAmount: true },
       })
       const mSalesValue = mOutbound._sum.saleAmount ?? 0
+      // Commission: our cut
+      const mProducts = await db.product.findMany({ where: { merchantId: m.merchantId }, select: { commissionPercent: true, unitCost: true } })
       const avgComm = mProducts.length > 0 ? mProducts.reduce((s, p) => s + p.commissionPercent, 0) / mProducts.length / 100 : 0
       const mCommission = Math.round(mSalesValue * avgComm)
       // Shrinkage for this merchant
       const mShrinkageAgg = await db.shrinkageRecord.aggregate({ where: { merchantId: m.merchantId }, _sum: { totalValue: true } })
       const mShrinkage = mShrinkageAgg._sum.totalValue ?? 0
-      // Returns for this merchant (approx: RTV qty * avg unitCost)
-      const mRtvAgg = await db.rTVRecord.aggregate({ where: { merchantName: m.businessName }, _sum: { qty: true } })
-      const avgUnitCost = mProducts.length > 0 ? (await db.product.aggregate({ where: { merchantId: m.merchantId }, _avg: { unitCost: true } }))._avg.unitCost ?? 0 : 0
-      const mReturns = Math.round((mRtvAgg._sum.qty ?? 0) * avgUnitCost)
-      const mNet = mRevenue - mCommission - mShrinkage - mReturns
-      merchantProfitability.push({ name: m.businessName, revenue: mRevenue, commission: mCommission, shrinkage: mShrinkage, returns: mReturns, net: mNet })
+      // Returns for this merchant
+      const mRtvAgg = await db.rTVRecord.aggregate({ where: { merchantId: m.merchantId }, _sum: { qty: true } })
+      const mAvgUnitCost = mProducts.length > 0 ? mProducts.reduce((s, p) => s + p.unitCost, 0) / mProducts.length : 0
+      const mReturns = Math.round((mRtvAgg._sum.qty ?? 0) * mAvgUnitCost)
+      // Net = what the merchant earns after our commission and their costs
+      const mNet = mSalesValue - mCommission - mShrinkage - mReturns
+      merchantProfitability.push({ name: m.businessName, revenue: mSalesValue, commission: mCommission, shrinkage: mShrinkage, returns: mReturns, net: mNet })
     }
     merchantProfitability.sort((a, b) => b.net - a.net)
 
@@ -506,10 +513,12 @@ export async function GET(request: NextRequest) {
       stats: {
         totalMerchants, totalProducts, totalCustomers, totalDrivers,
         activeDrivers: totalDrivers,
-        totalRevenue: totalRevenue || 0,
+        totalRevenue: deliveredSalesValue,
         totalCommission: Math.round(totalCommission),
+        netProfit,
         avgOrderValue, revenuePerMerchant,
         totalStockUnits, totalStockValue: Math.round(totalStockValue),
+        totalShrinkageValue, totalReturnValue,
       },
       inventory: { healthy: healthyStockProducts, low: lowStockProducts, critical: criticalStockProducts },
       orders: { total: totalOrders, pending: pendingCount, dispatched: dispatchedCount, delivered: deliveredCount, fulfillmentRate },

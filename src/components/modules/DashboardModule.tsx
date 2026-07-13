@@ -24,6 +24,7 @@ interface DashboardData {
     totalMerchants: number; totalProducts: number; totalCustomers: number; totalDrivers: number
     activeDrivers: number; totalRevenue: number; totalCommission: number
     avgOrderValue: number; revenuePerMerchant: number; totalStockUnits: number; totalStockValue: number
+    netProfit: number; totalShrinkageValue: number; totalReturnValue: number
   }
   inventory: { healthy: number; low: number; critical: number }
   orders: { total: number; pending: number; dispatched: number; delivered: number; fulfillmentRate: number }
@@ -32,8 +33,12 @@ interface DashboardData {
   onTimeRate: number
   exceptionCount: number
   exceptionRate: number
+  firstAttemptRate?: number
+  avgCycleTimeHours?: number
   revenueByMonth: Array<{ month: string; revenue: number; commissions: number }>
   merchantProfitability: Array<{ name: string; revenue: number; commission: number; shrinkage: number; returns: number; net: number }>
+  orderStatusDistribution?: Array<{ status: string; count: number }>
+  shrinkage?: { totalQty: number; byReason: Array<{ reason: string; qty: number; count: number }> }
   pulse: {
     streaks: {
       daysWithoutStockout: number; stockoutStreakHasData: boolean
@@ -154,42 +159,133 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
     setExporting(true)
     try {
       const rows: string[] = []
-      rows.push('Kwanza ERP, Dashboard Export')
+      const now = new Date()
+      // ── Header ──
+      rows.push('KWANZA ERP — OPERATIONS DASHBOARD REPORT')
+      rows.push(`Generated: ${now.toLocaleString('en-UG')}`)
       rows.push(`Period: ${period}`)
-      rows.push(`Generated: ${new Date().toLocaleString('en-UG')}`)
+      rows.push(`Report By: ${typeof window !== 'undefined' ? 'System User' : 'System'}`)
       rows.push('')
-      rows.push('KPI Summary')
-      rows.push(`Revenue,${data.stats.totalRevenue}`)
-      rows.push(`Commission,${data.stats.totalCommission}`)
-      rows.push(`Orders,${data.orders.total}`)
-      rows.push(`Delivered,${data.orders.delivered}`)
+      rows.push('═'.repeat(60))
+      rows.push('')
+
+      // ── Executive Summary ──
+      rows.push('1. EXECUTIVE SUMMARY')
+      rows.push('-'.repeat(40))
+      rows.push(`Total Revenue (Delivered Sales),${data.stats.totalRevenue}`)
+      rows.push(`Commission Earned,${data.stats.totalCommission}`)
+      rows.push(`Net Profit (Commission - Shrinkage - Returns),${data.stats.netProfit || 0}`)
+      rows.push(`Average Order Value,${data.stats.avgOrderValue}`)
       rows.push(`Fulfillment Rate,${data.orders.fulfillmentRate}%`)
       rows.push(`On-Time Rate,${data.onTimeRate}%`)
-      rows.push(`Avg Order Value,${data.stats.avgOrderValue}`)
+      rows.push(`Exception Rate,${data.exceptionRate}%`)
+      rows.push(`First-Attempt Success Rate,${data.firstAttemptRate || 0}%`)
+      rows.push(`Avg Cycle Time (hours),${data.avgCycleTimeHours || 0}`)
       rows.push(`Stock Value,${data.stats.totalStockValue}`)
       rows.push(`Active Merchants,${data.stats.totalMerchants}`)
-      rows.push(`COD Collected,${data.cod.collectedTotal}`)
-      rows.push(`COD Pending,${data.cod.pendingBankings}`)
-      rows.push(`Exceptions,${data.exceptionCount}`)
+      rows.push(`Active Products,${data.stats.totalProducts}`)
+      rows.push(`Active Drivers,${data.stats.activeDrivers}`)
+      rows.push(`Total Customers,${data.stats.totalCustomers}`)
       rows.push('')
-      rows.push('Merchant Profitability')
-      rows.push('Merchant,Revenue,Commission,Shrinkage,Returns,Net')
+
+      // ── Period Comparison ──
+      rows.push('2. PERIOD COMPARISON (vs Last Month)')
+      rows.push('-'.repeat(40))
+      rows.push(`Revenue Change,${data.comparison.revenueChange}%`)
+      rows.push(`Orders Change,${data.comparison.ordersChange}%`)
+      rows.push(`Stock Value Change,${data.comparison.stockValueChange}%`)
+      rows.push(`Avg Order Value Change,${data.comparison.avgOrderChange}%`)
+      rows.push('')
+
+      // ── Order Status ──
+      rows.push('3. ORDER STATUS DISTRIBUTION')
+      rows.push('-'.repeat(40))
+      rows.push('Status,Count')
+      rows.push(`Pending,${data.orders.pending}`)
+      rows.push(`Dispatched,${data.orders.dispatched}`)
+      rows.push(`Delivered,${data.orders.delivered}`)
+      ;(data.orderStatusDistribution || []).forEach(s => {
+        if (!['pending', 'dispatched', 'delivered'].includes(s.status)) {
+          rows.push(`${s.status},${s.count}`)
+        }
+      })
+      rows.push(`Total Orders,${data.orders.total}`)
+      rows.push('')
+
+      // ── Inventory Health ──
+      rows.push('4. INVENTORY HEALTH')
+      rows.push('-'.repeat(40))
+      rows.push(`Healthy Products,${data.inventory.healthy}`)
+      rows.push(`Low Stock Products,${data.inventory.low}`)
+      rows.push(`Critical (Out of Stock),${data.inventory.critical}`)
+      rows.push(`Total Stock Units,${data.stats.totalStockUnits}`)
+      rows.push(`Total Stock Value,${data.stats.totalStockValue}`)
+      rows.push('')
+
+      // ── COD Reconciliation ──
+      rows.push('5. COD RECONCILIATION')
+      rows.push('-'.repeat(40))
+      rows.push(`COD Collected,${data.cod.collectedTotal}`)
+      rows.push(`COD Banked,${data.cod.banked}`)
+      rows.push(`COD Pending,${data.cod.pendingBankings}`)
+      rows.push(`Banking Rate,${data.cod.bankingRate}%`)
+      rows.push('')
+
+      // ── Merchant Profitability ──
+      rows.push('6. MERCHANT PROFITABILITY')
+      rows.push('-'.repeat(40))
+      rows.push('Merchant,Delivered Sales,Commission (Our Cut),Shrinkage,Returns,Merchant Net')
       data.merchantProfitability.forEach(m => {
-        rows.push(`${m.name},${m.revenue},${m.commission},${m.shrinkage},${m.returns},${m.net}`)
+        rows.push(`"${m.name}",${m.revenue},${m.commission},${m.shrinkage},${m.returns},${m.net}`)
       })
       rows.push('')
-      rows.push('Revenue by Month')
+
+      // ── Revenue Trend (6 months) ──
+      rows.push('7. REVENUE TREND (6 MONTHS)')
+      rows.push('-'.repeat(40))
       rows.push('Month,Revenue,Commission')
       data.revenueByMonth.forEach(m => {
         rows.push(`${m.month},${m.revenue},${m.commissions}`)
       })
+      rows.push('')
+
+      // ── Shrinkage Summary ──
+      rows.push('8. SHRINKAGE SUMMARY')
+      rows.push('-'.repeat(40))
+      rows.push(`Total Shrinkage Qty,${data.shrinkage?.totalQty || 0}`)
+      rows.push(`Total Shrinkage Value,${data.stats.totalShrinkageValue || 0}`)
+      rows.push('Reason,Qty,Count')
+      ;(data.shrinkage?.byReason || []).forEach(s => {
+        rows.push(`${s.reason},${s.qty},${s.count}`)
+      })
+      rows.push('')
+
+      // ── System Status ──
+      rows.push('9. SYSTEM STATUS')
+      rows.push('-'.repeat(40))
+      rows.push('Module,Status,Label')
+      if (data.inventory.critical > 0) rows.push(`Inventory,Critical,${data.inventory.critical} out of stock`)
+      else if (data.inventory.low > 0) rows.push(`Inventory,Warning,${data.inventory.low} running low`)
+      else rows.push('Inventory,OK,All healthy')
+      if (data.orders.pending > 0) rows.push(`Outbound,Active,${data.orders.pending} in progress`)
+      else rows.push('Outbound,Quiet,No active orders')
+      if (data.cod.pendingBankings > 0) rows.push(`Payments,Warning,${data.cod.pendingBankings} unbanked`)
+      else rows.push('Payments,OK,All banked')
+      if (data.exceptionCount > 0) rows.push(`Returns,Critical,${data.exceptionCount} exceptions`)
+      else rows.push('Returns,OK,No exceptions')
+      rows.push(`Drivers,${data.stats.activeDrivers > 0 ? 'OK' : 'Quiet'},${data.stats.activeDrivers} active`)
+      rows.push('')
+
+      rows.push('═'.repeat(60))
+      rows.push('End of Report')
+      rows.push(`This report was generated by Kwanza ERP on ${now.toLocaleString('en-UG')}`)
 
       const csv = rows.join('\n')
       const blob = new Blob([csv], { type: 'text/csv' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `kwanza-dashboard-${period.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`
+      a.download = `kwanza-dashboard-${period.replace(/\s+/g, '-').toLowerCase()}-${now.toISOString().slice(0, 10)}.csv`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -210,8 +306,8 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
     )
   }
 
-  // Calculate net profit from merchant profitability
-  const totalNet = data.merchantProfitability.reduce((s, m) => s + m.net, 0)
+  // Use net profit from API (commission - shrinkage - returns = our earnings)
+  const totalNet = data.stats.netProfit || 0
 
   return (
     <div className="space-y-3">
