@@ -1,20 +1,25 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useEffect, useState, useCallback } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Search, Package, Plus, Trash2, Edit3, Boxes, AlertTriangle, ChevronDown, ChevronRight, HelpCircle } from 'lucide-react'
+import {
+  Search, Package, Plus, Trash2, Edit3, AlertTriangle,
+  HelpCircle, Layers, ArrowLeft as BackIcon,
+} from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
-import { formatCurrency } from '@/lib/currency'
+import PageTransition from '@/components/shared/PageTransition'
+import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+
+// ── Types ──
 
 interface Product {
   id: string
@@ -43,55 +48,125 @@ interface Merchant {
   businessName: string
 }
 
+// ── Constants ──
+
+const FILTER_CHIPS = [
+  { key: 'all', label: 'All' },
+  { key: 'active', label: 'Active' },
+  { key: 'inactive', label: 'Inactive' },
+  { key: 'low_stock', label: 'Low Stock' },
+  { key: 'out_of_stock', label: 'Out of Stock' },
+]
+
+const CATEGORIES = ['Produce', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Electronics', 'Personal Care', 'Other']
+
+const emptyForm = {
+  productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
+  unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
+}
+
+// ── Helpers ──
+
+const stockLabel = (p: Product): string => {
+  if (!p.isActive) return 'Inactive'
+  if (p.currentStock === 0) return 'Out of stock'
+  if (p.currentStock <= p.minStock) return `Low (${p.currentStock})`
+  return `In stock (${p.currentStock})`
+}
+
+const stockColor = (p: Product): string => {
+  if (!p.isActive) return 'text-gray-400'
+  if (p.currentStock === 0) return 'text-red-600'
+  if (p.currentStock <= p.minStock) return 'text-orange-600'
+  return 'text-green-700'
+}
+
+const stockDot = (p: Product): string => {
+  if (!p.isActive) return 'bg-gray-300'
+  if (p.currentStock === 0) return 'bg-red-500'
+  if (p.currentStock <= p.minStock) return 'bg-orange-500'
+  return 'bg-green-500'
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════════
+
 export default function ProductsModule() {
   const [data, setData] = useState<Product[]>([])
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [search, setSearch] = useState('')
-  const [open, setOpen] = useState(false)
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [activeFilter, setActiveFilter] = useState('all')
+  const [loading, setLoading] = useState(true)
+  const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
-  const [helpOpen, setHelpOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [form, setForm] = useState({
-    productLabel: '',
-    description: '',
-    brand: '',
-    variant: '',
-    category: '',
-    merchantId: '',
-    merchantName: '',
-    unit: 'pcs',
-    weight: '',
-    minStock: '10',
-    unitCost: '',
-    unitSellingPrice: '',
-    commissionPercent: '0',
-    isActive: true,
-  })
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [form, setForm] = useState(emptyForm)
 
-  const fetchData = () => {
-    fetch(`/api/products?search=${search}`).then(r => r.json()).then(d => setData(Array.isArray(d) ? d : []))
-  }
+  // ── Data fetching ──
+  const fetchData = useCallback(() => {
+    setLoading(true)
+    fetch(`/api/products?search=${search}`)
+      .then(r => r.json())
+      .then(d => { setData(Array.isArray(d) ? d : []); setLoading(false) })
+      .catch(() => { setLoading(false) })
+  }, [search])
 
   useEffect(() => {
     fetchData()
     fetch('/api/merchants').then(r => r.json()).then(d => setMerchants(Array.isArray(d) ? d : []))
   }, [])
 
-  useEffect(() => { fetchData() }, [search])
+  useEffect(() => { fetchData() }, [fetchData])
 
+  // ── Derived stats ──
   const totalProducts = data.length
   const activeProducts = data.filter(p => p.isActive).length
-  const lowStockProducts = data.filter(p => p.currentStock <= p.minStock).length
+  const lowStockProducts = data.filter(p => p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock).length
+  const outOfStockProducts = data.filter(p => p.isActive && p.currentStock === 0).length
   const totalStockValue = data.reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
 
-  const stats = [
-    { label: 'Total Products', value: totalProducts, icon: Package, color: '#FF6B35', bg: 'bg-orange-500/20', border: 'border-orange-400/30', gradient: 'from-orange-500/10 to-orange-500/5' },
-    { label: 'Active', value: activeProducts, icon: Boxes, color: '#22C55E', bg: 'bg-green-500/20', border: 'border-green-400/30', gradient: 'from-green-500/10 to-green-500/5' },
-    { label: 'Low Stock', value: lowStockProducts, icon: AlertTriangle, color: '#EF4444', bg: 'bg-red-500/20', border: 'border-red-400/30', gradient: 'from-red-500/10 to-red-500/5' },
-    { label: 'Stock Value', value: formatCurrency(totalStockValue), icon: Package, color: '#3B82F6', bg: 'bg-blue-500/20', border: 'border-blue-400/30', gradient: 'from-blue-500/10 to-blue-500/5' },
-  ]
+  // ── Filtered data ──
+  const filteredData = data.filter(p => {
+    if (activeFilter === 'active') return p.isActive
+    if (activeFilter === 'inactive') return !p.isActive
+    if (activeFilter === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
+    if (activeFilter === 'out_of_stock') return p.isActive && p.currentStock === 0
+    return true
+  })
+
+  // ── Actions ──
+  const openCreate = () => {
+    setEditing(null)
+    setForm(emptyForm)
+    setFormOpen(true)
+  }
+
+  const handleEdit = (p: Product) => {
+    setEditing(p)
+    setForm({
+      productLabel: p.productLabel,
+      description: p.description || '',
+      brand: p.brand || '',
+      variant: p.variant || '',
+      category: p.category,
+      merchantId: p.merchantId,
+      merchantName: p.merchantName,
+      unit: p.unit,
+      weight: p.weight || '',
+      minStock: String(p.minStock),
+      unitCost: String(p.unitCost),
+      unitSellingPrice: String(p.unitSellingPrice),
+      commissionPercent: String(p.commissionPercent),
+      isActive: p.isActive,
+    })
+    setProfileOpen(false)
+    setFormOpen(true)
+  }
 
   const handleSubmit = async () => {
     if (!form.productLabel || !form.category || !form.merchantId) {
@@ -118,51 +193,19 @@ export default function ProductsModule() {
     }
     try {
       if (editing) {
-        await fetch('/api/products', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: editing.id, ...payload }),
-        })
+        await fetch('/api/products', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editing.id, ...payload }) })
         toast.success('Product updated')
       } else {
-        await fetch('/api/products', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        })
+        await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         toast.success('Product created')
       }
-      setOpen(false)
+      setFormOpen(false)
       setEditing(null)
-      setForm({
-        productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
-        unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
-      })
+      setForm(emptyForm)
       fetchData()
     } catch {
       toast.error('Failed to save product')
     }
-  }
-
-  const handleEdit = (item: Product) => {
-    setEditing(item)
-    setForm({
-      productLabel: item.productLabel,
-      description: item.description || '',
-      brand: item.brand || '',
-      variant: item.variant || '',
-      category: item.category,
-      merchantId: item.merchantId,
-      merchantName: item.merchantName,
-      unit: item.unit,
-      weight: item.weight || '',
-      minStock: String(item.minStock),
-      unitCost: String(item.unitCost),
-      unitSellingPrice: String(item.unitSellingPrice),
-      commissionPercent: String(item.commissionPercent),
-      isActive: item.isActive,
-    })
-    setOpen(true)
   }
 
   const handleDelete = async () => {
@@ -172,26 +215,11 @@ export default function ProductsModule() {
       toast.success('Product deleted')
       setDeleteOpen(false)
       setDeletingId(null)
+      setProfileOpen(false)
       fetchData()
     } catch {
       toast.error('Failed to delete product')
     }
-  }
-
-  const openCreate = () => {
-    setEditing(null)
-    setForm({
-      productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
-      unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
-    })
-    setOpen(true)
-  }
-
-  const stockBadge = (p: Product) => {
-    if (!p.isActive) return <Badge className="bg-gray-100 text-gray-500 border-0 text-[10px]">Inactive</Badge>
-    if (p.currentStock === 0) return <Badge className="bg-red-100 text-red-700 border-0 text-[10px]">Out of stock</Badge>
-    if (p.currentStock <= p.minStock) return <Badge className="bg-orange-100 text-orange-700 border-0 text-[10px]">Low ({p.currentStock})</Badge>
-    return <Badge className="bg-green-100 text-green-700 border-0 text-[10px]">In stock ({p.currentStock})</Badge>
   }
 
   const handleToggleActive = async (p: Product) => {
@@ -200,316 +228,406 @@ export default function ProductsModule() {
     fetchData()
   }
 
-  return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
-      <OpsHeader
-        title="Products"
-        description="Catalog"
-        kpiCells={[
-          { label: 'TOTAL', value: totalProducts },
-          { label: 'ACTIVE', value: activeProducts },
-          { label: 'LOW STOCK', value: lowStockProducts, highlight: lowStockProducts > 0, highlightColor: 'red' },
-          { label: 'STOCK VALUE', value: formatCurrency(totalStockValue) },
-        ]}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search products..."
-        actionLabel="Add Product"
-        onAction={openCreate}
-      >
-        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-          <HelpCircle size={12} className="mr-1" /> How does this work?
-        </Button>
-      </OpsHeader>
+  const handleExpand = (p: Product) => {
+    setSelectedProduct(p)
+    setProfileOpen(true)
+  }
 
-      {data.length === 0 ? (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center justify-center py-20">
-          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-            <Package size={32} className="text-gray-300" />
+  // ── Render ──
+  return (
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          {/* ── Header (no action button — action bar is below) ── */}
+          <OpsHeader
+            title="Products"
+            description="Catalog and stock"
+            kpiCells={[
+              { label: 'TOTAL', value: totalProducts },
+              { label: 'ACTIVE', value: activeProducts },
+              { label: 'LOW STOCK', value: lowStockProducts, highlight: lowStockProducts > 0, highlightColor: 'orange' as const },
+              { label: 'OUT OF STOCK', value: outOfStockProducts, highlight: outOfStockProducts > 0, highlightColor: 'red' as const },
+              { label: 'STOCK VALUE', value: formatCurrencyCompact(totalStockValue) },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search products..."
+          />
+
+          {/* ── Action bar (below KPI, left-aligned) ── */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
+              <Plus size={12} className="mr-1" /> Add Product
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+              <HelpCircle size={12} className="mr-1" /> Help
+            </Button>
           </div>
-          <p className="text-gray-500 font-medium">No products</p>
-          <p className="text-sm text-gray-400 mt-1">Click "Add Product" to create one.</p>
-        </motion.div>
-      ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b border-gray-100">
+
+          {/* ── Filter chips ── */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {FILTER_CHIPS.map(chip => {
+              const count = chip.key === 'all' ? data.length : data.filter(p => {
+                if (chip.key === 'active') return p.isActive
+                if (chip.key === 'inactive') return !p.isActive
+                if (chip.key === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
+                if (chip.key === 'out_of_stock') return p.isActive && p.currentStock === 0
+                return true
+              }).length
+              return (
+                <button key={chip.key} onClick={() => setActiveFilter(chip.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                  {chip.label}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeFilter === chip.key ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* ── Low stock alert banner ── */}
+          {(lowStockProducts > 0 || outOfStockProducts > 0) && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 flex items-center gap-3">
+              <AlertTriangle size={16} className="text-orange-600 shrink-0" />
+              <div className="flex-1 text-xs">
+                <p className="text-orange-800 font-semibold">
+                  {outOfStockProducts > 0 && `${outOfStockProducts} out of stock`}
+                  {outOfStockProducts > 0 && lowStockProducts > 0 && ', '}
+                  {lowStockProducts > 0 && `${lowStockProducts} low stock`}
+                  {' '}— reorder needed.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Empty state ── */}
+          {data.length === 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+                <Package size={28} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">No products yet</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
+                Add your first product to start tracking stock, pricing, and commission. Each product is linked to a merchant.
+              </p>
+              <Button className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={openCreate}>
+                <Plus size={14} className="mr-1.5" /> Add your first product
+              </Button>
+            </div>
+          )}
+
+          {/* ── No results (filtered) ── */}
+          {data.length > 0 && filteredData.length === 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 py-8 text-center text-gray-400 text-sm">
+              No products match this filter.
+            </div>
+          )}
+
+          {/* ── Table ── */}
+          {filteredData.length > 0 && !loading && (
+            <DenseTable>
+              <thead>
                 <tr>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Product</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Merchant</th>
-                  <th className="text-left px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Category</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Unit Cost</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Sell Price</th>
-                  <th className="text-center px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Stock</th>
-                  <th className="text-right px-4 py-3 font-semibold text-gray-600 text-xs uppercase tracking-wider">Actions</th>
+                  <DenseTh className="w-24">ID</DenseTh>
+                  <DenseTh>Product</DenseTh>
+                  <DenseTh>Merchant</DenseTh>
+                  <DenseTh className="w-24">Category</DenseTh>
+                  <DenseTh className="w-24 text-right">Cost</DenseTh>
+                  <DenseTh className="w-24 text-right">Sell</DenseTh>
+                  <DenseTh className="w-16 text-right">Comm %</DenseTh>
+                  <DenseTh className="w-20 text-center">Stock</DenseTh>
+                  <DenseTh className="w-16 text-center">Status</DenseTh>
+                  <DenseTh className="w-24 text-right">Actions</DenseTh>
                 </tr>
               </thead>
               <tbody>
-                {data.map((p, i) => {
-                  const isExpanded = expandedId === p.id
-                  return (
-                    <>
-                      <motion.tr
-                        key={p.id}
-                        initial={{ opacity: 0, y: 5 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.15, delay: Math.min(i * 0.01, 0.5) }}
-                        className={`border-b border-gray-50 hover:bg-gray-50 cursor-pointer ${p.currentStock <= p.minStock ? 'bg-orange-50/40' : ''}`}
-                        onClick={() => setExpandedId(isExpanded ? null : p.id)}
-                      >
-                        <td className="px-4 py-2">
-                          <p className="font-medium text-gray-900 text-sm">{p.productLabel}</p>
-                          <p className="text-[10px] text-gray-400 font-mono">
-                            {p.productId}
-                            {p.brand && `, ${p.brand}`}
-                            {p.variant && `, ${p.variant}`}
-                          </p>
-                        </td>
-                        <td className="px-4 py-2 text-gray-700 text-xs">{p.merchantName || '—'}</td>
-                        <td className="px-4 py-2 text-gray-600 text-xs">{p.category}</td>
-                        <td className="px-4 py-2 text-right text-gray-700 font-mono text-xs tabular-nums">{formatCurrency(p.unitCost)}</td>
-                        <td className="px-4 py-2 text-right font-medium text-gray-900 font-mono text-xs tabular-nums">{formatCurrency(p.unitSellingPrice)}</td>
-                        <td className="px-4 py-2 text-center">{stockBadge(p)}</td>
-                        <td className="px-4 py-2 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-1">
-                            <button onClick={() => handleToggleActive(p)} title={p.isActive ? 'Deactivate' : 'Activate'} className="p-1.5 rounded hover:bg-gray-100">
-                              <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                            </button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(p)}>
-                              <Edit3 size={12} className="text-gray-600" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => { setDeletingId(p.id); setDeleteOpen(true) }}>
-                              <Trash2 size={12} className="text-red-600" />
-                            </Button>
-                            {isExpanded ? <ChevronDown size={12} className="text-gray-400" /> : <ChevronRight size={12} className="text-gray-400" />}
-                          </div>
-                        </td>
-                      </motion.tr>
-                      {isExpanded && (
-                        <tr key={`${p.id}-detail`} className="bg-white border-b border-gray-200">
-                          <td colSpan={7} className="px-6 py-3">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Product</p>
-                                <p className="text-gray-900">{p.productLabel}</p>
-                                <p className="text-gray-500 font-mono">{p.productId}</p>
-                                {p.brand && <p className="text-gray-500">Brand: {p.brand}</p>}
-                                {p.variant && <p className="text-gray-500">Variant: {p.variant}</p>}
-                                {p.description && <p className="text-gray-500 italic mt-1 text-[11px]">"{p.description}"</p>}
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Stock</p>
-                                <p className="text-gray-900">Current: <span className="font-mono font-bold">{p.currentStock}</span></p>
-                                <p className="text-gray-500">Min: <span className="font-mono">{p.minStock}</span></p>
-                                <p className="text-gray-500">Unit: {p.unit}</p>
-                                {p.weight && <p className="text-gray-500">Weight: {p.weight}</p>}
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Pricing</p>
-                                <p className="text-gray-700">Cost: <span className="font-mono">{formatCurrency(p.unitCost)}</span></p>
-                                <p className="text-gray-700">Sell: <span className="font-mono">{formatCurrency(p.unitSellingPrice)}</span></p>
-                                <p className="text-gray-700">Commission: <span className="font-mono">{p.commissionPercent}%</span></p>
-                                <p className="text-gray-500 mt-1">Stock value: <span className="font-mono">{formatCurrency(p.currentStock * p.unitCost)}</span></p>
-                              </div>
-                              <div>
-                                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-0.5">Merchant</p>
-                                <p className="text-gray-900">{p.merchantName || '—'}</p>
-                                <p className="text-gray-500 font-mono">{p.merchantId}</p>
-                                <div className="mt-2 flex gap-1">
-                                  <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => handleEdit(p)}>Edit</Button>
-                                </div>
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      <DetailSlideOver
-        open={open}
-        onClose={() => setOpen(false)}
-        title={editing ? `Edit ${editing.productLabel}` : 'New Product'}
-        subtitle={editing ? editing.productId : 'Fill in the details to create a new product'}
-        width="lg"
-        footer={
-          <div className="flex items-center justify-between">
-            {editing && (
-              <Button
-                variant="outline"
-                className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"
-                onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}
-              >
-                <Trash2 size={16} className="mr-2" /> Delete
-              </Button>
-            )}
-            <div className="flex gap-3 ml-auto">
-              <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-                {editing ? 'Update' : 'Create'}
-              </Button>
-            </div>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Label <span className="text-red-400">*</span></Label>
-              <Input value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} placeholder="e.g. Dettol Soap 500g" className="rounded-xl" />
-            </div>
-            <div className="col-span-2">
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Description</Label>
-              <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description for catalogs and invoices..." rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Brand</Label>
-              <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Dettol" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Variant</Label>
-              <Input value={form.variant} onChange={e => setForm({ ...form, variant: e.target.value })} placeholder="e.g. 500g, Blue" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Category <span className="text-red-400">*</span></Label>
-              <Input value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} placeholder="e.g. Toiletries" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
-              <select
-                value={form.merchantId}
-                onChange={e => setForm({ ...form, merchantId: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-              >
-                <option value="">Select merchant...</option>
-                {merchants.map(m => (
-                  <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>
+                {filteredData.map((p, i) => (
+                  <AnimatedDenseTr key={p.id} index={i} onClick={() => handleExpand(p)} tint={!p.isActive ? 'bg-gray-50/50' : p.currentStock <= p.minStock ? 'bg-orange-50/40' : ''}>
+                    <DenseTd mono className="text-gray-500 text-[10px]">{p.productId}</DenseTd>
+                    <DenseTd className="text-gray-900 font-medium">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${stockDot(p)}`} />
+                        <div className="min-w-0">
+                          <p className="truncate">{p.productLabel}</p>
+                          {(p.brand || p.variant) && (
+                            <p className="text-[10px] text-gray-400 font-mono truncate">
+                              {[p.brand, p.variant].filter(Boolean).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </DenseTd>
+                    <DenseTd className="text-gray-600 text-xs">{p.merchantName || '—'}</DenseTd>
+                    <DenseTd className="text-gray-600 text-xs">{p.category}</DenseTd>
+                    <DenseTd mono right className="text-gray-600">{formatCurrencyCompact(p.unitCost)}</DenseTd>
+                    <DenseTd mono right className="text-gray-900 font-medium">{formatCurrencyCompact(p.unitSellingPrice)}</DenseTd>
+                    <DenseTd mono right className="text-orange-700">{p.commissionPercent}%</DenseTd>
+                    <DenseTd mono className="text-center">
+                      <span className={stockColor(p)}>{p.currentStock}</span>
+                      <span className="text-gray-400 text-[10px]">/{p.minStock}</span>
+                    </DenseTd>
+                    <DenseTd className="text-center">
+                      <button onClick={(e) => { e.stopPropagation(); handleToggleActive(p) }} title={p.isActive ? 'Deactivate' : 'Activate'}>
+                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
+                      </button>
+                    </DenseTd>
+                    <DenseTd right>
+                      <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => handleEdit(p)} title="Edit" className="p-1 text-gray-400 hover:text-[#FF6B35]"><Edit3 size={12} /></button>
+                        <button onClick={() => { setDeletingId(p.id); setDeleteOpen(true) }} title="Delete" className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                      </div>
+                    </DenseTd>
+                  </AnimatedDenseTr>
                 ))}
-              </select>
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit</Label>
-              <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="pcs, kg, box" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Weight</Label>
-              <Input value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="e.g. 500g" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Min Stock</Label>
-              <Input type="number" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit Cost (UGX)</Label>
-              <Input type="number" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Sell Price (UGX)</Label>
-              <Input type="number" value={form.unitSellingPrice} onChange={e => setForm({ ...form, unitSellingPrice: e.target.value })} placeholder="0" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Commission (%)</Label>
-              <Input type="number" step="0.1" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="rounded-xl" />
-            </div>
-            {editing && (
-              <div className="flex items-center gap-2">
-                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Status</Label>
-                <button
-                  onClick={() => setForm({ ...form, isActive: !form.isActive })}
-                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${form.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}
-                >
-                  <span className={`w-2.5 h-2.5 rounded-full ${form.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                  {form.isActive ? 'Active' : 'Inactive'}
-                </button>
+              </tbody>
+            </DenseTable>
+          )}
+
+          {/* ── Loading ── */}
+          {loading && <div className="flex items-center justify-center py-12"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-300" /></div>}
+
+          {/* ══ PROFILE SLIDE-OVER ══ */}
+          <DetailSlideOver
+            open={profileOpen}
+            onClose={() => setProfileOpen(false)}
+            title={selectedProduct?.productLabel || ''}
+            subtitle={selectedProduct ? `${selectedProduct.productId} · ${selectedProduct.merchantName || 'No merchant'}` : ''}
+            width="lg"
+            footer={selectedProduct ? (
+              <div className="flex items-center justify-between w-full">
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleEdit(selectedProduct)}><Edit3 size={12} className="mr-1" /> Edit</Button>
+                  <Button variant="outline" size="sm" className="rounded-xl text-xs text-red-600 border-red-200 hover:bg-red-50" onClick={() => { setDeletingId(selectedProduct.id); setDeleteOpen(true) }}><Trash2 size={12} className="mr-1" /> Delete</Button>
+                </div>
+                <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => setProfileOpen(false)}>Close</Button>
               </div>
-            )}
-          </div>
+            ) : undefined}
+          >
+            {selectedProduct && (() => {
+              const p = selectedProduct
+              const margin = p.unitSellingPrice > 0 ? ((p.unitSellingPrice - p.unitCost) / p.unitSellingPrice) * 100 : 0
+              const stockValue = p.currentStock * p.unitCost
+              return (
+                <div className="space-y-3">
+                  {/* Status */}
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${stockDot(p)}`} />
+                    <span className="text-[11px] font-medium text-gray-700">{stockLabel(p)}</span>
+                    <span className="text-[10px] text-gray-400 ml-auto">Added {new Date(p.createdAt).toLocaleDateString('en-UG')}</span>
+                  </div>
+
+                  {/* Key stats */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Current</p>
+                      <p className={`text-lg font-bold font-mono ${stockColor(p)}`}>{p.currentStock}</p>
+                      <p className="text-[9px] text-gray-400">min {p.minStock}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Stock Value</p>
+                      <p className="text-lg font-bold font-mono text-gray-900">{formatCurrencyCompact(stockValue)}</p>
+                      <p className="text-[9px] text-gray-400">{p.unit}</p>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-center">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1">Margin</p>
+                      <p className={`text-lg font-bold font-mono ${margin >= 0 ? 'text-green-700' : 'text-red-700'}`}>{margin.toFixed(0)}%</p>
+                      <p className="text-[9px] text-gray-400">sell vs cost</p>
+                    </div>
+                  </div>
+
+                  {/* Pricing breakdown */}
+                  <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                    <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-2">Pricing</p>
+                    <div className="space-y-1 text-xs">
+                      <div className="flex justify-between"><span className="text-gray-500">Unit Cost</span><span className="font-mono font-medium text-gray-900">{formatCurrency(p.unitCost)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Selling Price</span><span className="font-mono font-medium text-gray-900">{formatCurrency(p.unitSellingPrice)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Margin per unit</span><span className="font-mono font-medium text-gray-900">{formatCurrency(p.unitSellingPrice - p.unitCost)}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">Commission</span><span className="font-mono font-medium text-orange-700">{p.commissionPercent}%</span></div>
+                      <div className="flex justify-between pt-1.5 border-t border-gray-200"><span className="text-gray-700 font-semibold">Stock Value</span><span className="font-mono font-bold text-gray-900">{formatCurrency(stockValue)}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Product details */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Product Details</p>
+                      <div className="space-y-0.5 text-xs">
+                        <p className="text-gray-900 font-medium">{p.productLabel}</p>
+                        <p className="text-gray-500 font-mono">{p.productId}</p>
+                        {p.brand && <p className="text-gray-700">Brand: {p.brand}</p>}
+                        {p.variant && <p className="text-gray-700">Variant: {p.variant}</p>}
+                        {p.weight && <p className="text-gray-700">Weight: {p.weight}</p>}
+                        <p className="text-gray-700">Unit: {p.unit}</p>
+                        <p className="text-gray-700">Category: {p.category}</p>
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Merchant</p>
+                      <div className="space-y-0.5 text-xs">
+                        <p className="text-gray-900 font-medium">{p.merchantName || '—'}</p>
+                        <p className="text-gray-500 font-mono">{p.merchantId}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  {p.description && (
+                    <div className="bg-gray-50 rounded-lg border border-gray-100 p-3">
+                      <p className="text-[9px] uppercase tracking-wider text-gray-400 font-semibold mb-1.5">Description</p>
+                      <p className="text-xs text-gray-700 italic">{p.description}</p>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </DetailSlideOver>
+
+          {/* ══ EDIT / CREATE SLIDE-OVER ══ */}
+          <DetailSlideOver
+            open={formOpen}
+            onClose={() => { setFormOpen(false); setEditing(null); setForm(emptyForm) }}
+            title={editing ? `Edit ${editing.productLabel}` : 'New Product'}
+            subtitle={editing ? editing.productId : 'Fill in the details to create a new product'}
+            width="lg"
+            footer={
+              <div className="flex items-center justify-between">
+                {editing && (
+                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}>
+                    <Trash2 size={16} className="mr-2" /> Delete
+                  </Button>
+                )}
+                <div className="flex gap-3 ml-auto">
+                  <Button variant="outline" onClick={() => setFormOpen(false)} className="rounded-xl">Cancel</Button>
+                  <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
+                    {editing ? 'Update' : 'Create'}
+                  </Button>
+                </div>
+              </div>
+            }
+          >
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Label <span className="text-red-400">*</span></Label>
+                  <Input value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} placeholder="e.g. Dettol Soap 500g" className="rounded-xl" />
+                </div>
+                <div className="col-span-2">
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Description</Label>
+                  <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description for catalogs and invoices..." rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Brand</Label>
+                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Dettol" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Variant</Label>
+                  <Input value={form.variant} onChange={e => setForm({ ...form, variant: e.target.value })} placeholder="e.g. 500g, Blue" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Category <span className="text-red-400">*</span></Label>
+                  <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select category...</option>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
+                  <select value={form.merchantId} onChange={e => setForm({ ...form, merchantId: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select merchant...</option>
+                    {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit</Label>
+                  <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="pcs, kg, box" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Weight</Label>
+                  <Input value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="e.g. 500g" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Min Stock</Label>
+                  <Input type="number" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })} className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit Cost</Label>
+                  <Input type="number" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Sell Price</Label>
+                  <Input type="number" value={form.unitSellingPrice} onChange={e => setForm({ ...form, unitSellingPrice: e.target.value })} placeholder="0" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Commission (%)</Label>
+                  <Input type="number" step="0.1" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="rounded-xl" />
+                </div>
+                {editing && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Status</Label>
+                    <button onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${form.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+                      <span className={`w-2.5 h-2.5 rounded-full ${form.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                      {form.isActive ? 'Active' : 'Inactive'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </DetailSlideOver>
+
+          {/* ══ DELETE DIALOG ══ */}
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle className="flex items-center gap-2"><Trash2 size={18} className="text-red-600" /> Delete Product</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete the product. Existing orders referencing it will not be affected.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="rounded-xl bg-red-600 hover:bg-red-700">Delete</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* ══ HELP DIALOG ══ */}
+          <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Products</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Manage your product catalog. Each product is linked to a merchant and tracks stock, pricing, and commission.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-3 py-2 text-xs text-gray-700">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Add Product</p>
+                  <p>Click "Add Product" to create a new catalog entry. Required: product label, category, and merchant. Pricing and commission are set per product.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Filter Chips</p>
+                  <p>Use the filter chips to narrow by status: All, Active, Inactive, Low Stock, Out of Stock. Counts are shown on each chip.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Stock Indicators</p>
+                  <p>The colored dot next to each product shows stock health: green = in stock, orange = low (at or below min), red = out of stock, gray = inactive.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Profile</p>
+                  <p>Click any row to open the product profile. Shows stock value, margin, pricing breakdown, and product details. Edit and delete from the footer.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Status Toggle</p>
+                  <p>Click the status dot in the table to activate or deactivate a product. Inactive products are excluded from new orders.</p>
+                </div>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      </DetailSlideOver>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent className="rounded-2xl">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete Product</AlertDialogTitle>
-            <AlertDialogDescription>This will permanently delete the product. Existing orders referencing it will not be affected.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 rounded-xl">Delete</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Help Dialog */}
-      <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Products Module Works
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              The Products module is your catalog — every item you store, sell, and ship lives here. Each product is linked to a merchant, has a cost and selling price, tracks current stock levels, and records every price change for audit. Products flow into Inbound (stock arrives), Outbound (stock leaves), and Risk (high-return SKUs are flagged). Without this module, the warehouse doesn't know what it has.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this module is for:</strong> Every parcel that enters or leaves your warehouse is tied to a product. This module defines what those products are: their name, brand, variant, category, unit of measurement, cost, selling price, commission rate, and minimum stock level. When a merchant delivers stock, it's received against a product. When a customer orders, the order references a product. When stock runs low, the minimum stock threshold triggers a reorder alert.
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>1. Create products.</strong> Click "Add Product". Select a merchant first (the product belongs to that merchant). Fill in the product label, brand, variant, category, unit, cost, selling price, and commission percentage. The system validates that the merchant exists and warns if the selling price is below cost (loss-making).
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                  <p className="text-xs text-green-900 leading-relaxed">
-                    <strong>2. Stock tracking.</strong> Current stock updates automatically: Inbound records increment it, Outbound orders decrement it, Shrinkage decrements it, RTV decrements it, and RMA RESTOCK disposition increments it. You don't manually adjust stock here — it flows from operational modules. The "low stock" KPI highlights products below their minimum stock threshold.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-100">
-                  <p className="text-xs text-amber-900 leading-relaxed">
-                    <strong>3. Price changes.</strong> When you edit a product's selling price or unit cost, the system records the old and new values in a PriceHistory table — who changed it, when, from what, to what. This is your audit trail for margin analysis and dispute resolution. Every price change is also written to the audit log.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
-                  <p className="text-xs text-purple-900 leading-relaxed">
-                    <strong>4. Deactivate vs Delete.</strong> To stop selling a product, set it to inactive — it stays in the catalog for historical reference but can't be ordered. Deleting is blocked if the product has stock or any dependent records (inbound, outbound, RTV, shrinkage). In most cases, deactivate is the right choice.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>5. Search.</strong> Search by product label, category, product ID, merchant name, or brand. Click any row to expand it and see full details. Click edit to modify the product.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most inventory systems treat products as flat records — a name and a price. This module treats each product as a living entity with a lifecycle: it has a cost and a selling price (with full change history), a commission rate (for merchant settlements), a minimum stock threshold (for reorder alerts), and links to every operational record that touched it. When a merchant disputes their settlement, you can trace every product's price changes. When stock goes missing, you can see every inbound and outbound that touched that product. The product catalog isn't just a list — it's the foundation of your financial and operational accountability.
-              </p>
-            </div>
-          </div>
-
-          <AlertDialogFooter>
-            <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </motion.div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
