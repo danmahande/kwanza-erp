@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,9 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Filter, CreditCard, Banknote, Calendar, Upload } from 'lucide-react'
+import { Trash2, Filter, CreditCard, Banknote, Calendar, Upload, Plus, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
@@ -66,7 +67,7 @@ export default function PaymentsModule() {
   const [merchants, setMerchants] = useState<Merchant[]>([])
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
-  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [editing, setEditing] = useState<Payment | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -132,7 +133,7 @@ export default function PaymentsModule() {
       await fetch('/api/payments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       toast.success('Payment recorded')
     }
-    setOpen(false); setEditing(null)
+    setView('list'); setEditing(null)
     setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' })
     fetchData()
   }
@@ -140,7 +141,7 @@ export default function PaymentsModule() {
   const handleEdit = (item: Payment) => {
     setEditing(item)
     setForm({ merchantId: item.merchantId, merchantName: item.merchantName, vendorId: item.vendorId, amount: String(item.amount), deductions: String(item.deductions || 0), paymentMethod: item.paymentMethod, reference: item.reference, comment: item.comment || '' })
-    setOpen(true)
+    setView('add')
   }
 
   const handleDelete = async () => {
@@ -197,22 +198,112 @@ export default function PaymentsModule() {
     setImportOpen(false); setImportText(''); fetchData()
   }
 
+  // ── Render: Record/Edit Payment (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => { setView('list'); setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }) }}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">{editing ? `Edit: ${editing.merchantName}` : 'Record New Payment'}</h1>
+                  <p className="text-[11px] text-gray-500">{editing ? editing.paymentId : 'Fill in the payment details below'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Payment Details</h2>
+                  <p className="text-xs text-gray-500">Select the merchant, enter the amount and deductions, and provide a reference (bank slip, M-Pesa code, etc.).</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Merchant <span className="text-red-400">*</span></Label>
+                  <select value={form.merchantId} onChange={e => handleMerchantSelect(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select merchant...</option>
+                    {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName} ({m.merchantId})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Amount (UGX) <span className="text-red-400">*</span></Label>
+                    <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Deductions (UGX)</Label>
+                    <Input type="number" value={form.deductions} onChange={e => setForm({ ...form, deductions: e.target.value })} placeholder="0 (e.g. warehouse fees)" className="rounded-xl" />
+                    {(parseFloat(form.amount) || 0) > 0 && (parseFloat(form.deductions) || 0) > 0 && (
+                      <p className="text-[10px] text-gray-500 mt-1">Net: UGX {((parseFloat(form.amount) || 0) - (parseFloat(form.deductions) || 0)).toLocaleString()}</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Payment Method <span className="text-red-400">*</span></Label>
+                  <select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="Bank Transfer">Bank Transfer</option>
+                    <option value="M-Pesa">M-Pesa</option>
+                    <option value="Cash">Cash</option>
+                    <option value="Cheque">Cheque</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Reference <span className="text-red-400">*</span></Label>
+                  <Input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="Bank slip / M-Pesa ref" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Comment</Label>
+                  <textarea value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Optional notes..." rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between">
+                {editing && (
+                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}>
+                    <Trash2 size={14} className="mr-1.5" /> Delete
+                  </Button>
+                )}
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button variant="outline" size="sm" className="rounded-xl" onClick={() => { setView('list'); setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }) }}>Cancel</Button>
+                  <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSubmit}>{editing ? 'Update' : 'Record'}</Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      <OpsHeader
-        title="Payment Records"
-        description="Individual merchant payments and credit memos"
-        kpiCells={kpiCells}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by payment ID, merchant, or reference..."
-        actionLabel="Record Payment"
-        onAction={() => { setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }); setOpen(true) }}
-      >
-        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
-          <Upload size={12} className="mr-1" /> Import CSV
-        </Button>
-      </OpsHeader>
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Payment Records"
+            description="Individual merchant payments and credit memos"
+            kpiCells={kpiCells}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by payment ID, merchant, or reference..."
+          />
+
+          {/* Action bar (below KPI, left-aligned) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => { setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }); setView('add') }}>
+              <Plus size={12} className="mr-1" /> Record Payment
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setImportOpen(true)}>
+              <Upload size={12} className="mr-1" /> Import CSV
+            </Button>
+          </div>
 
       {/* Date filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -303,66 +394,6 @@ export default function PaymentsModule() {
         </DenseTable>
       )}
 
-      {/* Edit / Create slide-over */}
-      <DetailSlideOver
-        open={open}
-        onClose={() => { setOpen(false); setEditing(null); setForm({ merchantId: '', merchantName: '', vendorId: '', amount: '', deductions: '', paymentMethod: 'Bank Transfer', reference: '', comment: '' }) }}
-        title={editing ? editing.merchantName : 'Record New Payment'}
-        subtitle={editing ? editing.paymentId : 'Fill in the payment details below'}
-                width="lg"
-        footer={
-          <div className="flex items-center justify-between">
-            {editing && <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}><Trash2 size={16} className="mr-2" /> Delete</Button>}
-            <div className="flex gap-3 ml-auto">
-              <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-              <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">{editing ? 'Update' : 'Record'}</Button>
-            </div>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Merchant <span className="text-red-400">*</span></Label>
-            <select value={form.merchantId} onChange={e => handleMerchantSelect(e.target.value)}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-              <option value="">Select merchant...</option>
-              {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName} ({m.merchantId})</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Amount (UGX) <span className="text-red-400">*</span></Label>
-              <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Deductions (UGX)</Label>
-              <Input type="number" value={form.deductions} onChange={e => setForm({ ...form, deductions: e.target.value })} placeholder="0 (e.g. warehouse fees)" className="rounded-xl" />
-              {(parseFloat(form.amount) || 0) > 0 && (parseFloat(form.deductions) || 0) > 0 && (
-                <p className="text-[10px] text-gray-500 mt-1">Net: UGX {((parseFloat(form.amount) || 0) - (parseFloat(form.deductions) || 0)).toLocaleString()}</p>
-              )}
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Payment Method <span className="text-red-400">*</span></Label>
-            <select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-              <option value="Bank Transfer">Bank Transfer</option>
-              <option value="M-Pesa">M-Pesa</option>
-              <option value="Cash">Cash</option>
-              <option value="Cheque">Cheque</option>
-            </select>
-          </div>
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Reference <span className="text-red-400">*</span></Label>
-            <Input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="Bank slip / M-Pesa ref" className="rounded-xl" />
-          </div>
-          <div>
-            <Label className="text-xs font-medium mb-1 block">Comment</Label>
-            <textarea value={form.comment} onChange={e => setForm({ ...form, comment: e.target.value })} placeholder="Optional notes..." rows={3} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-          </div>
-        </div>
-      </DetailSlideOver>
-
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="rounded-2xl">
           <AlertDialogHeader><AlertDialogTitle>Delete Payment</AlertDialogTitle><AlertDialogDescription>This will permanently delete this payment record.</AlertDialogDescription></AlertDialogHeader>
@@ -398,6 +429,8 @@ export default function PaymentsModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

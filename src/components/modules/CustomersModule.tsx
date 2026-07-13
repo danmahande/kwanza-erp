@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -12,11 +12,12 @@ import {
 import {
   Search, User, Upload, HelpCircle, ShieldAlert, ShoppingBag,
   Phone, Mail, MapPin, Calendar, TrendingUp, AlertTriangle, CheckCircle2,
-  Edit, Trash2, X,
+  Edit, Trash2, X, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 interface RiskProfile {
@@ -64,7 +65,7 @@ export default function CustomersModule() {
   const [importOpen, setImportOpen] = useState(false)
   const [importText, setImportText] = useState('')
   const [helpOpen, setHelpOpen] = useState(false)
-  const [editOpen, setEditOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'edit'>('list')
   const [editForm, setEditForm] = useState({ name: '', contact: '', email: '', address: '' })
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [customerOrders, setCustomerOrders] = useState<CustomerOrder[]>([])
@@ -114,7 +115,8 @@ export default function CustomersModule() {
       email: customer.email || '',
       address: customer.address || '',
     })
-    setEditOpen(true)
+    setOpen(false)
+    setView('edit')
   }
 
   const handleSaveEdit = async () => {
@@ -127,9 +129,8 @@ export default function CustomersModule() {
       })
       if (res.ok) {
         toast.success('Customer updated')
-        setEditOpen(false)
+        setView('list')
         fetchData()
-        handleClose()
       } else {
         const err = await res.json()
         toast.error(err.error || 'Failed to update')
@@ -199,24 +200,85 @@ export default function CustomersModule() {
     return colors[status] || 'bg-gray-100 text-gray-600'
   }
 
+  // ── Render: Edit Customer (full-page) ──
+  if (view === 'edit') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="edit">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5">
+                    <Edit size={16} className="text-[#FF6B35]" /> Edit Customer
+                  </h1>
+                  <p className="text-[11px] text-gray-500">{viewing?.name || 'Customer'} · {viewing?.customerId}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Customer Details</h2>
+                  <p className="text-xs text-gray-500">Update customer information. If you change the phone number, a new risk profile is created for the new number.</p>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Name *</Label>
+                  <Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Phone *</Label>
+                  <Input value={editForm.contact} onChange={e => setEditForm({ ...editForm, contact: e.target.value })} className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Email</Label>
+                  <Input value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address</Label>
+                  <Input value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} className="rounded-xl" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSaveEdit}>Save Changes</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      <OpsHeader
-        title="Customers"
-        description="Auto-created from orders. Risk profile tracks COD behavior over time."
-        kpiCells={kpiCells}
-        searchValue={search}
-        onSearchChange={setSearch}
-        onSearchSubmit={fetchData}
-        searchPlaceholder="Search by name, phone, or email..."
-      >
-        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-          <HelpCircle size={12} className="mr-1" /> How does this work?
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => setImportOpen(true)} className="h-7 text-xs rounded-md">
-          <Upload size={12} className="mr-1" /> Import CSV
-        </Button>
-      </OpsHeader>
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Customers"
+            description="Auto-created from orders. Risk profile tracks COD behavior over time."
+            kpiCells={kpiCells}
+            searchValue={search}
+            onSearchChange={setSearch}
+            onSearchSubmit={fetchData}
+            searchPlaceholder="Search by name, phone, or email..."
+          />
+
+          {/* Action bar (below KPI, left-aligned) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setImportOpen(true)}>
+              <Upload size={12} className="mr-1" /> Import CSV
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+              <HelpCircle size={12} className="mr-1" /> Help
+            </Button>
+          </div>
 
       {/* Dense table */}
       {data.length === 0 ? (
@@ -437,38 +499,6 @@ export default function CustomersModule() {
         )}
       </DetailSlideOver>
 
-      {/* Edit Dialog */}
-      <AlertDialog open={editOpen} onOpenChange={setEditOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-md">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><Edit size={18} /> Edit Customer</AlertDialogTitle>
-            <AlertDialogDescription>Update customer details. If you change the phone number, a new risk profile is created for the new number.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-3 py-2">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Name *</Label>
-              <Input value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Phone *</Label>
-              <Input value={editForm.contact} onChange={e => setEditForm({ ...editForm, contact: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Email</Label>
-              <Input value={editForm.email} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address</Label>
-              <Input value={editForm.address} onChange={e => setEditForm({ ...editForm, address: e.target.value })} className="rounded-xl" />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSaveEdit} className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Save Changes</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Delete Confirm */}
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="rounded-2xl max-w-md">
@@ -578,6 +608,8 @@ export default function CustomersModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
