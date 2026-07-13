@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertTriangle, Search, Package, Clock, CheckCircle2, TrendingDown, CalendarDays, UserCircle, AlertOctagon, ChevronDown, ChevronRight, Plus, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, StatusPill, rowTint, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
 
@@ -81,7 +82,7 @@ export default function ShrinkageModule() {
 
   // Slide-over states
   const [detailOpen, setDetailOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [selectedRecord, setSelectedRecord] = useState<ShrinkageRecord | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
@@ -116,7 +117,7 @@ export default function ShrinkageModule() {
       body: JSON.stringify({ ...form, qty: parseInt(form.qty) }),
     })
     toast.success('Shrinkage reported')
-    setCreateOpen(false)
+    setView('list')
     setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
     fetchData()
   }
@@ -153,7 +154,7 @@ export default function ShrinkageModule() {
 
   const openCreate = () => {
     setForm({ productId: '', productName: '', qty: '', reason: '', reportedBy: '' })
-    setCreateOpen(true)
+    setView('add')
   }
 
   // ── Computed stats ──
@@ -168,23 +169,106 @@ export default function ShrinkageModule() {
     { label: 'Resolved',        value: resolvedCount,     icon: CheckCircle2,   color: '#22C55E', bg: 'bg-green-500/15',   border: 'border-green-500/20',   gradient: 'from-green-500/10 to-green-500/5' },
   ]
 
+  // ── Render: Report Shrinkage (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">Report Shrinkage</h1>
+                  <p className="text-[11px] text-gray-500">Record an inventory loss or discrepancy</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Loss Details</h2>
+                  <p className="text-xs text-gray-500">Select the product, enter the quantity lost, and choose the reason. Stock is decremented immediately.</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product *</Label>
+                  <Select value={form.productId} onValueChange={handleProductSelect}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
+                    <SelectContent>
+                      {products.map((p) => (
+                        <SelectItem key={p.productId} value={p.productId}>
+                          {p.productLabel} (Stock: {p.currentStock})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity Lost *</Label>
+                  <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="0" />
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason *</Label>
+                  <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="damage_storage">Damage in Storage</SelectItem>
+                      <SelectItem value="damage_transit">Damage in Transit</SelectItem>
+                      <SelectItem value="theft">Theft</SelectItem>
+                      <SelectItem value="expiry">Expired</SelectItem>
+                      <SelectItem value="miscount">Miscount</SelectItem>
+                      <SelectItem value="lost">Lost</SelectItem>
+                      <SelectItem value="quality_rejection">Quality Rejection</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reported By *</Label>
+                  <Input value={form.reportedBy} onChange={e => setForm({ ...form, reportedBy: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="Your name" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSubmit}>Report</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ── Render: List ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
-      <OpsHeader
-        title="Shrinkage"
-        description="Track and report inventory losses and discrepancies"
-        kpiCells={[
-          { label: 'TOTAL', value: data.length },
-          { label: 'PENDING', value: data.filter(r => r.status === 'pending').length, highlight: true, highlightColor: 'orange' },
-          { label: 'INVESTIGATING', value: data.filter(r => r.status === 'investigating').length },
-          { label: 'RESOLVED', value: data.filter(r => r.status === 'resolved').length },
-        ]}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search shrinkage records..."
-        actionLabel="Report Shrinkage"
-        onAction={openCreate}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Shrinkage"
+            description="Track and report inventory losses and discrepancies"
+            kpiCells={[
+              { label: 'TOTAL', value: data.length },
+              { label: 'PENDING', value: data.filter(r => r.status === 'pending').length, highlight: true, highlightColor: 'orange' as const },
+              { label: 'INVESTIGATING', value: data.filter(r => r.status === 'investigating').length },
+              { label: 'RESOLVED', value: data.filter(r => r.status === 'resolved').length },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search shrinkage records..."
+          />
+
+          {/* Action bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
+              <Plus size={12} className="mr-1" /> Report Shrinkage
+            </Button>
+          </div>
 
       {/* ── Dense table with inline expansion ── */}
       {data.length > 0 ? (
@@ -272,17 +356,16 @@ export default function ShrinkageModule() {
           </tbody>
         </DenseTable>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center py-20"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-            <AlertTriangle size={28} className="text-gray-300" />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+            <AlertTriangle size={28} className="text-orange-500" />
           </div>
-          <p className="text-sm font-medium text-gray-400">No shrinkage records found</p>
-          <p className="text-xs text-gray-300 mt-1">Report a loss to get started</p>
-        </motion.div>
+          <h3 className="text-base font-bold text-gray-900 mb-1">No shrinkage records</h3>
+          <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">Report a loss or discrepancy to get started.</p>
+          <Button className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={openCreate}>
+            <Plus size={14} className="mr-1.5" /> Report Shrinkage
+          </Button>
+        </div>
       )}
 
       {/* ── Detail SlideOver ── */}
@@ -342,64 +425,9 @@ export default function ShrinkageModule() {
           </div>
         )}
       </DetailSlideOver>
-
-      {/* ── Create Shrinkage SlideOver ── */}
-      <DetailSlideOver
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Report Shrinkage"
-        subtitle="Record an inventory loss or discrepancy"
-        width="lg"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-              Report
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-5">
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product *</Label>
-            <Select value={form.productId} onValueChange={handleProductSelect}>
-              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
-              <SelectContent>
-                {products.map((p, i) => (
-                  <SelectItem key={p.productId} value={p.productId}>
-                    {p.productLabel} (Stock: {p.currentStock})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity Lost *</Label>
-            <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="0" />
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason *</Label>
-            <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
-              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="damage_storage">Damage in Storage</SelectItem>
-                <SelectItem value="damage_transit">Damage in Transit</SelectItem>
-                <SelectItem value="theft">Theft</SelectItem>
-                <SelectItem value="expiry">Expired</SelectItem>
-                <SelectItem value="miscount">Miscount</SelectItem>
-                <SelectItem value="lost">Lost</SelectItem>
-                <SelectItem value="quality_rejection">Quality Rejection</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reported By *</Label>
-            <Input value={form.reportedBy} onChange={e => setForm({ ...form, reportedBy: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="Your name" />
-          </div>
         </div>
-      </DetailSlideOver>
-    </motion.div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
 

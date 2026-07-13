@@ -1,16 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import { RotateCcw, Search, Package, Clock, Layers, CalendarDays, User, ChevronDown, ChevronRight, AlertTriangle, Plus, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
 import { StatusPill, rowTint, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import { getStage } from '@/lib/workflow'
@@ -103,7 +104,7 @@ export default function RTVModule() {
 
   // Slide-over states
   const [detailOpen, setDetailOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [selectedRecord, setSelectedRecord] = useState<RTVRecord | null>(null)
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [linkedShrinkage, setLinkedShrinkage] = useState<ShrinkageRecord[]>([])
@@ -146,7 +147,7 @@ export default function RTVModule() {
       body: JSON.stringify({ ...form, qty: parseInt(form.qty), processedBy: form.processedBy || null }),
     })
     toast.success('RTV record created')
-    setCreateOpen(false)
+    setView('list')
     setForm({ merchantId: '', merchantName: '', productId: '', productName: '', qty: '', reason: '', processedBy: '' })
     fetchData()
   }
@@ -197,7 +198,7 @@ export default function RTVModule() {
 
   const openCreate = () => {
     setForm({ merchantId: '', merchantName: '', productId: '', productName: '', qty: '', reason: '', processedBy: '' })
-    setCreateOpen(true)
+    setView('add')
   }
 
   // ── Computed stats ──
@@ -210,23 +211,106 @@ export default function RTVModule() {
     { label: 'Total Qty Returned', value: totalQty, icon: Layers,       color: '#22C55E', bg: 'bg-green-500/15',   border: 'border-green-500/20', gradient: 'from-green-500/10 to-green-500/5' },
   ]
 
+  // ── Render: New RTV (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">New RTV Record</h1>
+                  <p className="text-[11px] text-gray-500">Create a product return to vendor</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Return Details</h2>
+                  <p className="text-xs text-gray-500">Select merchant and product, enter quantity and reason. Stock is decremented when the RTV is submitted.</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Merchant *</Label>
+                  <Select value={form.merchantId} onValueChange={handleMerchantSelect}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select merchant" /></SelectTrigger>
+                    <SelectContent>{merchants.map(m => <SelectItem key={m.merchantId} value={m.merchantId}>{m.businessName}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product *</Label>
+                  <Select value={form.productId} onValueChange={handleProductSelect} disabled={!form.merchantId}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
+                    <SelectContent>{products.map(p => <SelectItem key={p.productId} value={p.productId}>{p.productLabel}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity *</Label>
+                    <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="0" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Processed By</Label>
+                    <Input value={form.processedBy} onChange={e => setForm({ ...form, processedBy: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="Optional" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason *</Label>
+                  <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
+                    <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="expired">Expired</SelectItem>
+                      <SelectItem value="damaged">Damaged</SelectItem>
+                      <SelectItem value="quality_issue">Quality Issue</SelectItem>
+                      <SelectItem value="overstock">Overstock</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSubmit}>Submit RTV</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ── Render: List ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.4 }} className="space-y-3">
-      <OpsHeader
-        title="Returns to Vendor (RTV)"
-        description="Manage product returns to vendors and merchants"
-        kpiCells={[
-          { label: 'TOTAL RTVs', value: data.length },
-          { label: 'PENDING', value: data.filter(r => r.status === 'pending' || r.status === 'pending_approval').length },
-          { label: 'APPROVED', value: data.filter(r => r.status === 'approved' || r.status === 'shipped').length },
-          { label: 'PROCESSED', value: data.filter(r => r.status === 'processed').length },
-        ]}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search RTV records..."
-        actionLabel="New RTV"
-        onAction={openCreate}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Returns to Vendor (RTV)"
+            description="Manage product returns to vendors and merchants"
+            kpiCells={[
+              { label: 'TOTAL RTVs', value: data.length },
+              { label: 'PENDING', value: data.filter(r => r.status === 'pending' || r.status === 'pending_approval').length },
+              { label: 'APPROVED', value: data.filter(r => r.status === 'approved' || r.status === 'shipped').length },
+              { label: 'PROCESSED', value: data.filter(r => r.status === 'processed').length },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search RTV records..."
+          />
+
+          {/* Action bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
+              <Plus size={12} className="mr-1" /> New RTV
+            </Button>
+          </div>
 
       {/* ── Dense table with inline expansion ── */}
       {data.length > 0 ? (
@@ -315,17 +399,16 @@ export default function RTVModule() {
           </tbody>
         </DenseTable>
       ) : (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex flex-col items-center justify-center py-20"
-        >
-          <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
-            <RotateCcw size={28} className="text-gray-300" />
+        <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+          <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+            <RotateCcw size={28} className="text-orange-500" />
           </div>
-          <p className="text-sm font-medium text-gray-400">No RTV records found</p>
-          <p className="text-xs text-gray-300 mt-1">Create a new return to get started</p>
-        </motion.div>
+          <h3 className="text-base font-bold text-gray-900 mb-1">No RTV records</h3>
+          <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">Create a new return to vendor to get started.</p>
+          <Button className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={openCreate}>
+            <Plus size={14} className="mr-1.5" /> New RTV
+          </Button>
+        </div>
       )}
 
       {/* ── Detail SlideOver ── */}
@@ -436,64 +519,9 @@ export default function RTVModule() {
           </div>
         )}
       </DetailSlideOver>
-
-      {/* ── Create RTV SlideOver ── */}
-      <DetailSlideOver
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="New RTV Record"
-        subtitle="Create a product return to vendor"
-        width="lg"
-        footer={
-          <div className="flex items-center justify-end gap-3">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-              Submit RTV
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-5">
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Merchant *</Label>
-            <Select value={form.merchantId} onValueChange={handleMerchantSelect}>
-              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select merchant" /></SelectTrigger>
-              <SelectContent>{merchants.map(m => <SelectItem key={m.merchantId} value={m.merchantId}>{m.businessName}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Product *</Label>
-            <Select value={form.productId} onValueChange={handleProductSelect} disabled={!form.merchantId}>
-              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select product" /></SelectTrigger>
-              <SelectContent>{products.map(p => <SelectItem key={p.productId} value={p.productId}>{p.productLabel}</SelectItem>)}</SelectContent>
-            </Select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Quantity *</Label>
-              <Input type="number" value={form.qty} onChange={e => setForm({ ...form, qty: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="0" />
-            </div>
-            <div>
-              <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Processed By</Label>
-              <Input value={form.processedBy} onChange={e => setForm({ ...form, processedBy: e.target.value })} className="mt-1.5 rounded-xl h-11" placeholder="Optional" />
-            </div>
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Reason *</Label>
-            <Select value={form.reason} onValueChange={v => setForm({ ...form, reason: v })}>
-              <SelectTrigger className="mt-1.5 rounded-xl h-11"><SelectValue placeholder="Select reason" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="expired">Expired</SelectItem>
-                <SelectItem value="damaged">Damaged</SelectItem>
-                <SelectItem value="quality_issue">Quality Issue</SelectItem>
-                <SelectItem value="overstock">Overstock</SelectItem>
-                <SelectItem value="other">Other</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
         </div>
-      </DetailSlideOver>
-    </motion.div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
 
