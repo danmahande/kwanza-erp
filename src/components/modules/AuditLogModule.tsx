@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
+import PageTransition from '@/components/shared/PageTransition'
 import { format } from 'date-fns'
 
 interface AuditLog {
@@ -153,7 +154,9 @@ export default function AuditLogModule() {
   const currentPage = data?.page || 1
 
   return (
-    <div className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Audit Log"
         description="Every state change recorded — for compliance and dispute resolution"
@@ -166,17 +169,20 @@ export default function AuditLogModule() {
         onSearchChange={setSearch}
         onSearchSubmit={() => fetchData()}
         searchPlaceholder="Search by action, user, or details..."
-      >
-        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-          <HelpCircle size={12} className="mr-1" /> How does this work?
-        </Button>
-        <Button variant="outline" size="sm" onClick={handleExport} className="h-7 text-xs rounded-md">
+      />
+
+      {/* Action bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={handleExport}>
           <Download size={12} className="mr-1" /> Export CSV
         </Button>
-        <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={fetchData}>
           <RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
-      </OpsHeader>
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+          <HelpCircle size={12} className="mr-1" /> Help
+        </Button>
+      </div>
 
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap bg-white rounded-lg border border-gray-200 px-3 py-2">
@@ -324,70 +330,41 @@ export default function AuditLogModule() {
 
       {/* Help Dialog */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Audit Log Works
-            </AlertDialogTitle>
+            <AlertDialogTitle>Audit Log</AlertDialogTitle>
             <AlertDialogDescription>
-              The Audit Log is the system's permanent record of every significant action. Every create, update, delete, approval, rejection, status change, and configuration change is written here — who did it, when, what module, what entity, and what changed. This is your compliance trail, your dispute resolver, and your "who pressed the button" investigation tool.
+              Permanent record of every significant action across the system. Every create, update, delete, approval, and status change is written here with who, when, and what changed.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this module is for:</strong> In a warehouse system that handles money, inventory, and customer data, accountability is non-negotiable. When a merchant disputes a charge, when stock goes missing, when a user's role changes, when a payment is reversed — the audit log tells you exactly what happened, who did it, and when. Without it, every dispute becomes a "he said, she said" with no evidence. With it, you have a timestamped, tamper-evident record that holds everyone accountable.
-              </p>
-            </div>
-
+          <div className="space-y-3 py-2 text-xs text-gray-700">
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>1. Search.</strong> Type in the search bar to find entries by action, user name, entity ID, or details. Press Enter or click the search icon.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>2. Filter.</strong> Use the dropdowns to filter by module (payments, outbound, inventory, etc.) and action type (CREATE, DELETE, APPROVE, etc.). Use the date pickers to narrow to a specific time range. Multiple filters combine (AND logic).
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>3. Paginate.</strong> The log shows 100 entries per page. Use the pagination controls (first, previous, page number, next, last) to navigate. The total count shows how many entries match your filters.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>4. Export.</strong> Click "Export CSV" to download all matching entries as a CSV file. The export respects your current filters. Useful for compliance audits, external investigations, or sharing with a merchant who disputes a charge.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>5. Investigate.</strong> Hover over truncated details to see the full text. The details column records exactly what changed — field-level diffs for updates, amounts for payments, statuses for workflow transitions.
-                  </p>
-                </div>
-              </div>
+              <p className="font-semibold text-gray-900 mb-1">Search</p>
+              <p>Type in the search bar to find entries by action, user name, entity ID, or details. Press Enter to search.</p>
             </div>
-
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most ERP systems have audit logging as an afterthought — a debug table that nobody reads, with no filtering, no pagination, and no export. This module makes the audit log a first-class investigative tool. Every mutation across every module writes to it. Every entry has who, when, what module, what entity, and what changed. You can filter by any combination of module, action, user, and date range. You can export to CSV for external review. And the log is append-only — entries can never be edited or deleted through the API, making it tamper-evident for compliance.
-              </p>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Filter</p>
+              <p>Use the dropdowns to filter by module and action type. Use the date pickers to narrow to a time range. Filters combine with AND logic.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Paginate</p>
+              <p>100 entries per page. Use the pagination controls to navigate. The total count shows how many entries match your filters.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Export</p>
+              <p>Click "Export CSV" to download all matching entries. Respects current filters. Useful for compliance audits and dispute resolution.</p>
             </div>
           </div>
-
           <AlertDialogFooter>
             <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
 
-// Button import needed for OpsHeader children
+// Button import needed for action bar
 import { Button } from '@/components/ui/button'

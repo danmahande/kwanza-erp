@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +12,7 @@ import {
 import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
+import PageTransition from '@/components/shared/PageTransition'
 
 interface SettingItem {
   key: string
@@ -61,11 +62,7 @@ function SettingsSection({
   }
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: delay * 0.08 }}
-      className="bg-white rounded-xl border border-gray-200 overflow-hidden"
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden"
     >
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2">
@@ -126,7 +123,7 @@ function SettingsSection({
           </p>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
 
@@ -205,7 +202,9 @@ export default function SettingsModule() {
   const totalItems = settings.reduce((s, st) => s + st.value.length, 0)
 
   return (
-    <div className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Settings"
         description="System-wide configuration. Changes persist to the database."
@@ -216,14 +215,17 @@ export default function SettingsModule() {
           { label: 'LOCATIONS', value: settings.find(s => s.key === 'storageLocations')?.value.length ?? 0 },
           { label: 'TOTAL ITEMS', value: totalItems },
         ]}
-      >
-        <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
-          <HelpCircle size={12} className="mr-1" /> How does this work?
-        </Button>
-        <Button variant="outline" size="sm" onClick={fetchData} className="h-7 text-xs rounded-md">
+      />
+
+      {/* Action bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={fetchData}>
           <RefreshCw size={12} className={`mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
         </Button>
-      </OpsHeader>
+        <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+          <HelpCircle size={12} className="mr-1" /> Help
+        </Button>
+      </div>
 
       {/* Save bar — sticky when dirty */}
       {dirty && (
@@ -267,88 +269,42 @@ export default function SettingsModule() {
 
       {/* Help Dialog */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Settings Module Works
-            </AlertDialogTitle>
+            <AlertDialogTitle>Settings</AlertDialogTitle>
             <AlertDialogDescription>
-              The Settings module configures system-wide lists that other modules use: product categories, units of measurement, payment methods, and storage locations. Changes here affect dropdowns and validation across the entire system. Only admins can make changes. Every update is saved to the database and audited.
+              Configure system-wide lists that other modules use: product categories, units, payment methods, and storage locations. Changes take effect immediately across all dropdowns.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this module is for:</strong> When a warehouse worker creates an inbound record, they select a product category. When finance records a payment, they select a payment method. When stock is put away, it goes to a storage location. All of these dropdowns are configured here — not hardcoded. If you add a new product line (e.g., "Electronics"), you add it here once, and it appears in every dropdown across the system. Without this module, you'd need a developer to add new categories or payment methods.
-              </p>
-            </div>
-
+          <div className="space-y-3 py-2 text-xs text-gray-700">
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">The Four Setting Types</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-orange-50 border border-orange-100">
-                  <p className="text-xs text-orange-900 leading-relaxed">
-                    <strong>Product Categories</strong> — Used when creating products. Each product is assigned a category (Produce, Dairy, Bakery, etc.). These appear in the Products module dropdown and drive the dashboard's category breakdown.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>Units of Measurement</strong> — Used when receiving stock. Each product is measured in a unit (kg, unit, pack, liter, box, dozen). These appear in the Inbound and Inventory modules.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                  <p className="text-xs text-green-900 leading-relaxed">
-                    <strong>Payment Methods</strong> — Used when recording payments to merchants and from customers. These appear in the Payments module and on the Outbound order form. Add new methods (e.g., "Airtel Money") here, and they become available everywhere.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>Storage Locations</strong> — Used when putting away stock. Each inbound batch is assigned to a storage location (Warehouse A, Cold Room, Shelf 1, etc.). These appear in the Inbound module and the Item Tracker.
-                  </p>
-                </div>
-              </div>
+              <p className="font-semibold text-gray-900 mb-1">Product Categories</p>
+              <p>Used when creating products. Appears in the Products module dropdown and drives dashboard breakdowns.</p>
             </div>
-
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How to Use This Module</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>1. Add items.</strong> Type a name in the input field and press Enter (or click the + button). The item appears as a badge. Changes are tracked locally — the "Unsaved changes" bar appears.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>2. Remove items.</strong> Click the X on any badge to remove it. The item disappears immediately from the local state. If you change your mind, click "Discard" to revert to the saved version.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>3. Save changes.</strong> Click "Save Changes" to persist all modifications to the database. Only admins can save. Every save is audited — the audit log records which settings were changed, by whom, and how many items each setting now has.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>4. Defaults.</strong> On first load, the system seeds sensible defaults (Produce, Dairy, kg, unit, M-Pesa, Warehouse A, etc.). You can customize these to match your operation — remove what you don't use, add what you need.
-                  </p>
-                </div>
-              </div>
+              <p className="font-semibold text-gray-900 mb-1">Units of Measurement</p>
+              <p>Used when receiving stock (kg, unit, pack, liter, box). Appears in Inbound and Inventory modules.</p>
             </div>
-
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most ERP systems hardcode categories, units, and payment methods in the source code. Adding a new one requires a developer and a code deploy. This module puts that power in the hands of the admin — changes take effect immediately across the entire system, with no code changes and no downtime. And every change is audited, so you always know who added "Electronics" as a category or who removed "Cheque" as a payment method.
-              </p>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Payment Methods</p>
+              <p>Used when recording payments. Appears in the Payments module and Outbound order form.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Storage Locations</p>
+              <p>Used when putting away stock. Appears in Inbound and Item Tracker.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Saving</p>
+              <p>Type a name and press Enter to add. Click X on a badge to remove. The "Unsaved changes" bar appears — click Save to persist. Discard reverts to the saved version.</p>
             </div>
           </div>
-
           <AlertDialogFooter>
             <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
