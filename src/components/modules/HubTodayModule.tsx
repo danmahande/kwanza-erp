@@ -12,6 +12,7 @@ import {
   Search, ChevronRight, ChevronDown, Lock, RefreshCw,
   AlertTriangle, CheckCircle2, HelpCircle, Package,
   Boxes, Truck, ClipboardList, RotateCcw, ArrowRight, X,
+  TrendingUp, TrendingDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
@@ -94,6 +95,28 @@ function formatDwell(minutes: number | null | undefined): string {
   if (minutes < 60) return `${minutes}m`
   const h = Math.floor(minutes / 60); const m = minutes % 60
   return m === 0 ? `${h}h` : `${h}h ${m}m`
+}
+
+// Compute dwell color for a station's avg dwell time
+function dwellColor(dwell: number | null | undefined, threshold: number | null | undefined, count: number): string {
+  if (dwell == null || threshold == null || count === 0) return 'bg-gray-200'
+  if (dwell > threshold) return 'bg-red-500'
+  if (dwell > threshold * 0.6) return 'bg-amber-500'
+  return 'bg-green-500'
+}
+
+// Check if a station is stale
+function isStationStale(dwell: number | null | undefined, threshold: number | null | undefined, count: number): boolean {
+  return dwell != null && threshold != null && dwell > threshold && count > 0
+}
+
+// Compute item staleness from createdAt
+function isItemStale(createdAt: string | undefined, stationKey: StationKey): boolean {
+  if (!createdAt) return false
+  const threshold = STALE_THRESHOLD_MINUTES[stationKey]
+  if (!threshold) return false
+  const minutes = Math.floor((Date.now() - new Date(createdAt).getTime()) / 60000)
+  return minutes > threshold
 }
 
 // ── Status pill ──
@@ -200,7 +223,12 @@ function StationTable({ station, stationKey, expandedId, onToggleExpand }: {
               return (
                 <React.Fragment key={id}>
                   <tr onClick={() => onToggleExpand(id)} className={`border-b border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors ${rowTint(status)} ${isExpanded ? 'bg-blue-50' : ''}`} style={{ height: '32px' }}>
-                    <td className="px-3 py-1 font-mono font-semibold text-gray-900 text-[11px]">{item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || '—'}</td>
+                    <td className="px-3 py-1 font-mono font-semibold text-gray-900 text-[11px]">
+                      <div className="flex items-center gap-1">
+                        {isItemStale(item.createdAt, stationKey) && <span title="Stuck — exceeds stale threshold" className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse shrink-0" />}
+                        {item.orderNumber || item.outboundId || item.inboundId || item.afterSalesId || '—'}
+                      </div>
+                    </td>
                     <td className="px-3 py-1 text-gray-700 truncate max-w-xs">{item.customerName || item.productName || '—'}</td>
                     {(stationKey === 'inTransit' || stationKey === 'delivered' || stationKey === 'dispatch') && <td className="px-3 py-1 text-gray-600 text-[11px]">{item.assignedDriver || '—'}</td>}
                     {stationKey === 'intake' && <td className="px-3 py-1 text-gray-600 text-[11px] truncate">{item.merchantName || '—'}</td>}
@@ -559,6 +587,28 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         </div>
       </div>
 
+      {/* ── Day progress summary banner ── */}
+      {(() => {
+        const totalProcessed = data.totals.outboundToday || 1
+        const deliveredPct = Math.round((data.stations.delivered.count / totalProcessed) * 100)
+        const pipelineCount = (data.stations.intake.count || 0) + (data.stations.sort.count || 0) + (data.stations.stage.count || 0) + (data.stations.dispatch.count || 0) + (data.stations.inTransit.count || 0)
+        const isOnTrack = data.exceptions.count === 0 && pipelineCount <= data.stations.delivered.count * 0.3
+        const isBehind = data.exceptions.count > 2 || pipelineCount > data.stations.delivered.count * 0.5
+        return (
+          <div className={`rounded-lg px-4 py-2 flex items-center gap-3 text-xs border ${isBehind ? 'bg-red-50 border-red-200' : isOnTrack ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'}`}>
+            <span className={`font-bold ${isBehind ? 'text-red-700' : isOnTrack ? 'text-green-700' : 'text-amber-700'}`}>
+              {isBehind ? '⚠ BEHIND' : isOnTrack ? '✓ ON TRACK' : '○ MONITOR'}
+            </span>
+            <span className="text-gray-600">
+              {deliveredPct}% delivered · {data.exceptions.count} exception{data.exceptions.count !== 1 ? 's' : ''} · {pipelineCount} order{pipelineCount !== 1 ? 's' : ''} in pipeline
+            </span>
+            <span className="ml-auto text-gray-400 font-mono">
+              {data.stations.delivered.count} / {totalProcessed} done
+            </span>
+          </div>
+        )
+      })()}
+
       {/* ── Number strip (no charts, just counts) ── */}
       <div className="bg-[#1B2A4A] text-white rounded-lg overflow-hidden flex items-stretch text-xs">
         {[
@@ -662,25 +712,54 @@ export default function HubTodayModule({ onNavigate }: HubTodayModuleProps = {})
         </div>
       )}
 
-      {/* ── Station tabs ── */}
-      <div className="flex items-center gap-1 border-b border-gray-200 overflow-x-auto">
-        {STATIONS.map(s => {
-          const station = data.stations[s.key]
-          const count = station?.count ?? 0
-          const isActive = activeStation === s.key
-          const dwell = station?.avgDwellMinutes ?? null
-          const threshold = STALE_THRESHOLD_MINUTES[s.key]
-          const isStale = dwell != null && threshold != null && dwell > threshold && count > 0
-          const Icon = s.icon
-          return (
-            <button key={s.key} onClick={() => { setActiveStation(s.key); setExpandedId(null) }} className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${isActive ? 'border-[#FF6B35] text-[#FF6B35]' : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50'}`} title={dwell != null ? `Avg: ${formatDwell(dwell)}` : undefined}>
-              <Icon size={12} className={isActive ? 'text-[#FF6B35]' : 'text-gray-400'} />
-              <span>{s.shortLabel}</span>
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-[#FF6B35] text-white' : count > 0 ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>{count}</span>
-              {count > 0 && dwell != null && <span className={`text-[9px] font-mono px-1 rounded ${isStale ? 'text-orange-700 bg-orange-100' : 'text-gray-400'}`}>{isStale ? '⚠ ' : ''}{formatDwell(dwell)}</span>}
-            </button>
-          )
-        })}
+      {/* ── Pipeline flow diagram (replaces tab bar) ── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-2 overflow-x-auto">
+        <div className="flex items-stretch gap-0 min-w-max">
+          {STATIONS.map((s, i) => {
+            const station = data.stations[s.key]
+            const count = station?.count ?? 0
+            const isActive = activeStation === s.key
+            const dwell = station?.avgDwellMinutes ?? null
+            const threshold = STALE_THRESHOLD_MINUTES[s.key]
+            const stale = isStationStale(dwell, threshold, count)
+            const heatColor = dwellColor(dwell, threshold, count)
+            const Icon = s.icon
+            return (
+              <div key={s.key} className="flex items-stretch">
+                {/* Arrow connector (except first) */}
+                {i > 0 && (
+                  <div className="flex items-center px-0.5">
+                    <div className={`w-4 h-px ${count > 0 ? 'bg-gray-300' : 'bg-gray-100'}`} />
+                  </div>
+                )}
+                {/* Node */}
+                <button
+                  onClick={() => { setActiveStation(s.key); setExpandedId(null) }}
+                  className={`flex flex-col items-center justify-center px-3 py-2 rounded-lg transition-all min-w-[80px] relative ${
+                    isActive ? 'bg-orange-50 ring-2 ring-[#FF6B35]' : 'hover:bg-gray-50'
+                  }`}
+                  title={dwell != null ? `Avg dwell: ${formatDwell(dwell)}` : undefined}
+                >
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Icon size={12} className={isActive ? 'text-[#FF6B35]' : 'text-gray-400'} />
+                    <span className={`text-[10px] font-semibold ${isActive ? 'text-[#FF6B35]' : 'text-gray-600'}`}>{s.shortLabel}</span>
+                  </div>
+                  <span className={`font-mono font-bold text-lg tabular-nums leading-none ${count > 0 ? 'text-gray-900' : 'text-gray-300'}`}>{count}</span>
+                  {/* Dwell time */}
+                  {count > 0 && dwell != null && (
+                    <span className={`text-[9px] font-mono mt-0.5 ${stale ? 'text-orange-600 font-bold' : 'text-gray-400'}`}>
+                      {stale ? '⚠ ' : ''}{formatDwell(dwell)}
+                    </span>
+                  )}
+                  {/* Heat bar */}
+                  <div className="absolute bottom-0 left-2 right-2 h-0.5 rounded-full overflow-hidden">
+                    <div className={`h-full ${heatColor} ${stale ? 'animate-pulse' : ''}`} />
+                  </div>
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── Main: table + right rail ── */}
