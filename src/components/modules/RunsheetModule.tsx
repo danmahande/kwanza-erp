@@ -15,9 +15,11 @@ import {
   MapPin, Package, DollarSign, ChevronRight, ArrowRight,
   AlertTriangle, FileText, Search, Eye, X,
   ScanBarcode, Ban, CalendarClock, Filter,
+  HelpCircle, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
+import PageTransition from '@/components/shared/PageTransition'
 
 // ── Types ──
 interface Driver { id: string; driverId: string; name: string; phone: string; vehicleNumber: string | null; status: string }
@@ -116,8 +118,7 @@ const AttemptTracker = ({ attempts = 0, max = 5 }: { attempts?: number; max?: nu
 export default function RunsheetModule() {
   const [data, setData] = useState<RunsheetData | null>(null)
   const [drivers, setDrivers] = useState<Driver[]>([])
-  const [view, setView] = useState<'list' | Runsheet | null>(null)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'create' | Runsheet | null>('list')
   const [stopUpdateOpen, setStopUpdateOpen] = useState(false)
   const [updatingStop, setUpdatingStop] = useState<Stop | null>(null)
   const [search, setSearch] = useState('')
@@ -171,12 +172,12 @@ export default function RunsheetModule() {
 
   const handleOpenCreate = () => {
     resetCreateForm()
-    setCreateOpen(true)
+    setView('create')
   }
 
-  const handleCloseCreate = (open: boolean) => {
-    if (!open) resetCreateForm()
-    setCreateOpen(open)
+  const handleCloseCreate = () => {
+    resetCreateForm()
+    setView('list')
   }
 
   const handleCreateRunsheet = async () => {
@@ -192,7 +193,7 @@ export default function RunsheetModule() {
     const result = await res.json()
     if (res.ok) {
       toast.success(`Runsheet ${result.runsheetId} created with ${selectedOrders.length} stops!`)
-      handleCloseCreate(false)
+      handleCloseCreate()
       fetchData()
     } else {
       toast.error(result.error || 'Failed to create runsheet')
@@ -696,24 +697,287 @@ export default function RunsheetModule() {
   const driverInfo = drivers.find(d => d.driverId === formDriver)
   const canCreate = formDriver && selectedOrders.length > 0
 
+  // ── Create Runsheet (full-page) ──
+  if (view === 'create') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="create">
+          <div className="min-h-full flex flex-col">
+            {/* Top bar */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={handleCloseCreate}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5">
+                    <Truck size={16} className="text-[#FF6B35]" /> Create Runsheet
+                  </h1>
+                  <p className="text-[11px] text-gray-500">Step 1: Who → Step 2: What → Step 3: Review → Step 4: Commit</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+                {/* ── STEP 1: WHO IS RIDING? ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">1</div>
+                    <span className="text-sm font-semibold text-gray-800">Who is riding?</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-gray-600 text-xs">Rider *</Label>
+                      <Select value={formDriver} onValueChange={v => { setFormDriver(v); const d = drivers.find(d => d.driverId === v); if (d) setFormVehicle(d.vehicleNumber || '') }}>
+                        <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Select rider" /></SelectTrigger>
+                        <SelectContent>{drivers.filter(d => d.status === 'active').map(d => <SelectItem key={d.driverId} value={d.driverId}>{d.name} {d.vehicleNumber ? `(${d.vehicleNumber})` : ''}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-gray-600 text-xs">Bike Registration</Label>
+                      <Input value={formVehicle} onChange={e => setFormVehicle(e.target.value)} placeholder="e.g., KMC 234J" className="rounded-xl mt-1" />
+                    </div>
+                  </div>
+                  <div className="mt-2">
+                    <Label className="text-gray-600 text-xs">Trip Notes</Label>
+                    <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Special instructions for the rider..." rows={2} className="rounded-xl mt-1" />
+                  </div>
+                </div>
+
+                {/* ── STEP 2: WHAT GOES ON THE BIKE? ── */}
+                <div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">2</div>
+                    <span className="text-sm font-semibold text-gray-800">What goes on the bike?</span>
+                    <Badge variant="secondary" className="text-[10px] font-semibold bg-orange-50 text-[#FF6B35] border-0 ml-1">
+                      {selectedOrders.length} selected
+                    </Badge>
+                  </div>
+
+                  {/* Scan bar */}
+                  <div className="flex gap-2 mb-2">
+                    <div className="relative flex-1">
+                      <ScanBarcode size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FF6B35]" />
+                      <Input
+                        ref={scanInputRef}
+                        value={scanInput}
+                        onChange={e => setScanInput(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleScanOrder() } }}
+                        placeholder="Scan barcode or type order ID... (Enter to add)"
+                        className="pl-9 rounded-xl border-gray-200 text-sm font-mono"
+                      />
+                    </div>
+                    <Button type="button" onClick={handleScanOrder} disabled={!scanInput.trim()} variant="outline" className="rounded-xl border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white shrink-0">
+                      <Plus size={16} className="mr-1" /> Add
+                    </Button>
+                  </div>
+
+                  {/* Scan feedback */}
+                  <AnimatePresence>
+                    {scanMessage && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                      >
+                        <p className={`text-xs font-medium mb-2 ${scanMessage.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                          {scanMessage.type === 'success' ? '✓' : '✗'} {scanMessage.text}
+                        </p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  <p className="text-[10px] text-gray-400 mb-3">
+                    Scan barcodes rapidly — input auto-focuses after each scan. Paste multiple IDs separated by commas for bulk add.
+                  </p>
+
+                  {/* Filter + Select All / Clear All */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="relative flex-1">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Input
+                        value={orderSearch}
+                        onChange={e => setOrderSearch(e.target.value)}
+                        placeholder="Filter orders..."
+                        className="pl-8 h-8 rounded-lg border-gray-200 text-xs"
+                      />
+                    </div>
+                    <Button size="sm" variant="outline" onClick={allSelected ? clearAllOrders : selectAllOrders}
+                      className="rounded-lg text-xs h-8 border-gray-200 hover:bg-gray-50 shrink-0">
+                      {allSelected ? 'Clear All' : 'Select All'}
+                    </Button>
+                  </div>
+
+                  {/* Orders list */}
+                  {data && (
+                    <div className="space-y-1 max-h-60 overflow-y-auto rounded-xl border border-gray-200 p-1.5">
+                      {filteredUnassigned.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">
+                          {data.unassigned.length === 0 ? 'All orders have been assigned' : 'No orders match your filter'}
+                        </p>
+                      ) : (
+                        filteredUnassigned.map((order) => (
+                          <label
+                            key={order.id}
+                            className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-sm ${
+                              selectedOrders.includes(order.id)
+                                ? 'bg-[#FF6B35]/5 border border-[#FF6B35]/30'
+                                : 'hover:bg-gray-50 border border-transparent'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedOrders.includes(order.id)}
+                              onChange={() => toggleOrderSelection(order.id)}
+                              className="w-3.5 h-3.5 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
+                            />
+                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                              <span className="text-xs font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{order.outboundId}</span>
+                              <span className="font-medium text-gray-900 truncate">{order.customerName}</span>
+                              <span className="text-gray-400 truncate hidden sm:inline">· {order.productName}</span>
+                            </div>
+                            <span className="text-xs text-gray-500 font-semibold shrink-0">x{order.qty}</span>
+                          </label>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── STEP 3: TRIP SUMMARY ── */}
+                <AnimatePresence>
+                  {selectedOrdersList.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                    >
+                      <div className="flex items-center gap-2 mb-3">
+                        <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">3</div>
+                        <span className="text-sm font-semibold text-gray-800">Review trip</span>
+                      </div>
+
+                      {/* Summary header */}
+                      <div className="bg-gradient-to-r from-[#1B2A4A] to-[#243656] rounded-t-xl px-4 py-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Truck size={16} className="text-[#FF6B35]" />
+                          <span className="text-sm font-semibold text-white">
+                            {selectedOrdersList.length} stop{selectedOrdersList.length !== 1 ? 's' : ''}
+                          </span>
+                        </div>
+                        {driverInfo && (
+                          <div className="text-right">
+                            <p className="text-xs font-medium text-white">{driverInfo.name}</p>
+                            <p className="text-[10px] text-blue-200/60">
+                              {formVehicle || driverInfo.vehicleNumber || 'No bike plate'}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Summary table */}
+                      <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden">
+                        <div className="max-h-64 overflow-y-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-50 sticky top-0">
+                                <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-10 px-3 py-2">#</th>
+                                <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Order</th>
+                                <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Customer</th>
+                                <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hidden sm:table-cell">Product</th>
+                                <th className="text-right text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Qty</th>
+                                <th className="w-10 px-2 py-2"></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedOrdersList.map((order, i) => (
+                                <tr key={order.id} className="border-t border-gray-50 hover:bg-red-50/30 transition-colors group/row">
+                                  <td className="px-3 py-2">
+                                    <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                      {i + 1}
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-2 font-mono text-xs text-gray-400">{order.outboundId}</td>
+                                  <td className="px-2 py-2 font-medium text-gray-900">{order.customerName}</td>
+                                  <td className="px-2 py-2 text-gray-500 hidden sm:table-cell">{order.productName}</td>
+                                  <td className="px-2 py-2 text-right font-semibold text-gray-700">{order.qty}</td>
+                                  <td className="px-2 py-2">
+                                    <button
+                                      onClick={() => removeFromSelection(order.id)}
+                                      className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1 rounded hover:bg-red-100"
+                                      aria-label={`Remove ${order.outboundId}`}
+                                    >
+                                      <X size={12} className="text-red-400" />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-3xl mx-auto px-6 py-3 flex items-center justify-between">
+                <Button variant="ghost" size="sm" className="rounded-xl text-gray-500" onClick={handleCloseCreate}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleCreateRunsheet}
+                  disabled={!canCreate}
+                  className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl px-6"
+                >
+                  <Truck size={14} className="mr-2" />
+                  Create Runsheet
+                  {selectedOrders.length > 0 && (
+                    <Badge className="ml-2 bg-white/20 text-white border-0 text-xs">
+                      {selectedOrders.length} stop{selectedOrders.length !== 1 ? 's' : ''}
+                    </Badge>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   // ── List View ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      <OpsHeader
-        title="Runsheets"
-        description="Plan and track rider delivery trips"
-        kpiCells={[
-          { label: 'RUNSHEETS', value: data?.runsheets.length || 0 },
-          { label: 'IN PROGRESS', value: data?.runsheets.filter(r => r.status === 'in_progress').length || 0 },
-          { label: 'COMPLETED', value: data?.runsheets.filter(r => r.status === 'completed').length || 0 },
-          { label: 'UNASSIGNED', value: data?.unassigned.length || 0, highlight: (data?.unassigned.length || 0) > 0, highlightColor: 'orange' as const },
-        ]}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by rider, customer, or runsheet ID..."
-        actionLabel="Create Runsheet"
-        onAction={handleOpenCreate}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Runsheets"
+            description="Plan and track rider delivery trips"
+            kpiCells={[
+              { label: 'RUNSHEETS', value: data?.runsheets.length || 0 },
+              { label: 'IN PROGRESS', value: data?.runsheets.filter(r => r.status === 'in_progress').length || 0 },
+              { label: 'COMPLETED', value: data?.runsheets.filter(r => r.status === 'completed').length || 0 },
+              { label: 'UNASSIGNED', value: data?.unassigned.length || 0, highlight: (data?.unassigned.length || 0) > 0, highlightColor: 'orange' as const },
+            ]}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by rider, customer, or runsheet ID..."
+          />
+
+          {/* Action bar (below KPI, left-aligned) */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleOpenCreate}>
+              <Plus size={12} className="mr-1" /> Create Runsheet
+            </Button>
+          </div>
 
       {/* Status filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -815,250 +1079,6 @@ export default function RunsheetModule() {
         </div>
       )}
 
-      {/* ══════════════════════════════════════════════════════════════
-          CREATE RUNSHEET DIALOG -- Librarian Workflow
-          Step 1: WHO  → Select rider + bike
-          Step 2: WHAT → Scan / search / select orders
-          Step 3: REVIEW → Trip summary table
-          Step 4: COMMIT → Create runsheet
-          ══════════════════════════════════════════════════════════════ */}
-      <Dialog open={createOpen} onOpenChange={handleCloseCreate}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden rounded-2xl flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="text-gray-900 flex items-center gap-2">
-              <Truck size={20} className="text-[#FF6B35]" />
-              Create Runsheet
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto space-y-5 pr-1">
-
-            {/* ── STEP 1: WHO IS RIDING? ── */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">1</div>
-                <span className="text-sm font-semibold text-gray-800">Who is riding?</span>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-gray-600 text-xs">Rider *</Label>
-                  <Select value={formDriver} onValueChange={v => { setFormDriver(v); const d = drivers.find(d => d.driverId === v); if (d) setFormVehicle(d.vehicleNumber || '') }}>
-                    <SelectTrigger className="rounded-xl mt-1"><SelectValue placeholder="Select rider" /></SelectTrigger>
-                    <SelectContent>{drivers.filter(d => d.status === 'active').map(d => <SelectItem key={d.driverId} value={d.driverId}>{d.name} {d.vehicleNumber ? `(${d.vehicleNumber})` : ''}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label className="text-gray-600 text-xs">Bike Registration</Label>
-                  <Input value={formVehicle} onChange={e => setFormVehicle(e.target.value)} placeholder="e.g., KMC 234J" className="rounded-xl mt-1" />
-                </div>
-              </div>
-              <div className="mt-2">
-                <Label className="text-gray-600 text-xs">Trip Notes</Label>
-                <Textarea value={formNotes} onChange={e => setFormNotes(e.target.value)} placeholder="Special instructions for the rider..." rows={2} className="rounded-xl mt-1" />
-              </div>
-            </div>
-
-            {/* ── STEP 2: WHAT GOES ON THE BIKE? ── */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">2</div>
-                <span className="text-sm font-semibold text-gray-800">What goes on the bike?</span>
-                <Badge variant="secondary" className="text-[10px] font-semibold bg-orange-50 text-[#FF6B35] border-0 ml-1">
-                  {selectedOrders.length} selected
-                </Badge>
-              </div>
-
-              {/* Scan bar -- always visible */}
-              <div className="flex gap-2 mb-2">
-                <div className="relative flex-1">
-                  <ScanBarcode size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#FF6B35]" />
-                  <Input
-                    ref={scanInputRef}
-                    value={scanInput}
-                    onChange={e => setScanInput(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleScanOrder() } }}
-                    placeholder="Scan barcode or type order ID... (Enter to add)"
-                    className="pl-9 rounded-xl border-gray-200 text-sm font-mono"
-                  />
-                </div>
-                <Button type="button" onClick={handleScanOrder} disabled={!scanInput.trim()} variant="outline" className="rounded-xl border-[#FF6B35] text-[#FF6B35] hover:bg-[#FF6B35] hover:text-white shrink-0">
-                  <Plus size={16} className="mr-1" /> Add
-                </Button>
-              </div>
-
-              {/* Scan feedback */}
-              <AnimatePresence>
-                {scanMessage && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                  >
-                    <p className={`text-xs font-medium mb-2 ${scanMessage.type === 'success' ? 'text-green-600' : 'text-red-500'}`}>
-                      {scanMessage.type === 'success' ? '✓' : '✗'} {scanMessage.text}
-                    </p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <p className="text-[10px] text-gray-400 mb-3">
-                Scan barcodes rapidly -- input auto-focuses after each scan. Paste multiple IDs separated by commas for bulk add.
-              </p>
-
-              {/* Filter + Select All / Clear All */}
-              <div className="flex items-center gap-2 mb-2">
-                <div className="relative flex-1">
-                  <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                  <Input
-                    value={orderSearch}
-                    onChange={e => setOrderSearch(e.target.value)}
-                    placeholder="Filter orders..."
-                    className="pl-8 h-8 rounded-lg border-gray-200 text-xs"
-                  />
-                </div>
-                <Button size="sm" variant="outline" onClick={allSelected ? clearAllOrders : selectAllOrders}
-                  className="rounded-lg text-xs h-8 border-gray-200 hover:bg-gray-50 shrink-0">
-                  {allSelected ? 'Clear All' : 'Select All'}
-                </Button>
-              </div>
-
-              {/* Orders list (sorted oldest first) */}
-              {data && (
-                <div className="space-y-1 max-h-40 overflow-y-auto rounded-xl border border-gray-200 p-1.5">
-                  {filteredUnassigned.length === 0 ? (
-                    <p className="text-sm text-gray-400 text-center py-4">
-                      {data.unassigned.length === 0 ? 'All orders have been assigned' : 'No orders match your filter'}
-                    </p>
-                  ) : (
-                    filteredUnassigned.map((order, i) => (
-                      <label
-                        key={order.id}
-                        className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors text-sm ${
-                          selectedOrders.includes(order.id)
-                            ? 'bg-[#FF6B35]/5 border border-[#FF6B35]/30'
-                            : 'hover:bg-gray-50 border border-transparent'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedOrders.includes(order.id)}
-                          onChange={() => toggleOrderSelection(order.id)}
-                          className="w-3.5 h-3.5 rounded border-gray-300 text-[#FF6B35] focus:ring-[#FF6B35]"
-                        />
-                        <div className="flex-1 min-w-0 flex items-center gap-2">
-                          <span className="text-xs font-mono text-gray-400 bg-gray-50 px-1.5 py-0.5 rounded">{order.outboundId}</span>
-                          <span className="font-medium text-gray-900 truncate">{order.customerName}</span>
-                          <span className="text-gray-400 truncate hidden sm:inline">· {order.productName}</span>
-                        </div>
-                        <span className="text-xs text-gray-500 font-semibold shrink-0">x{order.qty}</span>
-                      </label>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* ── STEP 3: TRIP SUMMARY (verify before commit) ── */}
-            <AnimatePresence>
-              {selectedOrdersList.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                >
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-6 h-6 rounded-full bg-[#FF6B35] text-white flex items-center justify-center text-xs font-bold">3</div>
-                    <span className="text-sm font-semibold text-gray-800">Review trip</span>
-                  </div>
-
-                  {/* Summary header */}
-                  <div className="bg-gradient-to-r from-[#1B2A4A] to-[#243656] rounded-t-xl px-4 py-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Truck size={16} className="text-[#FF6B35]" />
-                      <span className="text-sm font-semibold text-white">
-                        {selectedOrdersList.length} stop{selectedOrdersList.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    {driverInfo && (
-                      <div className="text-right">
-                        <p className="text-xs font-medium text-white">{driverInfo.name}</p>
-                        <p className="text-[10px] text-blue-200/60">
-                          {formVehicle || driverInfo.vehicleNumber || 'No bike plate'}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Summary table */}
-                  <div className="border border-t-0 border-gray-200 rounded-b-xl overflow-hidden">
-                    <div className="max-h-48 overflow-y-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-gray-50 sticky top-0">
-                            <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-10 px-3 py-2">#</th>
-                            <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Order</th>
-                            <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Customer</th>
-                            <th className="text-left text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2 hidden sm:table-cell">Product</th>
-                            <th className="text-right text-[10px] font-semibold text-gray-500 uppercase tracking-wider px-2 py-2">Qty</th>
-                            <th className="w-10 px-2 py-2"></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {selectedOrdersList.map((order, i) => (
-                            <tr key={order.id} className="border-t border-gray-50 hover:bg-red-50/30 transition-colors group/row">
-                              <td className="px-3 py-2">
-                                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
-                                  {i + 1}
-                                </div>
-                              </td>
-                              <td className="px-2 py-2 font-mono text-xs text-gray-400">{order.outboundId}</td>
-                              <td className="px-2 py-2 font-medium text-gray-900">{order.customerName}</td>
-                              <td className="px-2 py-2 text-gray-500 hidden sm:table-cell">{order.productName}</td>
-                              <td className="px-2 py-2 text-right font-semibold text-gray-700">{order.qty}</td>
-                              <td className="px-2 py-2">
-                                <button
-                                  onClick={() => removeFromSelection(order.id)}
-                                  className="opacity-0 group-hover/row:opacity-100 transition-opacity p-1 rounded hover:bg-red-100"
-                                  aria-label={`Remove ${order.outboundId}`}
-                                >
-                                  <X size={12} className="text-red-400" />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-
-          {/* ── STEP 4: COMMIT ── */}
-          <DialogFooter className="pt-3 border-t border-gray-100 mt-2">
-            <div className="flex items-center justify-between w-full">
-              <Button variant="ghost" onClick={() => handleCloseCreate(false)} className="rounded-xl text-gray-500">
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateRunsheet}
-                disabled={!canCreate}
-                className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl px-6"
-              >
-                <Truck size={16} className="mr-2" />
-                Create Runsheet
-                {selectedOrders.length > 0 && (
-                  <Badge className="ml-2 bg-white/20 text-white border-0 text-xs">
-                    {selectedOrders.length} stop{selectedOrders.length !== 1 ? 's' : ''}
-                  </Badge>
-                )}
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* ── Update Stop Dialog ── */}
       <Dialog open={stopUpdateOpen} onOpenChange={setStopUpdateOpen}>
         <DialogContent className="rounded-2xl">
@@ -1105,6 +1125,8 @@ export default function RunsheetModule() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
