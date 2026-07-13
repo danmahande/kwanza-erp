@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import {
   Search, Package, ArrowDownRight, CheckCircle2, XCircle,
   Clock, Truck, AlertTriangle, RotateCcw, Trash2, ClipboardList,
-  ChevronRight, MapPin, Calendar,
+  ChevronRight, MapPin, Calendar, HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
@@ -17,6 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Label } from '@/components/ui/label'
+import PageTransition from '@/components/shared/PageTransition'
 
 // ── Types ──
 interface ItemEvent {
@@ -167,6 +168,7 @@ export default function ItemTrackerModule() {
   const [updateAction, setUpdateAction] = useState<'DAMAGED' | 'DISPOSED' | 'RETURNED_TO_WAREHOUSE' | 'RELOCATE'>('DAMAGED')
   const [updateReason, setUpdateReason] = useState('')
   const [newLocation, setNewLocation] = useState('')
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const handleUpdateItem = async () => {
     if (!item) return
@@ -524,70 +526,119 @@ export default function ItemTrackerModule() {
   // ── List View (search results) ──
   // ── Main View ──
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      <OpsHeader
-        title="Item Tracker"
-        description="Track any item through its complete lifecycle journey"
-        kpiCells={[
-          { label: 'TRACKED ITEMS', value: items.length },
-          { label: 'IN WAREHOUSE', value: items.filter(i => i.status === 'IN_WAREHOUSE').length },
-          { label: 'IN TRANSIT', value: items.filter(i => i.status === 'IN_TRANSIT').length },
-          { label: 'DELIVERED', value: items.filter(i => i.status === 'DELIVERED').length },
-        ]}
-        searchValue={searchInput}
-        onSearchChange={setSearchInput}
-        onSearchSubmit={handleSearch}
-        searchPlaceholder="Enter Item ID (e.g., ITM-123456) or product name, then press Enter..."
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Item Tracker"
+            description="Track any item through its complete lifecycle journey"
+            kpiCells={[
+              { label: 'TRACKED ITEMS', value: items.length },
+              { label: 'IN WAREHOUSE', value: items.filter(i => i.status === 'IN_WAREHOUSE').length },
+              { label: 'IN TRANSIT', value: items.filter(i => i.status === 'IN_TRANSIT').length },
+              { label: 'DELIVERED', value: items.filter(i => i.status === 'DELIVERED').length },
+            ]}
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            onSearchSubmit={handleSearch}
+            searchPlaceholder="Enter Item ID (e.g., ITM-123456) or product name, then press Enter..."
+          />
 
-      {/* Search hint */}
-      <div className="flex items-center gap-3 text-[11px] text-gray-400">
-        <button onClick={handleShowAll} disabled={!searchInput.trim()} className="text-[#FF6B35] hover:text-[#E55A25] font-medium disabled:text-gray-300">
-          Search all items matching "{searchInput || '...'}"
-        </button>
-      </div>
+          {/* Action bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+              <HelpCircle size={12} className="mr-1" /> Help
+            </Button>
+          </div>
 
-      {/* Dense table for list results */}
-      {listMode && items.length > 0 ? (
-        <DenseTable>
-          <thead>
-            <tr>
-              <DenseTh className="w-24">Item ID</DenseTh>
-              <DenseTh>Product</DenseTh>
-              <DenseTh>Merchant</DenseTh>
-              <DenseTh className="w-20 text-center">Status</DenseTh>
-              <DenseTh className="w-20 text-center">Condition</DenseTh>
-              <DenseTh className="w-20">Outbound</DenseTh>
-            </tr>
-          </thead>
-          <tbody>
-            {items.slice(0, 100).map((item, i) => {
-              const sc = statusColor(item.status)
-              return (
-                <AnimatedDenseTr key={item.id} index={i} onClick={() => fetchItem(item.itemId)}>
-                  <DenseTd mono className="text-gray-900 font-semibold text-[10px]">{item.itemId}</DenseTd>
-                  <DenseTd>
-                    <p className="text-gray-900 text-xs font-medium truncate max-w-[150px]">{item.productName}</p>
-                  </DenseTd>
-                  <DenseTd className="text-gray-600 text-[11px]">{item.merchantName}</DenseTd>
-                  <DenseTd className="text-center">
-                    <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-semibold ${sc.bg} ${sc.text}`}>{item.status.replace(/_/g, ' ')}</span>
-                  </DenseTd>
-                  <DenseTd className="text-center">
-                    <span className={`text-[9px] font-medium ${item.condition === 'good' ? 'text-green-600' : item.condition === 'damaged' ? 'text-red-600' : 'text-gray-400'}`}>{item.condition}</span>
-                  </DenseTd>
-                  <DenseTd mono className="text-gray-400 text-[10px]">{item.outboundId || '—'}</DenseTd>
-                </AnimatedDenseTr>
-              )
-            })}
-          </tbody>
-        </DenseTable>
-      ) : !item && !listMode && (
-        <div className="py-12 text-center text-gray-400 text-sm">
-          <Search size={32} className="mx-auto mb-3 text-gray-300" />
-          Enter an Item ID above to see its complete journey, from receipt through storage, picking, dispatch, delivery, and any returns or failures.
+          {/* Search hint */}
+          <div className="flex items-center gap-3 text-[11px] text-gray-400">
+            <button onClick={handleShowAll} disabled={!searchInput.trim()} className="text-[#FF6B35] hover:text-[#E55A25] font-medium disabled:text-gray-300">
+              Search all items matching &quot;{searchInput || '...'}&quot;
+            </button>
+          </div>
+
+          {/* Dense table for list results */}
+          {listMode && items.length > 0 ? (
+            <DenseTable>
+              <thead>
+                <tr>
+                  <DenseTh className="w-24">Item ID</DenseTh>
+                  <DenseTh>Product</DenseTh>
+                  <DenseTh>Merchant</DenseTh>
+                  <DenseTh className="w-20 text-center">Status</DenseTh>
+                  <DenseTh className="w-20 text-center">Condition</DenseTh>
+                  <DenseTh className="w-20">Outbound</DenseTh>
+                </tr>
+              </thead>
+              <tbody>
+                {items.slice(0, 100).map((item, i) => {
+                  const sc = statusColor(item.status)
+                  return (
+                    <AnimatedDenseTr key={item.id} index={i} onClick={() => fetchItem(item.itemId)}>
+                      <DenseTd mono className="text-gray-900 font-semibold text-[10px]">{item.itemId}</DenseTd>
+                      <DenseTd>
+                        <p className="text-gray-900 text-xs font-medium truncate max-w-[150px]">{item.productName}</p>
+                      </DenseTd>
+                      <DenseTd className="text-gray-600 text-[11px]">{item.merchantName}</DenseTd>
+                      <DenseTd className="text-center">
+                        <span className={`inline-block px-1 py-0.5 rounded text-[8px] font-semibold ${sc.bg} ${sc.text}`}>{item.status.replace(/_/g, ' ')}</span>
+                      </DenseTd>
+                      <DenseTd className="text-center">
+                        <span className={`text-[9px] font-medium ${item.condition === 'good' ? 'text-green-600' : item.condition === 'damaged' ? 'text-red-600' : 'text-gray-400'}`}>{item.condition}</span>
+                      </DenseTd>
+                      <DenseTd mono className="text-gray-400 text-[10px]">{item.outboundId || '—'}</DenseTd>
+                    </AnimatedDenseTr>
+                  )
+                })}
+              </tbody>
+            </DenseTable>
+          ) : !item && !listMode && (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+                <Search size={28} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">Track any item</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto">
+                Enter an Item ID above to see its complete journey, from receipt through storage, picking, dispatch, delivery, and any returns or failures.
+              </p>
+            </div>
+          )}
+
+          {/* Help dialog */}
+          <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Item Tracker</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Track any individual unit by its Item ID (ITM-xxx). Every unit received via inbound gets a unique barcode and a complete lifecycle history.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-3 py-2 text-xs text-gray-700">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Search</p>
+                  <p>Type an Item ID (e.g., ITM-123456) or product name in the search bar and press Enter. Or click &quot;Search all items matching&quot; to see a list of results.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Item Detail</p>
+                  <p>Clicking a result opens a full-page detail view showing the item&apos;s complete journey: receipt, storage, picking, dispatch, delivery, returns. Includes product info, merchant, storage location, and expiry.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Warehouse Actions</p>
+                  <p>From the detail view you can: mark as damaged, dispose, return to warehouse after failed delivery, or relocate to a different shelf. Each action is logged in the event timeline.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Event Timeline</p>
+                  <p>Every state change is recorded as an event with timestamp, location, and who performed it. This is the audit trail for each unit.</p>
+                </div>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      )}
-    </motion.div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

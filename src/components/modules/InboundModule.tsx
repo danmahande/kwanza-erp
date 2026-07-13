@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -15,10 +15,12 @@ import {
   MapPin, DollarSign, Package, Calendar, Filter, X,
   Loader2, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
   CheckSquare, Square, Upload, Trash2, User, Building2, Clock,
+  HelpCircle, Layers, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader } from '@/components/shared/ops-ui'
+import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
 import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
@@ -297,7 +299,8 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
   // ── SlideOver ──
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<InboundRecord | null>(null)
-  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add' | 'table'>('list')
+  const [helpOpen, setHelpOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     merchantId: '', merchantName: '', vendorId: '', productId: '', productName: '',
@@ -418,7 +421,7 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
       const res = await fetch('/api/inbound', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
       if (res.ok) {
         toast.success(`Inventory received successfully, ${qtyIn} units (IN record created)`)
-        setOpen(false); resetForm(); fetchData()
+        setView('list'); resetForm(); fetchData()
       } else if (res.status === 409) {
         const err = await res.json().catch(() => ({}))
         if (err.code === 'MERCHANT_ON_HOLD') {
@@ -515,105 +518,297 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
   ], [])
 
   // ════════════════════════════════════════
-  // ── RENDER ──
+  // ── RENDER: FULL-PAGE RECEIVE INVENTORY ──
+  // ════════════════════════════════════════
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">Receive Inventory</h1>
+                  <p className="text-[11px] text-gray-500">New inbound record · Stock enters the warehouse here</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                {/* Merchant */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Merchant / Supplier *</Label>
+                  <Select value={form.merchantId} onValueChange={handleMerchantSelect}>
+                    <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue placeholder="Select merchant" /></SelectTrigger>
+                    <SelectContent>
+                      {merchants.map(m => <SelectItem key={m.merchantId} value={m.merchantId}>{m.businessName}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Product */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Product *</Label>
+                  <Select value={form.productId} onValueChange={handleProductSelect} disabled={!form.merchantId}>
+                    <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue placeholder={form.merchantId ? 'Select product' : 'Select merchant first'} /></SelectTrigger>
+                    <SelectContent>
+                      {products.map(p => <SelectItem key={p.productId} value={p.productId}>{p.productLabel} {p.brand ? `(${p.brand})` : ''}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {/* Quantity & Price */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">Quantity *</Label>
+                    <Input type="number" value={form.qtyIn} onChange={e => setForm({ ...form, qtyIn: e.target.value })} placeholder="0" className="mt-1.5 rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">Unit Price</Label>
+                    <Input type="number" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} placeholder="0.00" className="mt-1.5 rounded-xl" />
+                  </div>
+                </div>
+                {form.qtyIn && form.unitPrice && (
+                  <div className="bg-green-50 rounded-lg border border-green-100 p-3">
+                    <p className="text-xs text-gray-500">Total Inbound Value</p>
+                    <p className="text-lg font-bold text-green-700">UGX {(parseInt(form.qtyIn) * parseFloat(form.unitPrice)).toLocaleString()}</p>
+                  </div>
+                )}
+                {/* Expiry Date */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Expiry Date</Label>
+                  <Input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className="mt-1.5 rounded-xl" />
+                </div>
+                {/* Storage Location */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Storage Location</Label>
+                  <div className="grid grid-cols-3 gap-3 mt-1.5">
+                    <Select value={form.storageLocation ? form.storageLocation.split('-')[0] : ''} onValueChange={v => setForm({ ...form, storageLocation: v ? `${v}-${form.storageLocation?.split('-')[1] || ''}-${form.storageLocation?.split('-')[2] || ''}` : '' })}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Zone" /></SelectTrigger>
+                      <SelectContent>{ZONES.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={form.storageLocation ? form.storageLocation.split('-')[1] || '' : ''} onValueChange={v => setForm({ ...form, storageLocation: `${form.storageLocation?.split('-')[0] || ''}-${v}-${form.storageLocation?.split('-')[2] || ''}` })}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Level" /></SelectTrigger>
+                      <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
+                    </Select>
+                    <Select value={form.storageLocation ? form.storageLocation.split('-')[2] || '' : ''} onValueChange={v => setForm({ ...form, storageLocation: `${form.storageLocation?.split('-')[0] || ''}-${form.storageLocation?.split('-')[1] || ''}-${v}` })}>
+                      <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pallet" /></SelectTrigger>
+                      <SelectContent>{PALLETS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+                  {form.storageLocation && form.storageLocation.split('-').filter(Boolean).length === 3 && (
+                    <p className="text-xs text-[#1B2A4A] font-medium mt-1.5 flex items-center gap-1"><MapPin size={12} />Location: {form.storageLocation}</p>
+                  )}
+                </div>
+                {/* Received By & Stored By */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">Received By *</Label>
+                    <Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Name" className="mt-1.5 rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium text-gray-600">Stored By</Label>
+                    <Input value={form.storedBy} onChange={e => setForm({ ...form, storedBy: e.target.value })} placeholder="Name" className="mt-1.5 rounded-xl" />
+                  </div>
+                </div>
+                {/* Comment */}
+                <div>
+                  <Label className="text-xs font-medium text-gray-600">Comment</Label>
+                  <Textarea value={form.userComment} onChange={e => setForm({ ...form, userComment: e.target.value })} placeholder="Optional notes..." className="mt-1.5 rounded-xl" rows={3} />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl flex items-center gap-1.5" onClick={handleSubmit} disabled={submitting}>
+                  {submitting && <Loader2 size={14} className="animate-spin" />}
+                  {submitting ? 'Submitting...' : 'Receive Inventory'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ════════════════════════════════════════
+  // ── RENDER: FULL-PAGE ALL INBOUND ──
+  // ════════════════════════════════════════
+  if (view === 'table') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="table">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Layers size={16} className="text-[#FF6B35]" /> All Inbound</h1>
+                  <p className="text-[11px] text-gray-500">{data.length} records · Click any row for details</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="max-w-7xl mx-auto space-y-3">
+                {/* Filter chips */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Filter size={14} className="text-gray-400" />
+                  <button onClick={() => handleFilterStatusChange(null)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${!filterStatus ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    All
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${!filterStatus ? 'bg-white/20' : 'bg-gray-100'}`}>{data.length}</span>
+                  </button>
+                  {INBOUND_STATUSES.map(s => {
+                    const isActive = filterStatus === s.key
+                    const count = statusCounts[s.key] || 0
+                    return (
+                      <button key={s.key} onClick={() => handleFilterStatusChange(isActive ? null : s.key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                        <span className={`w-2 h-2 rounded-full ${s.dot}`} />
+                        {s.label}
+                        <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+                      </button>
+                    )
+                  })}
+                  {vendors.length > 0 && (
+                    <select value={filterVendor[0] || ''} onChange={e => handleFilterVendorChange(e.target.value || null)}
+                      className="ml-auto px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white">
+                      <option value="">All Vendors</option>
+                      {vendors.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  )}
+                </div>
+                {/* Table */}
+                {loading ? (
+                  <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
+                ) : paginatedData.length === 0 ? (
+                  <div className="text-center py-20 text-gray-400"><Package size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm font-medium">No inbound records found</p></div>
+                ) : (
+                  <DataTable
+                    data={paginatedData}
+                    columns={tableColumns}
+                    keyExtractor={(r) => r.id}
+                    onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
+                    pageSize={25}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ════════════════════════════════════════
+  // ── RENDER: OVERVIEW ──
   // ════════════════════════════════════════
   return (
-    <div className="space-y-3">
-      <OpsHeader
-        title="Inbound"
-        description="Receive and manage incoming inventory"
-        kpiCells={[
-          { label: 'TOTAL', value: data.length },
-          { label: 'RECEIVED', value: data.filter(r => r.status === 'received').length },
-          { label: 'PUT AWAY', value: data.filter(r => r.status === 'put_away').length },
-          { label: 'STORED', value: data.filter(r => r.status === 'stored').length },
-          { label: 'UNITS', value: data.reduce((s, r) => s + r.qtyIn, 0) },
-        ]}
-        searchValue={search}
-        onSearchChange={handleSearchChange}
-        searchPlaceholder="Search inbound records..."
-        actionLabel="Receive Inventory"
-        onAction={() => { resetForm(); setOpen(true) }}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="Inbound"
+            description="Receive and manage incoming inventory"
+            kpiCells={[
+              { label: 'TOTAL', value: data.length },
+              { label: 'RECEIVED', value: data.filter(r => r.status === 'received').length },
+              { label: 'PUT AWAY', value: data.filter(r => r.status === 'put_away').length },
+              { label: 'STORED', value: data.filter(r => r.status === 'stored').length },
+              { label: 'UNITS', value: data.reduce((s, r) => s + r.qtyIn, 0) },
+            ]}
+            searchValue={search}
+            onSearchChange={handleSearchChange}
+            searchPlaceholder="Search inbound records..."
+          />
 
-      {/* Filter chips (Outbound pattern: plain buttons, no Popover) */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Filter size={14} className="text-gray-400" />
-        {/* Status chips */}
-        <button
-          onClick={() => handleFilterStatusChange(null)}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${!filterStatus ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-        >
-          All
-          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${!filterStatus ? 'bg-white/20' : 'bg-gray-100'}`}>{data.length}</span>
-        </button>
-        {INBOUND_STATUSES.map(s => {
-          const isActive = filterStatus === s.key
-          const count = statusCounts[s.key] || 0
-          return (
-            <button
-              key={s.key}
-              onClick={() => handleFilterStatusChange(isActive ? null : s.key)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isActive ? 'bg-[#FF6B35] text-white shadow-sm' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-            >
-              <span className={`w-2 h-2 rounded-full ${s.dot}`} />
-              {s.label}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${isActive ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
-            </button>
-          )
-        })}
-        {/* Vendor filter */}
-        {vendors.length > 0 && (
-          <select
-            value={filterVendor[0] || ''}
-            onChange={e => handleFilterVendorChange(e.target.value || null)}
-            className="ml-auto px-2 py-1.5 rounded-md text-xs border border-gray-200 text-gray-600 bg-white"
-          >
-            <option value="">All Vendors</option>
-            {vendors.map(v => <option key={v} value={v}>{v}</option>)}
-          </select>
-        )}
-      </div>
-
-      {/* ── Table ── */}
-      {loading ? (
-        <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-[#FF6B35] animate-spin" /></div>
-      ) : paginatedData.length === 0 ? (
-        <div className="text-center py-20 text-gray-400"><Package size={40} className="mx-auto mb-3 opacity-40" /><p className="text-sm font-medium">No inbound records found</p><p className="text-xs mt-1">Try adjusting your filters or receive new inventory</p></div>
-      ) : (
-        <DataTable
-          data={paginatedData}
-          columns={tableColumns}
-          keyExtractor={(r) => r.id}
-          onRowClick={(r) => { setSelectedRecord(r); setDetailOpen(true) }}
-          pageSize={25}
-        />
-      )}
-      {/* Pagination handled by DataTable internally */}
-
-      {/* ── Detail SlideOver ── */}
-      <DetailSlideOver
-        open={detailOpen}
-        onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
-        title={selectedRecord?.productName || 'Record Details'}
-        subtitle={selectedRecord?.inboundId}
-        width="lg"
-        footer={selectedRecord ? (
-          <div className="flex items-center justify-between">
-            <AlertDialog>
-              <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"><Trash2 size={14} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
-              <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this record?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteRecord(selectedRecord.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button variant="outline" size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl ml-auto">Close</Button>
+          {/* Action bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => { resetForm(); setView('add') }}>
+              <ArrowDownRight size={12} className="mr-1" /> Receive Inventory
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setView('table')} disabled={data.length === 0}>
+              <Layers size={12} className="mr-1" /> View All
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
+              <HelpCircle size={12} className="mr-1" /> Help
+            </Button>
           </div>
-        ) : undefined}
-      >
-        {selectedRecord && (
-          <div className="space-y-3">
-            {/* Status + Date */}
-            <div className="flex items-center justify-between">
+
+          {/* Empty state */}
+          {data.length === 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className="w-16 h-16 mx-auto bg-orange-50 rounded-full flex items-center justify-center mb-4">
+                <ArrowDownRight size={28} className="text-orange-500" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900 mb-1">No inbound records</h3>
+              <p className="text-xs text-gray-500 max-w-md mx-auto mb-4">
+                Receive inventory from merchants to start tracking stock. Each record creates individual item barcodes for per-unit tracking.
+              </p>
+              <Button className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={() => { resetForm(); setView('add') }}>
+                <ArrowDownRight size={14} className="mr-1.5" /> Receive Inventory
+              </Button>
+            </div>
+          )}
+
+          {/* Search results (inline) */}
+          {search && data.length > 0 && !loading && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <div className="divide-y divide-gray-50">
+                {data.slice(0, 10).map(r => (
+                  <div key={r.id} onClick={() => { setSelectedRecord(r); setDetailOpen(true) }} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                    <span className={`w-2 h-2 rounded-full shrink-0 ${INBOUND_STATUSES.find(s => s.key === r.status)?.dot || 'bg-gray-300'}`} />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-semibold text-gray-900">{r.productName}</span>
+                      <span className="text-[10px] text-gray-400 ml-2">{r.inboundId}</span>
+                    </div>
+                    <span className="text-[10px] text-gray-500 shrink-0">{r.merchantName}</span>
+                    <span className="text-[11px] font-mono font-bold shrink-0 text-gray-900">{r.qtyIn}</span>
+                    <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                  </div>
+                ))}
+                {data.length > 10 && (
+                  <button onClick={() => setView('table')} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
+                    View all {data.length} records →
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Loading */}
+          {loading && <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 text-[#FF6B35] animate-spin" /></div>}
+
+          {/* ── Detail SlideOver ── */}
+          <DetailSlideOver
+            open={detailOpen}
+            onClose={() => { setDetailOpen(false); setSelectedRecord(null) }}
+            title={selectedRecord?.productName || 'Record Details'}
+            subtitle={selectedRecord?.inboundId}
+            width="lg"
+            footer={selectedRecord ? (
+              <div className="flex items-center justify-between">
+                <AlertDialog>
+                  <AlertDialogTrigger asChild><Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl"><Trash2 size={14} className="mr-1.5" />Delete</Button></AlertDialogTrigger>
+                  <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete this record?</AlertDialogTitle><AlertDialogDescription>This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
+                    <AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={() => handleDeleteRecord(selectedRecord.id)} className="bg-red-600 hover:bg-red-700">Delete</AlertDialogAction></AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button variant="outline" size="sm" onClick={() => { setDetailOpen(false); setSelectedRecord(null) }} className="rounded-xl ml-auto">Close</Button>
+              </div>
+            ) : undefined}
+          >
+            {selectedRecord && (
+              <div className="space-y-3">
+                {/* Status + Date */}
+                <div className="flex items-center justify-between">
               <div>{statusBadge(selectedRecord.status)}</div>
               <div className="text-xs text-gray-400">{new Date(selectedRecord.createdAt).toLocaleDateString('en-UG', { year: 'numeric', month: 'short', day: 'numeric' })}</div>
             </div>
@@ -695,113 +890,40 @@ export default function InboundModule({ onNavigate }: { onNavigate?: (module: st
         )}
       </DetailSlideOver>
 
-      {/* ── Create New SlideOver ── */}
-      <DetailSlideOver
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Receive Inventory"
-        subtitle="New inbound record"
-        width="lg"
-        footer={
-          <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl flex items-center gap-1.5">
-              {submitting && <Loader2 size={14} className="animate-spin" />}
-              {submitting ? 'Submitting...' : 'Receive Inventory'}
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-5">
-          {/* Merchant */}
-          <div>
-            <Label className="text-xs font-medium text-gray-600">Merchant / Supplier *</Label>
-            <Select value={form.merchantId} onValueChange={handleMerchantSelect}>
-              <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue placeholder="Select merchant" /></SelectTrigger>
-              <SelectContent>
-                {merchants.map(m => <SelectItem key={m.merchantId} value={m.merchantId}>{m.businessName}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Product (cascading from merchant) */}
-          <div>
-            <Label className="text-xs font-medium text-gray-600">Product *</Label>
-            <Select value={form.productId} onValueChange={handleProductSelect} disabled={!form.merchantId}>
-              <SelectTrigger className="mt-1.5 rounded-xl"><SelectValue placeholder={form.merchantId ? 'Select product' : 'Select merchant first'} /></SelectTrigger>
-              <SelectContent>
-                {products.map(p => <SelectItem key={p.productId} value={p.productId}>{p.productLabel} {p.brand ? `(${p.brand})` : ''}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Quantity & Price */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Quantity *</Label>
-              <Input type="number" value={form.qtyIn} onChange={e => setForm({ ...form, qtyIn: e.target.value })} placeholder="0" className="mt-1.5 rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Unit Price</Label>
-              <Input type="number" value={form.unitPrice} onChange={e => setForm({ ...form, unitPrice: e.target.value })} placeholder="0.00" className="mt-1.5 rounded-xl" />
-            </div>
-          </div>
-
-          {/* Value preview */}
-          {form.qtyIn && form.unitPrice && (
-            <div className="bg-green-50 rounded-lg border border-green-100 p-3">
-              <p className="text-xs text-gray-500">Total Inbound Value</p>
-              <p className="text-lg font-bold text-green-700">UGX {(parseInt(form.qtyIn) * parseFloat(form.unitPrice)).toLocaleString()}</p>
-            </div>
-          )}
-
-          {/* Expiry Date */}
-          <div>
-            <Label className="text-xs font-medium text-gray-600">Expiry Date</Label>
-            <Input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} className="mt-1.5 rounded-xl" />
-          </div>
-
-          {/* Storage Location: Zone > Level > Pallet */}
-          <div>
-            <Label className="text-xs font-medium text-gray-600">Storage Location</Label>
-            <div className="grid grid-cols-3 gap-3 mt-1.5">
-              <Select value={form.storageLocation ? form.storageLocation.split('-')[0] : ''} onValueChange={v => setForm({ ...form, storageLocation: v ? `${v}-${form.storageLocation?.split('-')[1] || ''}-${form.storageLocation?.split('-')[2] || ''}` : '' })}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Zone" /></SelectTrigger>
-                <SelectContent>{ZONES.map(z => <SelectItem key={z} value={z}>{z}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={form.storageLocation ? form.storageLocation.split('-')[1] || '' : ''} onValueChange={v => setForm({ ...form, storageLocation: `${form.storageLocation?.split('-')[0] || ''}-${v}-${form.storageLocation?.split('-')[2] || ''}` })}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Level" /></SelectTrigger>
-                <SelectContent>{LEVELS.map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}</SelectContent>
-              </Select>
-              <Select value={form.storageLocation ? form.storageLocation.split('-')[2] || '' : ''} onValueChange={v => setForm({ ...form, storageLocation: `${form.storageLocation?.split('-')[0] || ''}-${form.storageLocation?.split('-')[1] || ''}-${v}` })}>
-                <SelectTrigger className="rounded-xl"><SelectValue placeholder="Pallet" /></SelectTrigger>
-                <SelectContent>{PALLETS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            {form.storageLocation && form.storageLocation.split('-').filter(Boolean).length === 3 && (
-              <p className="text-xs text-[#1B2A4A] font-medium mt-1.5 flex items-center gap-1"><MapPin size={12} />Location: {form.storageLocation}</p>
-            )}
-          </div>
-
-          {/* Received By & Stored By */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Received By *</Label>
-              <Input value={form.receivedBy} onChange={e => setForm({ ...form, receivedBy: e.target.value })} placeholder="Name" className="mt-1.5 rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium text-gray-600">Stored By</Label>
-              <Input value={form.storedBy} onChange={e => setForm({ ...form, storedBy: e.target.value })} placeholder="Name" className="mt-1.5 rounded-xl" />
-            </div>
-          </div>
-
-          {/* Comment */}
-          <div>
-            <Label className="text-xs font-medium text-gray-600">Comment</Label>
-            <Textarea value={form.userComment} onChange={e => setForm({ ...form, userComment: e.target.value })} placeholder="Optional notes..." className="mt-1.5 rounded-xl" rows={3} />
-          </div>
+          {/* Help dialog */}
+          <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
+            <AlertDialogContent className="rounded-2xl max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Inbound</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Receive stock from merchants into the warehouse. Each inbound record creates individual item barcodes for per-unit tracking and updates stock levels automatically.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="space-y-3 py-2 text-xs text-gray-700">
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Receive Inventory</p>
+                  <p>Opens a full-page form. Select merchant, then product (cascading), enter quantity and unit price. The system creates the inbound record, updates stock, and generates a barcode for each unit.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">View All</p>
+                  <p>Opens a full-page table with all inbound records, filterable by status (Received, Put Away, Stored) and vendor. Click any row for details.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Storage Location</p>
+                  <p>Three-part location: Zone (A-D), Level (1-4), Pallet (P1-P10). Helps warehouse staff find stock quickly during picking.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Profile</p>
+                  <p>Click any row to see full details: status workflow, product info, quantities, pricing, storage location, and who received/stored it.</p>
+                </div>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-      </DetailSlideOver>
-    </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
