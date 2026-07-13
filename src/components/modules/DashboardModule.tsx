@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
+import ExcelJS from 'exceljs'
 import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area,
@@ -158,138 +159,196 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
     if (!data) return
     setExporting(true)
     try {
-      const rows: string[] = []
-      const now = new Date()
-      // ── Header ──
-      rows.push('KWANZA ERP — OPERATIONS DASHBOARD REPORT')
-      rows.push(`Generated: ${now.toLocaleString('en-UG')}`)
-      rows.push(`Period: ${period}`)
-      rows.push(`Report By: ${typeof window !== 'undefined' ? 'System User' : 'System'}`)
-      rows.push('')
-      rows.push('═'.repeat(60))
-      rows.push('')
+      const wb = new ExcelJS.Workbook()
+      wb.creator = 'Kwanza ERP'
+      wb.created = new Date()
 
-      // ── Executive Summary ──
-      rows.push('1. EXECUTIVE SUMMARY')
-      rows.push('-'.repeat(40))
-      rows.push(`Total Revenue (Delivered Sales),${data.stats.totalRevenue}`)
-      rows.push(`Commission Earned,${data.stats.totalCommission}`)
-      rows.push(`Net Profit (Commission - Shrinkage - Returns),${data.stats.netProfit || 0}`)
-      rows.push(`Average Order Value,${data.stats.avgOrderValue}`)
-      rows.push(`Fulfillment Rate,${data.orders.fulfillmentRate}%`)
-      rows.push(`On-Time Rate,${data.onTimeRate}%`)
-      rows.push(`Exception Rate,${data.exceptionRate}%`)
-      rows.push(`First-Attempt Success Rate,${data.firstAttemptRate || 0}%`)
-      rows.push(`Avg Cycle Time (hours),${data.avgCycleTimeHours || 0}`)
-      rows.push(`Stock Value,${data.stats.totalStockValue}`)
-      rows.push(`Active Merchants,${data.stats.totalMerchants}`)
-      rows.push(`Active Products,${data.stats.totalProducts}`)
-      rows.push(`Active Drivers,${data.stats.activeDrivers}`)
-      rows.push(`Total Customers,${data.stats.totalCustomers}`)
-      rows.push('')
+      // ── Helper: style a header row ──
+      const styleHeader = (row: ExcelJS.Row) => {
+        row.height = 22
+        row.eachCell(cell => {
+          cell.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1B2A4A' } }
+          cell.alignment = { vertical: 'middle', horizontal: 'left' }
+          cell.border = { bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } } }
+        })
+      }
+      // ── Helper: style a section title row ──
+      const styleSectionTitle = (row: ExcelJS.Row) => {
+        row.height = 24
+        row.eachCell(cell => {
+          cell.font = { bold: true, size: 12, color: { argb: 'FFFF6B35' } }
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } }
+        })
+      }
+      // ── Helper: add metric rows ──
+      const addMetric = (ws: ExcelJS.Worksheet, rowNum: number, label: string, value: string | number): number => {
+        ws.getCell(`A${rowNum}`).value = label
+        ws.getCell(`B${rowNum}`).value = value
+        ws.getCell(`A${rowNum}`).font = { size: 10, color: { argb: 'FF666666' } }
+        ws.getCell(`B${rowNum}`).font = { size: 10, bold: true }
+        return rowNum + 1
+      }
 
-      // ── Period Comparison ──
-      rows.push('2. PERIOD COMPARISON (vs Last Month)')
-      rows.push('-'.repeat(40))
-      rows.push(`Revenue Change,${data.comparison.revenueChange}%`)
-      rows.push(`Orders Change,${data.comparison.ordersChange}%`)
-      rows.push(`Stock Value Change,${data.comparison.stockValueChange}%`)
-      rows.push(`Avg Order Value Change,${data.comparison.avgOrderChange}%`)
-      rows.push('')
+      // ═══════════════════════════════════════
+      // SHEET 1: EXECUTIVE SUMMARY
+      // ═══════════════════════════════════════
+      const ws1 = wb.addWorksheet('Executive Summary', { views: [{ showGridLines: false }] })
+      ws1.columns = [{ width: 40 }, { width: 24 }]
 
-      // ── Order Status ──
-      rows.push('3. ORDER STATUS DISTRIBUTION')
-      rows.push('-'.repeat(40))
-      rows.push('Status,Count')
-      rows.push(`Pending,${data.orders.pending}`)
-      rows.push(`Dispatched,${data.orders.dispatched}`)
-      rows.push(`Delivered,${data.orders.delivered}`)
-      ;(data.orderStatusDistribution || []).forEach(s => {
-        if (!['pending', 'dispatched', 'delivered'].includes(s.status)) {
-          rows.push(`${s.status},${s.count}`)
-        }
-      })
-      rows.push(`Total Orders,${data.orders.total}`)
-      rows.push('')
+      // Title
+      ws1.mergeCells('A1:B1')
+      ws1.getCell('A1').value = 'KWANZA ERP — OPERATIONS REPORT'
+      ws1.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF1B2A4A' } }
+      ws1.getCell('A1').alignment = { horizontal: 'center' }
+      ws1.getRow(1).height = 30
 
-      // ── Inventory Health ──
-      rows.push('4. INVENTORY HEALTH')
-      rows.push('-'.repeat(40))
-      rows.push(`Healthy Products,${data.inventory.healthy}`)
-      rows.push(`Low Stock Products,${data.inventory.low}`)
-      rows.push(`Critical (Out of Stock),${data.inventory.critical}`)
-      rows.push(`Total Stock Units,${data.stats.totalStockUnits}`)
-      rows.push(`Total Stock Value,${data.stats.totalStockValue}`)
-      rows.push('')
+      // Meta
+      let r = 3
+      ws1.getCell(`A${r}`).value = 'Generated'
+      ws1.getCell(`B${r}`).value = new Date().toLocaleString('en-UG')
+      r++
+      ws1.getCell(`A${r}`).value = 'Period'
+      ws1.getCell(`B${r}`).value = period
+      r++
+      ws1.getCell(`A${r}`).value = 'System'
+      ws1.getCell(`B${r}`).value = 'Kwanza ERP'
+      r += 2
 
-      // ── COD Reconciliation ──
-      rows.push('5. COD RECONCILIATION')
-      rows.push('-'.repeat(40))
-      rows.push(`COD Collected,${data.cod.collectedTotal}`)
-      rows.push(`COD Banked,${data.cod.banked}`)
-      rows.push(`COD Pending,${data.cod.pendingBankings}`)
-      rows.push(`Banking Rate,${data.cod.bankingRate}%`)
-      rows.push('')
+      // Section: Financial Performance
+      ws1.mergeCells(`A${r}:B${r}`)
+      ws1.getCell(`A${r}`).value = 'FINANCIAL PERFORMANCE'
+      styleSectionTitle(ws1.getRow(r))
+      r++
+      r = addMetric(ws1, r, 'Total Revenue (Delivered Sales)', formatCurrency(data.stats.totalRevenue))
+      r = addMetric(ws1, r, 'Commission Earned', formatCurrency(data.stats.totalCommission))
+      r = addMetric(ws1, r, 'Net Profit', formatCurrency(data.stats.netProfit || 0))
+      r = addMetric(ws1, r, 'Average Order Value', formatCurrency(data.stats.avgOrderValue))
+      r = addMetric(ws1, r, 'Stock Value', formatCurrency(data.stats.totalStockValue))
+      r = addMetric(ws1, r, 'Shrinkage Loss', formatCurrency(data.stats.totalShrinkageValue || 0))
+      r = addMetric(ws1, r, 'Returns Loss', formatCurrency(data.stats.totalReturnValue || 0))
+      r++
 
-      // ── Merchant Profitability ──
-      rows.push('6. MERCHANT PROFITABILITY')
-      rows.push('-'.repeat(40))
-      rows.push('Merchant,Delivered Sales,Commission (Our Cut),Shrinkage,Returns,Merchant Net')
+      // Section: Operational Performance
+      ws1.mergeCells(`A${r}:B${r}`)
+      ws1.getCell(`A${r}`).value = 'OPERATIONAL PERFORMANCE'
+      styleSectionTitle(ws1.getRow(r))
+      r++
+      r = addMetric(ws1, r, 'Total Orders', data.orders.total)
+      r = addMetric(ws1, r, 'Pending', data.orders.pending)
+      r = addMetric(ws1, r, 'Dispatched', data.orders.dispatched)
+      r = addMetric(ws1, r, 'Delivered', data.orders.delivered)
+      r = addMetric(ws1, r, 'Fulfillment Rate', `${data.orders.fulfillmentRate}%`)
+      r = addMetric(ws1, r, 'On-Time Rate', `${data.onTimeRate}%`)
+      r = addMetric(ws1, r, 'Exception Rate', `${data.exceptionRate}%`)
+      r = addMetric(ws1, r, 'First-Attempt Success Rate', `${data.firstAttemptRate || 0}%`)
+      r = addMetric(ws1, r, 'Avg Cycle Time (hours)', data.avgCycleTimeHours || 0)
+      r++
+
+      // Section: Period Comparison
+      ws1.mergeCells(`A${r}:B${r}`)
+      ws1.getCell(`A${r}`).value = 'PERIOD COMPARISON (vs Last Month)'
+      styleSectionTitle(ws1.getRow(r))
+      r++
+      r = addMetric(ws1, r, 'Revenue Change', `${data.comparison.revenueChange > 0 ? '+' : ''}${data.comparison.revenueChange}%`)
+      r = addMetric(ws1, r, 'Orders Change', `${data.comparison.ordersChange > 0 ? '+' : ''}${data.comparison.ordersChange}%`)
+      r = addMetric(ws1, r, 'Stock Value Change', `${data.comparison.stockValueChange > 0 ? '+' : ''}${data.comparison.stockValueChange}%`)
+      r = addMetric(ws1, r, 'Avg Order Value Change', `${data.comparison.avgOrderChange > 0 ? '+' : ''}${data.comparison.avgOrderChange}%`)
+      r++
+
+      // Section: Inventory & Resources
+      ws1.mergeCells(`A${r}:B${r}`)
+      ws1.getCell(`A${r}`).value = 'INVENTORY & RESOURCES'
+      styleSectionTitle(ws1.getRow(r))
+      r++
+      r = addMetric(ws1, r, 'Healthy Products', data.inventory.healthy)
+      r = addMetric(ws1, r, 'Low Stock Products', data.inventory.low)
+      r = addMetric(ws1, r, 'Out of Stock', data.inventory.critical)
+      r = addMetric(ws1, r, 'Total Stock Units', data.stats.totalStockUnits)
+      r = addMetric(ws1, r, 'Active Merchants', data.stats.totalMerchants)
+      r = addMetric(ws1, r, 'Active Products', data.stats.totalProducts)
+      r = addMetric(ws1, r, 'Active Drivers', data.stats.activeDrivers)
+      r = addMetric(ws1, r, 'Total Customers', data.stats.totalCustomers)
+      r++
+
+      // Section: COD Reconciliation
+      ws1.mergeCells(`A${r}:B${r}`)
+      ws1.getCell(`A${r}`).value = 'COD RECONCILIATION'
+      styleSectionTitle(ws1.getRow(r))
+      r++
+      r = addMetric(ws1, r, 'COD Collected', formatCurrency(data.cod.collectedTotal))
+      r = addMetric(ws1, r, 'COD Banked', formatCurrency(data.cod.banked))
+      r = addMetric(ws1, r, 'COD Pending', formatCurrency(data.cod.pendingBankings))
+      r = addMetric(ws1, r, 'Banking Rate', `${data.cod.bankingRate}%`)
+
+      // ═══════════════════════════════════════
+      // SHEET 2: MERCHANT PROFITABILITY
+      // ═══════════════════════════════════════
+      const ws2 = wb.addWorksheet('Merchant Profitability', { views: [{ showGridLines: false }] })
+      ws2.columns = [
+        { width: 30 }, { width: 18 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 18 },
+      ]
+      const mHeader = ws2.addRow(['Merchant', 'Delivered Sales', 'Commission (Our Cut)', 'Shrinkage', 'Returns', 'Merchant Net'])
+      styleHeader(mHeader)
       data.merchantProfitability.forEach(m => {
-        rows.push(`"${m.name}",${m.revenue},${m.commission},${m.shrinkage},${m.returns},${m.net}`)
+        const row = ws2.addRow([m.name, m.revenue, m.commission, m.shrinkage, m.returns, m.net])
+        row.eachCell((cell, colNumber) => {
+          if (colNumber >= 2) { cell.numFmt = '#,##0'; cell.alignment = { horizontal: 'right' } }
+          cell.font = { size: 10 }
+        })
+        // Color the net column
+        const netCell = row.getCell(6)
+        netCell.font = { size: 10, bold: true, color: { argb: m.net >= 0 ? 'FF22C55E' : 'FFEF4444' } }
       })
-      rows.push('')
 
-      // ── Revenue Trend (6 months) ──
-      rows.push('7. REVENUE TREND (6 MONTHS)')
-      rows.push('-'.repeat(40))
-      rows.push('Month,Revenue,Commission')
+      // ═══════════════════════════════════════
+      // SHEET 3: REVENUE TREND
+      // ═══════════════════════════════════════
+      const ws3 = wb.addWorksheet('Revenue Trend', { views: [{ showGridLines: false }] })
+      ws3.columns = [{ width: 16 }, { width: 18 }, { width: 18 }]
+      const rHeader = ws3.addRow(['Month', 'Revenue', 'Commission'])
+      styleHeader(rHeader)
       data.revenueByMonth.forEach(m => {
-        rows.push(`${m.month},${m.revenue},${m.commissions}`)
+        const row = ws3.addRow([m.month, m.revenue, m.commissions])
+        row.eachCell((cell, colNumber) => {
+          if (colNumber >= 2) { cell.numFmt = '#,##0'; cell.alignment = { horizontal: 'right' } }
+          cell.font = { size: 10 }
+        })
       })
-      rows.push('')
 
-      // ── Shrinkage Summary ──
-      rows.push('8. SHRINKAGE SUMMARY')
-      rows.push('-'.repeat(40))
-      rows.push(`Total Shrinkage Qty,${data.shrinkage?.totalQty || 0}`)
-      rows.push(`Total Shrinkage Value,${data.stats.totalShrinkageValue || 0}`)
-      rows.push('Reason,Qty,Count')
-      ;(data.shrinkage?.byReason || []).forEach(s => {
-        rows.push(`${s.reason},${s.qty},${s.count}`)
-      })
-      rows.push('')
+      // ═══════════════════════════════════════
+      // SHEET 4: SHRINKAGE SUMMARY
+      // ═══════════════════════════════════════
+      if (data.shrinkage) {
+        const ws4 = wb.addWorksheet('Shrinkage', { views: [{ showGridLines: false }] })
+        ws4.columns = [{ width: 30 }, { width: 16 }, { width: 16 }]
+        const sHeader = ws4.addRow(['Reason', 'Qty Lost', 'Count'])
+        styleHeader(sHeader)
+        data.shrinkage.byReason.forEach(s => {
+          const row = ws4.addRow([s.reason, s.qty, s.count])
+          row.eachCell((cell, colNumber) => {
+            if (colNumber >= 2) { cell.numFmt = '#,##0'; cell.alignment = { horizontal: 'right' } }
+            cell.font = { size: 10 }
+          })
+        })
+        ws4.addRow([])
+        const totalRow = ws4.addRow(['TOTAL', data.shrinkage.totalQty, data.shrinkage.byReason.reduce((s, r) => s + r.count, 0)])
+        totalRow.eachCell(cell => { cell.font = { size: 10, bold: true } })
+      }
 
-      // ── System Status ──
-      rows.push('9. SYSTEM STATUS')
-      rows.push('-'.repeat(40))
-      rows.push('Module,Status,Label')
-      if (data.inventory.critical > 0) rows.push(`Inventory,Critical,${data.inventory.critical} out of stock`)
-      else if (data.inventory.low > 0) rows.push(`Inventory,Warning,${data.inventory.low} running low`)
-      else rows.push('Inventory,OK,All healthy')
-      if (data.orders.pending > 0) rows.push(`Outbound,Active,${data.orders.pending} in progress`)
-      else rows.push('Outbound,Quiet,No active orders')
-      if (data.cod.pendingBankings > 0) rows.push(`Payments,Warning,${data.cod.pendingBankings} unbanked`)
-      else rows.push('Payments,OK,All banked')
-      if (data.exceptionCount > 0) rows.push(`Returns,Critical,${data.exceptionCount} exceptions`)
-      else rows.push('Returns,OK,No exceptions')
-      rows.push(`Drivers,${data.stats.activeDrivers > 0 ? 'OK' : 'Quiet'},${data.stats.activeDrivers} active`)
-      rows.push('')
-
-      rows.push('═'.repeat(60))
-      rows.push('End of Report')
-      rows.push(`This report was generated by Kwanza ERP on ${now.toLocaleString('en-UG')}`)
-
-      const csv = rows.join('\n')
-      const blob = new Blob([csv], { type: 'text/csv' })
+      // ═══════════════════════════════════════
+      // Generate and download
+      // ═══════════════════════════════════════
+      const buffer = await wb.xlsx.writeBuffer()
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `kwanza-dashboard-${period.replace(/\s+/g, '-').toLowerCase()}-${now.toISOString().slice(0, 10)}.csv`
+      a.download = `Kwanza-ERP-Report-${period.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
-    } catch {
-      // silent
+    } catch (err) {
+      console.error('Export error:', err)
     } finally {
       setExporting(false)
     }
@@ -346,7 +405,7 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
             </AnimatePresence>
           </div>
           <Button variant="outline" size="sm" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md"><HelpCircle size={12} className="mr-1" /> Help</Button>
-          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="h-7 text-xs rounded-md"><Download size={12} className="mr-1" /> {exporting ? 'Exporting...' : 'Export'}</Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting} className="h-7 text-xs rounded-md"><Download size={12} className="mr-1" /> {exporting ? 'Generating...' : 'Export Excel'}</Button>
         </div>
       </div>
 
