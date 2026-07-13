@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   Search, Package, Plus, Trash2, Edit3, AlertTriangle,
-  HelpCircle, Layers, ArrowLeft as BackIcon,
+  HelpCircle, Layers, ArrowLeft as BackIcon, ChevronRight, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
@@ -48,6 +48,13 @@ interface Merchant {
   businessName: string
 }
 
+interface FormState {
+  productLabel: string; description: string; brand: string; variant: string
+  category: string; merchantId: string; merchantName: string
+  unit: string; weight: string; minStock: string
+  unitCost: string; unitSellingPrice: string; commissionPercent: string; isActive: boolean
+}
+
 // ── Constants ──
 
 const FILTER_CHIPS = [
@@ -60,7 +67,7 @@ const FILTER_CHIPS = [
 
 const CATEGORIES = ['Produce', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Electronics', 'Personal Care', 'Other']
 
-const emptyForm = {
+const emptyForm: FormState = {
   productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
   unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
 }
@@ -89,6 +96,273 @@ const stockDot = (p: Product): string => {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// ADD PRODUCT VIEW — FULL-PAGE FORM
+// ═══════════════════════════════════════════════════════════════
+
+function AddProductView({
+  editing, form, setForm, merchants, onSubmit, onCancel, onDelete,
+}: {
+  editing: Product | null
+  form: FormState
+  setForm: (f: FormState) => void
+  merchants: Merchant[]
+  onSubmit: () => void
+  onCancel: () => void
+  onDelete: () => void
+}) {
+  return (
+    <div className="min-h-full flex flex-col">
+      {/* Top bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onCancel}>
+              <BackIcon size={14} className="mr-1" /> Back
+            </Button>
+            <div className="h-5 w-px bg-gray-200" />
+            <div>
+              <h1 className="text-base font-bold text-gray-900">{editing ? `Edit ${editing.productLabel}` : 'Add New Product'}</h1>
+              <p className="text-[11px] text-gray-500">{editing ? editing.productId : 'Fill in the details to create a new product'}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-6 py-8">
+          <div className="space-y-5">
+            <div>
+              <h2 className="text-sm font-bold text-gray-900 mb-1">Product Information</h2>
+              <p className="text-xs text-gray-500">Catalog entry linked to a merchant. Required fields are marked with *.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Label <span className="text-red-400">*</span></Label>
+                <Input value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} placeholder="e.g. Dettol Soap 500g" className="rounded-xl" />
+              </div>
+              <div className="col-span-2">
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Description</Label>
+                <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description for catalogs and invoices..." rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Brand</Label>
+                <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Dettol" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Variant</Label>
+                <Input value={form.variant} onChange={e => setForm({ ...form, variant: e.target.value })} placeholder="e.g. 500g, Blue" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Category <span className="text-red-400">*</span></Label>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <option value="">Select category...</option>
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
+                <select value={form.merchantId} onChange={e => setForm({ ...form, merchantId: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                  <option value="">Select merchant...</option>
+                  {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit</Label>
+                <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="pcs, kg, box" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Weight</Label>
+                <Input value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="e.g. 500g" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Min Stock</Label>
+                <Input type="number" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })} className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit Cost</Label>
+                <Input type="number" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Sell Price</Label>
+                <Input type="number" value={form.unitSellingPrice} onChange={e => setForm({ ...form, unitSellingPrice: e.target.value })} placeholder="0" className="rounded-xl" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Commission (%)</Label>
+                <Input type="number" step="0.1" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="rounded-xl" />
+              </div>
+              {editing && (
+                <div className="flex items-center gap-2">
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Status</Label>
+                  <button onClick={() => setForm({ ...form, isActive: !form.isActive })}
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${form.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
+                    <span className={`w-2.5 h-2.5 rounded-full ${form.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
+                    {form.isActive ? 'Active' : 'Inactive'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="bg-white border-t border-gray-200 sticky bottom-0">
+        <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-between">
+          {editing ? (
+            <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={onDelete}>
+              <Trash2 size={14} className="mr-1.5" /> Delete
+            </Button>
+          ) : <div />}
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={onCancel}>Cancel</Button>
+            <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={onSubmit}>
+              {editing ? 'Update' : 'Create'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ALL PRODUCTS VIEW — FULL-PAGE TABLE
+// ═══════════════════════════════════════════════════════════════
+
+function AllProductsView({
+  data, activeFilter, onFilterChange, onBack, onSelect, onToggleActive, onEdit, onDelete,
+}: {
+  data: Product[]
+  activeFilter: string
+  onFilterChange: (f: string) => void
+  onBack: () => void
+  onSelect: (p: Product) => void
+  onToggleActive: (p: Product) => void
+  onEdit: (p: Product) => void
+  onDelete: (p: Product) => void
+}) {
+  const filteredData = data.filter(p => {
+    if (activeFilter === 'active') return p.isActive
+    if (activeFilter === 'inactive') return !p.isActive
+    if (activeFilter === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
+    if (activeFilter === 'out_of_stock') return p.isActive && p.currentStock === 0
+    return true
+  })
+
+  return (
+    <div className="min-h-full flex flex-col">
+      {/* Top bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={onBack}>
+              <BackIcon size={14} className="mr-1" /> Back
+            </Button>
+            <div className="h-5 w-px bg-gray-200" />
+            <div>
+              <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Layers size={16} className="text-[#FF6B35]" /> All Products</h1>
+              <p className="text-[11px] text-gray-500">{data.length} total · Click any row to open the product profile</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-7xl mx-auto space-y-3">
+          {/* Filter chips */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <Filter size={12} className="text-gray-400" />
+            {FILTER_CHIPS.map(chip => {
+              const count = chip.key === 'all' ? data.length : data.filter(p => {
+                if (chip.key === 'active') return p.isActive
+                if (chip.key === 'inactive') return !p.isActive
+                if (chip.key === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
+                if (chip.key === 'out_of_stock') return p.isActive && p.currentStock === 0
+                return true
+              }).length
+              return (
+                <button key={chip.key} onClick={() => onFilterChange(chip.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                  {chip.label}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeFilter === chip.key ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Table */}
+          <DenseTable>
+            <thead>
+              <tr>
+                <DenseTh className="w-24">ID</DenseTh>
+                <DenseTh>Product</DenseTh>
+                <DenseTh>Merchant</DenseTh>
+                <DenseTh className="w-24">Category</DenseTh>
+                <DenseTh className="w-24 text-right">Cost</DenseTh>
+                <DenseTh className="w-24 text-right">Sell</DenseTh>
+                <DenseTh className="w-16 text-right">Comm %</DenseTh>
+                <DenseTh className="w-20 text-center">Stock</DenseTh>
+                <DenseTh className="w-16 text-center">Status</DenseTh>
+                <DenseTh className="w-24 text-right">Actions</DenseTh>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.map((p, i) => (
+                <AnimatedDenseTr key={p.id} index={i} onClick={() => onSelect(p)} tint={!p.isActive ? 'bg-gray-50/50' : p.currentStock <= p.minStock ? 'bg-orange-50/40' : ''}>
+                  <DenseTd mono className="text-gray-500 text-[10px]">{p.productId}</DenseTd>
+                  <DenseTd className="text-gray-900 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${stockDot(p)}`} />
+                      <div className="min-w-0">
+                        <p className="truncate">{p.productLabel}</p>
+                        {(p.brand || p.variant) && (
+                          <p className="text-[10px] text-gray-400 font-mono truncate">
+                            {[p.brand, p.variant].filter(Boolean).join(', ')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </DenseTd>
+                  <DenseTd className="text-gray-600 text-xs">{p.merchantName || '—'}</DenseTd>
+                  <DenseTd className="text-gray-600 text-xs">{p.category}</DenseTd>
+                  <DenseTd mono right className="text-gray-600">{formatCurrencyCompact(p.unitCost)}</DenseTd>
+                  <DenseTd mono right className="text-gray-900 font-medium">{formatCurrencyCompact(p.unitSellingPrice)}</DenseTd>
+                  <DenseTd mono right className="text-orange-700">{p.commissionPercent}%</DenseTd>
+                  <DenseTd mono className="text-center">
+                    <span className={stockColor(p)}>{p.currentStock}</span>
+                    <span className="text-gray-400 text-[10px]">/{p.minStock}</span>
+                  </DenseTd>
+                  <DenseTd className="text-center">
+                    <button onClick={(e) => { e.stopPropagation(); onToggleActive(p) }} title={p.isActive ? 'Deactivate' : 'Activate'}>
+                      <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
+                    </button>
+                  </DenseTd>
+                  <DenseTd right>
+                    <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                      <button onClick={() => onEdit(p)} title="Edit" className="p-1 text-gray-400 hover:text-[#FF6B35]"><Edit3 size={12} /></button>
+                      <button onClick={() => onDelete(p)} title="Delete" className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
+                    </div>
+                  </DenseTd>
+                </AnimatedDenseTr>
+              ))}
+              {filteredData.length === 0 && (
+                <tr><td colSpan={10} className="py-8 text-center text-gray-400 text-sm">No products match this filter.</td></tr>
+              )}
+            </tbody>
+          </DenseTable>
+
+          <p className="text-[10px] text-gray-400 px-1">
+            {filteredData.length} product(s). Click a row to open the profile. Use the status dot to activate/deactivate.
+          </p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ═══════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════
 
@@ -98,14 +372,14 @@ export default function ProductsModule() {
   const [search, setSearch] = useState('')
   const [activeFilter, setActiveFilter] = useState('all')
   const [loading, setLoading] = useState(true)
-  const [formOpen, setFormOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add' | 'table'>('list')
   const [editing, setEditing] = useState<Product | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null)
   const [helpOpen, setHelpOpen] = useState(false)
-  const [form, setForm] = useState(emptyForm)
+  const [form, setForm] = useState<FormState>(emptyForm)
 
   // ── Data fetching ──
   const fetchData = useCallback(() => {
@@ -130,20 +404,11 @@ export default function ProductsModule() {
   const outOfStockProducts = data.filter(p => p.isActive && p.currentStock === 0).length
   const totalStockValue = data.reduce((s, p) => s + (p.currentStock * p.unitCost), 0)
 
-  // ── Filtered data ──
-  const filteredData = data.filter(p => {
-    if (activeFilter === 'active') return p.isActive
-    if (activeFilter === 'inactive') return !p.isActive
-    if (activeFilter === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
-    if (activeFilter === 'out_of_stock') return p.isActive && p.currentStock === 0
-    return true
-  })
-
   // ── Actions ──
   const openCreate = () => {
     setEditing(null)
     setForm(emptyForm)
-    setFormOpen(true)
+    setView('add')
   }
 
   const handleEdit = (p: Product) => {
@@ -165,7 +430,7 @@ export default function ProductsModule() {
       isActive: p.isActive,
     })
     setProfileOpen(false)
-    setFormOpen(true)
+    setView('add')
   }
 
   const handleSubmit = async () => {
@@ -199,7 +464,7 @@ export default function ProductsModule() {
         await fetch('/api/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         toast.success('Product created')
       }
-      setFormOpen(false)
+      setView('list')
       setEditing(null)
       setForm(emptyForm)
       fetchData()
@@ -216,6 +481,7 @@ export default function ProductsModule() {
       setDeleteOpen(false)
       setDeletingId(null)
       setProfileOpen(false)
+      setView('list')
       fetchData()
     } catch {
       toast.error('Failed to delete product')
@@ -233,12 +499,63 @@ export default function ProductsModule() {
     setProfileOpen(true)
   }
 
-  // ── Render ──
+  const handleDeleteFromForm = () => {
+    if (editing) {
+      setDeletingId(editing.id)
+      setDeleteOpen(true)
+    }
+  }
+
+  const handleDeleteFromTable = (p: Product) => {
+    setDeletingId(p.id)
+    setDeleteOpen(true)
+  }
+
+  // ── Render: Add Product (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <AddProductView
+            editing={editing}
+            form={form}
+            setForm={setForm}
+            merchants={merchants}
+            onSubmit={handleSubmit}
+            onCancel={() => { setView('list'); setEditing(null); setForm(emptyForm) }}
+            onDelete={handleDeleteFromForm}
+          />
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ── Render: All Products table (full-page) ──
+  if (view === 'table') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="table">
+          <AllProductsView
+            data={data}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            onBack={() => setView('list')}
+            onSelect={(p) => { setView('list'); handleExpand(p) }}
+            onToggleActive={handleToggleActive}
+            onEdit={(p) => { setView('list'); handleEdit(p) }}
+            onDelete={handleDeleteFromTable}
+          />
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
+  // ── Render: Main list view (overview) ──
   return (
     <AnimatePresence mode="wait">
       <PageTransition key="list">
         <div className="space-y-3">
-          {/* ── Header (no action button — action bar is below) ── */}
+          {/* ── Header ── */}
           <OpsHeader
             title="Products"
             description="Catalog and stock"
@@ -259,29 +576,12 @@ export default function ProductsModule() {
             <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
               <Plus size={12} className="mr-1" /> Add Product
             </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setView('table')} disabled={data.length === 0}>
+              <Layers size={12} className="mr-1" /> View All
+            </Button>
             <Button variant="outline" size="sm" className="h-8 text-xs rounded-md" onClick={() => setHelpOpen(true)}>
               <HelpCircle size={12} className="mr-1" /> Help
             </Button>
-          </div>
-
-          {/* ── Filter chips ── */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {FILTER_CHIPS.map(chip => {
-              const count = chip.key === 'all' ? data.length : data.filter(p => {
-                if (chip.key === 'active') return p.isActive
-                if (chip.key === 'inactive') return !p.isActive
-                if (chip.key === 'low_stock') return p.isActive && p.currentStock > 0 && p.currentStock <= p.minStock
-                if (chip.key === 'out_of_stock') return p.isActive && p.currentStock === 0
-                return true
-              }).length
-              return (
-                <button key={chip.key} onClick={() => setActiveFilter(chip.key)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${activeFilter === chip.key ? 'bg-[#FF6B35] text-white' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-                  {chip.label}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${activeFilter === chip.key ? 'bg-white/20' : 'bg-gray-100'}`}>{count}</span>
-                </button>
-              )
-            })}
           </div>
 
           {/* ── Low stock alert banner ── */}
@@ -296,6 +596,9 @@ export default function ProductsModule() {
                   {' '}— reorder needed.
                 </p>
               </div>
+              <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-md bg-white" onClick={() => setView('table')}>
+                View All <ChevronRight size={11} className="ml-1" />
+              </Button>
             </div>
           )}
 
@@ -315,71 +618,33 @@ export default function ProductsModule() {
             </div>
           )}
 
-          {/* ── No results (filtered) ── */}
-          {data.length > 0 && filteredData.length === 0 && !loading && (
-            <div className="bg-white rounded-lg border border-gray-200 py-8 text-center text-gray-400 text-sm">
-              No products match this filter.
+          {/* ── Search results (inline) ── */}
+          {search && (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              {data.length === 0 ? (
+                <div className="py-8 text-center text-gray-400 text-sm">No products match &quot;{search}&quot;</div>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {data.slice(0, 10).map(p => (
+                    <div key={p.id} onClick={() => handleExpand(p)} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${stockDot(p)}`} />
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-semibold text-gray-900">{p.productLabel}</span>
+                        <span className="text-[10px] text-gray-400 ml-2">{p.productId}</span>
+                      </div>
+                      <span className="text-[10px] text-gray-500 shrink-0">{p.merchantName || '—'}</span>
+                      <span className={`text-[11px] font-mono font-bold shrink-0 ${stockColor(p)}`}>{p.currentStock}</span>
+                      <ChevronRight size={14} className="text-gray-300 shrink-0" />
+                    </div>
+                  ))}
+                  {data.length > 10 && (
+                    <button onClick={() => setView('table')} className="w-full px-4 py-2 text-center text-[11px] text-[#FF6B35] font-semibold hover:bg-orange-50">
+                      View all {data.length} products →
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-
-          {/* ── Table ── */}
-          {filteredData.length > 0 && !loading && (
-            <DenseTable>
-              <thead>
-                <tr>
-                  <DenseTh className="w-24">ID</DenseTh>
-                  <DenseTh>Product</DenseTh>
-                  <DenseTh>Merchant</DenseTh>
-                  <DenseTh className="w-24">Category</DenseTh>
-                  <DenseTh className="w-24 text-right">Cost</DenseTh>
-                  <DenseTh className="w-24 text-right">Sell</DenseTh>
-                  <DenseTh className="w-16 text-right">Comm %</DenseTh>
-                  <DenseTh className="w-20 text-center">Stock</DenseTh>
-                  <DenseTh className="w-16 text-center">Status</DenseTh>
-                  <DenseTh className="w-24 text-right">Actions</DenseTh>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredData.map((p, i) => (
-                  <AnimatedDenseTr key={p.id} index={i} onClick={() => handleExpand(p)} tint={!p.isActive ? 'bg-gray-50/50' : p.currentStock <= p.minStock ? 'bg-orange-50/40' : ''}>
-                    <DenseTd mono className="text-gray-500 text-[10px]">{p.productId}</DenseTd>
-                    <DenseTd className="text-gray-900 font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`w-2 h-2 rounded-full shrink-0 ${stockDot(p)}`} />
-                        <div className="min-w-0">
-                          <p className="truncate">{p.productLabel}</p>
-                          {(p.brand || p.variant) && (
-                            <p className="text-[10px] text-gray-400 font-mono truncate">
-                              {[p.brand, p.variant].filter(Boolean).join(', ')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    </DenseTd>
-                    <DenseTd className="text-gray-600 text-xs">{p.merchantName || '—'}</DenseTd>
-                    <DenseTd className="text-gray-600 text-xs">{p.category}</DenseTd>
-                    <DenseTd mono right className="text-gray-600">{formatCurrencyCompact(p.unitCost)}</DenseTd>
-                    <DenseTd mono right className="text-gray-900 font-medium">{formatCurrencyCompact(p.unitSellingPrice)}</DenseTd>
-                    <DenseTd mono right className="text-orange-700">{p.commissionPercent}%</DenseTd>
-                    <DenseTd mono className="text-center">
-                      <span className={stockColor(p)}>{p.currentStock}</span>
-                      <span className="text-gray-400 text-[10px]">/{p.minStock}</span>
-                    </DenseTd>
-                    <DenseTd className="text-center">
-                      <button onClick={(e) => { e.stopPropagation(); handleToggleActive(p) }} title={p.isActive ? 'Deactivate' : 'Activate'}>
-                        <span className={`inline-block w-2.5 h-2.5 rounded-full ${p.isActive ? 'bg-green-500 hover:bg-green-600' : 'bg-gray-300 hover:bg-gray-400'}`} />
-                      </button>
-                    </DenseTd>
-                    <DenseTd right>
-                      <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                        <button onClick={() => handleEdit(p)} title="Edit" className="p-1 text-gray-400 hover:text-[#FF6B35]"><Edit3 size={12} /></button>
-                        <button onClick={() => { setDeletingId(p.id); setDeleteOpen(true) }} title="Delete" className="p-1 text-gray-400 hover:text-red-500"><Trash2 size={12} /></button>
-                      </div>
-                    </DenseTd>
-                  </AnimatedDenseTr>
-                ))}
-              </tbody>
-            </DenseTable>
           )}
 
           {/* ── Loading ── */}
@@ -481,99 +746,6 @@ export default function ProductsModule() {
             })()}
           </DetailSlideOver>
 
-          {/* ══ EDIT / CREATE SLIDE-OVER ══ */}
-          <DetailSlideOver
-            open={formOpen}
-            onClose={() => { setFormOpen(false); setEditing(null); setForm(emptyForm) }}
-            title={editing ? `Edit ${editing.productLabel}` : 'New Product'}
-            subtitle={editing ? editing.productId : 'Fill in the details to create a new product'}
-            width="lg"
-            footer={
-              <div className="flex items-center justify-between">
-                {editing && (
-                  <Button variant="outline" className="text-red-600 border-red-200 hover:bg-red-50 rounded-xl" onClick={() => { setDeletingId(editing.id); setDeleteOpen(true) }}>
-                    <Trash2 size={16} className="mr-2" /> Delete
-                  </Button>
-                )}
-                <div className="flex gap-3 ml-auto">
-                  <Button variant="outline" onClick={() => setFormOpen(false)} className="rounded-xl">Cancel</Button>
-                  <Button onClick={handleSubmit} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-                    {editing ? 'Update' : 'Create'}
-                  </Button>
-                </div>
-              </div>
-            }
-          >
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="col-span-2">
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Product Label <span className="text-red-400">*</span></Label>
-                  <Input value={form.productLabel} onChange={e => setForm({ ...form, productLabel: e.target.value })} placeholder="e.g. Dettol Soap 500g" className="rounded-xl" />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Description</Label>
-                  <textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Product description for catalogs and invoices..." rows={2} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Brand</Label>
-                  <Input value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} placeholder="e.g. Dettol" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Variant</Label>
-                  <Input value={form.variant} onChange={e => setForm({ ...form, variant: e.target.value })} placeholder="e.g. 500g, Blue" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Category <span className="text-red-400">*</span></Label>
-                  <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                    <option value="">Select category...</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Merchant <span className="text-red-400">*</span></Label>
-                  <select value={form.merchantId} onChange={e => setForm({ ...form, merchantId: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                    <option value="">Select merchant...</option>
-                    {merchants.map(m => <option key={m.merchantId} value={m.merchantId}>{m.businessName}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit</Label>
-                  <Input value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="pcs, kg, box" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Weight</Label>
-                  <Input value={form.weight} onChange={e => setForm({ ...form, weight: e.target.value })} placeholder="e.g. 500g" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Min Stock</Label>
-                  <Input type="number" value={form.minStock} onChange={e => setForm({ ...form, minStock: e.target.value })} className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Unit Cost</Label>
-                  <Input type="number" value={form.unitCost} onChange={e => setForm({ ...form, unitCost: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Sell Price</Label>
-                  <Input type="number" value={form.unitSellingPrice} onChange={e => setForm({ ...form, unitSellingPrice: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Commission (%)</Label>
-                  <Input type="number" step="0.1" value={form.commissionPercent} onChange={e => setForm({ ...form, commissionPercent: e.target.value })} className="rounded-xl" />
-                </div>
-                {editing && (
-                  <div className="flex items-center gap-2">
-                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Status</Label>
-                    <button onClick={() => setForm({ ...form, isActive: !form.isActive })}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium ${form.isActive ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-gray-50 text-gray-500 border border-gray-200'}`}>
-                      <span className={`w-2.5 h-2.5 rounded-full ${form.isActive ? 'bg-green-500' : 'bg-gray-300'}`} />
-                      {form.isActive ? 'Active' : 'Inactive'}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          </DetailSlideOver>
-
           {/* ══ DELETE DIALOG ══ */}
           <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
             <AlertDialogContent className="rounded-2xl max-w-md">
@@ -602,11 +774,11 @@ export default function ProductsModule() {
               <div className="space-y-3 py-2 text-xs text-gray-700">
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">Add Product</p>
-                  <p>Click "Add Product" to create a new catalog entry. Required: product label, category, and merchant. Pricing and commission are set per product.</p>
+                  <p>Opens a full-page form. Required: product label, category, and merchant. Pricing and commission are set per product.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">Filter Chips</p>
-                  <p>Use the filter chips to narrow by status: All, Active, Inactive, Low Stock, Out of Stock. Counts are shown on each chip.</p>
+                  <p className="font-semibold text-gray-900 mb-1">View All</p>
+                  <p>Opens a full-page table with all products, filter chips (All, Active, Inactive, Low Stock, Out of Stock), and inline actions. Click any row to open the product profile.</p>
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">Stock Indicators</p>
