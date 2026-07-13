@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   RefreshCw, Shield, AlertTriangle, Ban, Settings as SettingsIcon,
   FileText, Users, Plus, X, CheckCircle2, ChevronDown, ChevronRight,
-  Search, Trash2, UserCog, Scale,
+  Search, Trash2, UserCog, Scale, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -152,7 +154,7 @@ export default function RiskModule() {
 
   // ── Blocklist ──
   const [blocklist, setBlocklist] = useState<BlocklistEntry[]>([])
-  const [blocklistFormOpen, setBlocklistFormOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [blocklistForm, setBlocklistForm] = useState({ phone: '', address: '', reason: '' })
 
   // ── Settings ──
@@ -293,7 +295,7 @@ export default function RiskModule() {
       const d = await r.json()
       if (r.ok) {
         toast.success('Added to blocklist')
-        setBlocklistFormOpen(false)
+        setView('list')
         setBlocklistForm({ phone: '', address: '', reason: '' })
         fetchBlocklist()
       } else {
@@ -435,11 +437,88 @@ export default function RiskModule() {
     : profiles
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // RENDER
+  // RENDER: Add to Blocklist (full-page)
   // ═══════════════════════════════════════════════════════════════════════════
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5">
+                    <Ban size={16} className="text-red-600" /> Add to Blocklist
+                  </h1>
+                  <p className="text-[11px] text-gray-500">Phone and/or address will be blocked from passing intake</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Blocklist Entry</h2>
+                  <p className="text-xs text-gray-500">Enter the phone and/or address to block. Any new order from these identifiers will score 100 (hard block) and require manager override.</p>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Phone <span className="text-gray-400">(digits only — auto-normalized)</span></Label>
+                  <Input
+                    value={blocklistForm.phone}
+                    onChange={(e) => setBlocklistForm({ ...blocklistForm, phone: e.target.value })}
+                    placeholder="e.g. 0700123456"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address <span className="text-gray-400">(case-insensitive match)</span></Label>
+                  <Input
+                    value={blocklistForm.address}
+                    onChange={(e) => setBlocklistForm({ ...blocklistForm, address: e.target.value })}
+                    placeholder="e.g. Plot 12, Kampala Road"
+                    className="rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Reason <span className="text-red-400">*</span></Label>
+                  <Input
+                    value={blocklistForm.reason}
+                    onChange={(e) => setBlocklistForm({ ...blocklistForm, reason: e.target.value })}
+                    placeholder="e.g. 3 COD refusals in 90 days"
+                    className="rounded-xl"
+                  />
+                  <p className="text-[10px] text-gray-500 mt-1">This reason will be shown to managers when a future order is blocked.</p>
+                </div>
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                  <p className="text-[11px] text-red-700">
+                    <strong>Effect:</strong> Any new order from this phone or address will score 100 (hard block) and require manager override to proceed.
+                    Existing pending orders will be re-scored automatically on the next refresh.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white rounded-xl" onClick={handleAddBlocklist}>Add to Blocklist</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // RENDER: Main view
+  // ═══════════════════════════════════════════════════════════════════════════
   return (
-    <div className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       {/* Header — uses red accent instead of orange */}
       <OpsHeader
         title="Risk & Fraud"
@@ -597,7 +676,7 @@ export default function RiskModule() {
             <Button
               size="sm"
               className="h-7 text-xs rounded-md bg-red-600 hover:bg-red-700 text-white"
-              onClick={() => setBlocklistFormOpen(true)}
+              onClick={() => setView('add')}
             >
               <Plus size={12} className="mr-1" />
               Add to Blocklist
@@ -988,61 +1067,9 @@ export default function RiskModule() {
           </div>
         )}
       </DetailSlideOver>
-
-      {/* ═════════════════════════════════════════════════════════════════════
-          BLOCKLIST ADD SLIDE-OVER
-          ═════════════════════════════════════════════════════════════════════ */}
-      <DetailSlideOver
-        open={blocklistFormOpen}
-        onClose={() => setBlocklistFormOpen(false)}
-        title="Add to Blocklist"
-        subtitle="Phone and/or address will be blocked from passing intake"
-        width="md"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => setBlocklistFormOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleAddBlocklist} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">Add to Blocklist</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Phone <span className="text-gray-400">(digits only — auto-normalized)</span></Label>
-            <Input
-              value={blocklistForm.phone}
-              onChange={(e) => setBlocklistForm({ ...blocklistForm, phone: e.target.value })}
-              placeholder="e.g. 0700123456"
-              className="rounded-xl"
-            />
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Address <span className="text-gray-400">(case-insensitive match)</span></Label>
-            <Input
-              value={blocklistForm.address}
-              onChange={(e) => setBlocklistForm({ ...blocklistForm, address: e.target.value })}
-              placeholder="e.g. Plot 12, Kampala Road"
-              className="rounded-xl"
-            />
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Reason <span className="text-red-400">*</span></Label>
-            <Input
-              value={blocklistForm.reason}
-              onChange={(e) => setBlocklistForm({ ...blocklistForm, reason: e.target.value })}
-              placeholder="e.g. 3 COD refusals in 90 days"
-              className="rounded-xl"
-            />
-            <p className="text-[10px] text-gray-500 mt-1">This reason will be shown to managers when a future order is blocked.</p>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3">
-            <p className="text-[11px] text-red-700">
-              <strong>Effect:</strong> Any new order from this phone or address will score 100 (hard block) and require manager override to proceed.
-              Existing pending orders will be re-scored automatically on the next refresh.
-            </p>
-          </div>
         </div>
-      </DetailSlideOver>
-    </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
 
