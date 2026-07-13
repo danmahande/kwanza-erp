@@ -14,11 +14,12 @@ import {
   Car, Shield, ShieldAlert, Loader2, Package,
   X, CheckSquare, Upload, Trash2, TrendingUp,
   Banknote, AlertTriangle, Bell, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
-  MessageSquare, Plus, CheckCircle2, HelpCircle,
+  MessageSquare, Plus, CheckCircle2, HelpCircle, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import DataTable, { type Column } from '@/components/shared/DataTable'
 import DriverProfile from '@/components/modules/DriverProfile'
 
@@ -153,7 +154,7 @@ export default function DriversModule() {
   const [detailOpen, setDetailOpen] = useState(false)
   const [selectedRecord, setSelectedRecord] = useState<Driver | null>(null)
   const [profileDriver, setProfileDriver] = useState<Driver | null>(null)
-  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [editing, setEditing] = useState<Driver | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -362,7 +363,7 @@ export default function DriversModule() {
     setEditing(null)
   }
 
-  const openCreate = () => { resetForm(); setOpen(true) }
+  const openCreate = () => { resetForm(); setView('add') }
 
   const handleShiftToggle = async (driver: Driver) => {
     const isOnShift = !!driver.shiftStart && !driver.shiftEnd
@@ -393,10 +394,10 @@ export default function DriversModule() {
       expectedBankings: String(driver.expectedBankings || 0),
       banked: String(driver.banked || 0),
     })
-    setOpen(true)
+    setView('add')
   }
 
-  const handleClose = () => { setOpen(false); resetForm() }
+  const handleClose = () => { setView('list'); resetForm() }
 
   const handleSubmit = async () => {
     if (!form.name || !form.phone) { toast.error('Name and phone are required'); return }
@@ -422,7 +423,7 @@ export default function DriversModule() {
         await fetch('/api/drivers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
         toast.success(`Driver "${form.name}" added`)
       }
-      setOpen(false); resetForm(); fetchData()
+      setView('list'); resetForm(); fetchData()
     } catch { toast.error('Failed to save driver. Please try again.') } finally { setSubmitting(false) }
   }
 
@@ -529,8 +530,156 @@ export default function DriversModule() {
     )
   }
 
+  // ── Render: Add/Edit Driver (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={handleClose}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900">{editing ? `Edit: ${editing.name}` : 'New Driver'}</h1>
+                  <p className="text-[11px] text-gray-500">{editing ? `ID: ${editing.driverId}` : 'Fill in the details to add a new driver'}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                {editing && (
+                  <div className="p-4 rounded-xl bg-gray-50 border border-gray-100">
+                    <div className="grid grid-cols-3 gap-3 text-sm">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Driver ID</p>
+                        <p className="font-mono text-gray-700">{editing.driverId}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Status</p>
+                        {statusBadge(editing.status)}
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Created</p>
+                        <p className="text-gray-700">{new Date(editing.createdAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    {editing.ordersReceived > 0 && (
+                      <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-4 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><Package size={12} />{editing.ordersReceived} orders received</span>
+                        <span className="flex items-center gap-1 text-green-600"><TrendingUp size={12} />{editing.successRate}% success</span>
+                        {editing.riskPercent > 0 && <span className="flex items-center gap-1 text-amber-600"><ShieldAlert size={12} />{editing.riskPercent}% risk</span>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Personal Info */}
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Personal Information</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">Full Name <span className="text-red-400">*</span></Label>
+                      <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g., Stephen Opalakiro" className="rounded-xl" />
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">Phone <span className="text-red-400">*</span></Label>
+                      <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="e.g., 0771234567" className="rounded-xl" />
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">National ID</Label>
+                      <Input value={form.nationalId} onChange={e => setForm({ ...form, nationalId: e.target.value })} placeholder="e.g., CF12345678" className="rounded-xl" />
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">License No</Label>
+                      <Input value={form.licenseNumber} onChange={e => setForm({ ...form, licenseNumber: e.target.value })} placeholder="e.g., DL-45231" className="rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Vehicle Info */}
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Vehicle Information</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">Vehicle Type</Label>
+                      <Select value={form.vehicleType} onValueChange={v => setForm({ ...form, vehicleType: v })}>
+                        <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>{VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">Plate Number</Label>
+                      <Input value={form.vehicleNumber} onChange={e => setForm({ ...form, vehicleNumber: e.target.value })} placeholder="e.g., UBA 234J" className="rounded-xl" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status */}
+                <div>
+                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Status</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-gray-700 font-medium mb-1.5 block">Driver Status</Label>
+                      <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
+                        <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select status" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="inactive">Inactive</SelectItem>
+                          <SelectItem value="on_leave">On Leave</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial (only when editing) */}
+                {editing && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Financial Tracking</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-gray-700 font-medium mb-1.5 block">Expected Bankings (KES)</Label>
+                        <Input type="number" value={form.expectedBankings} onChange={e => setForm({ ...form, expectedBankings: e.target.value })} placeholder="0" className="rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-gray-700 font-medium mb-1.5 block">Banked (KES)</Label>
+                        <Input type="number" value={form.banked} onChange={e => setForm({ ...form, banked: e.target.value })} placeholder="0" className="rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-gray-700 font-medium mb-1.5 block">Damages (KES)</Label>
+                        <Input type="number" value={form.damages} onChange={e => setForm({ ...form, damages: e.target.value })} placeholder="0" className="rounded-xl" />
+                      </div>
+                      <div>
+                        <Label className="text-gray-700 font-medium mb-1.5 block">Loss (KES)</Label>
+                        <Input type="number" value={form.loss} onChange={e => setForm({ ...form, loss: e.target.value })} placeholder="0" className="rounded-xl" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={handleClose}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSubmit} disabled={submitting}>
+                  {submitting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : null}
+                  {editing ? 'Update Driver' : 'Add Driver'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <div className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Drivers"
         description="Manage delivery fleet, driver assignments, and performance"
@@ -543,8 +692,6 @@ export default function DriversModule() {
         searchValue={search}
         onSearchChange={handleSearchChange}
         searchPlaceholder="Search drivers, phone, ID..."
-        actionLabel="Add Driver"
-        onAction={openCreate}
       >
         <StatusFilter selected={filterStatus} onSelect={handleFilterStatusChange} statuses={DRIVER_STATUSES} counts={statusCounts} />
         <Button variant="outline" size="sm" className="rounded-xl border-gray-200 h-9 text-xs font-medium gap-1.5" onClick={() => setHelpOpen(true)}>
@@ -558,6 +705,13 @@ export default function DriversModule() {
           <SelectContent>{PAGE_SIZES.map(s => <SelectItem key={s} value={String(s)}>{s}/page</SelectItem>)}</SelectContent>
         </Select>
       </OpsHeader>
+
+      {/* Action bar (below KPI, left-aligned) */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
+          <Plus size={12} className="mr-1" /> Add Driver
+        </Button>
+      </div>
 
       {/* ── Active Filters ── */}
       <FilterChips chips={activeChips} onClearAll={handleClearFilters} />
@@ -996,138 +1150,6 @@ export default function DriversModule() {
         )}
       </DetailSlideOver>
 
-      {/* ══════════════════════════════════ */}
-      {/* ── CREATE / EDIT SLIDE-OVER ── */}
-      {/* ══════════════════════════════════ */}
-      <DetailSlideOver
-        open={open}
-        onClose={handleClose}
-        title={editing ? `Edit: ${editing.name}` : 'New Driver'}
-        subtitle={editing ? `ID: ${editing.driverId}` : 'Fill in the details to add a new driver'}
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={handleClose} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleSubmit} disabled={submitting} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-              {submitting ? <Loader2 size={14} className="mr-1.5 animate-spin" /> : null}
-              {editing ? 'Update Driver' : 'Add Driver'}
-            </Button>
-          </div>
-        }
-      >
-        {editing && (
-          <div className="mb-6 p-4 rounded-xl bg-gray-50 border border-gray-100">
-            <div className="grid grid-cols-3 gap-3 text-sm">
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Driver ID</p>
-                <p className="font-mono text-gray-700">{editing.driverId}</p>
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Status</p>
-                {statusBadge(editing.status)}
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-wider text-gray-400 font-medium mb-0.5">Created</p>
-                <p className="text-gray-700">{new Date(editing.createdAt).toLocaleDateString()}</p>
-              </div>
-            </div>
-            {editing.ordersReceived > 0 && (
-              <div className="mt-3 pt-3 border-t border-gray-200 flex items-center gap-4 text-xs text-gray-500">
-                <span className="flex items-center gap-1"><Package size={12} />{editing.ordersReceived} orders received</span>
-                <span className="flex items-center gap-1 text-green-600"><TrendingUp size={12} />{editing.successRate}% success</span>
-                {editing.riskPercent > 0 && <span className="flex items-center gap-1 text-amber-600"><ShieldAlert size={12} />{editing.riskPercent}% risk</span>}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="space-y-5">
-          {/* Personal Info */}
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Personal Information</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">Full Name <span className="text-red-400">*</span></Label>
-                <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g., Stephen Opalakiro" className="rounded-xl" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">Phone <span className="text-red-400">*</span></Label>
-                <Input value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} placeholder="e.g., 0771234567" className="rounded-xl" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">National ID</Label>
-                <Input value={form.nationalId} onChange={e => setForm({ ...form, nationalId: e.target.value })} placeholder="e.g., CF12345678" className="rounded-xl" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">License No</Label>
-                <Input value={form.licenseNumber} onChange={e => setForm({ ...form, licenseNumber: e.target.value })} placeholder="e.g., DL-45231" className="rounded-xl" />
-              </div>
-            </div>
-          </div>
-
-          {/* Vehicle Info */}
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Vehicle Information</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">Vehicle Type</Label>
-                <Select value={form.vehicleType} onValueChange={v => setForm({ ...form, vehicleType: v })}>
-                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select type" /></SelectTrigger>
-                  <SelectContent>{VEHICLE_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">Plate Number</Label>
-                <Input value={form.vehicleNumber} onChange={e => setForm({ ...form, vehicleNumber: e.target.value })} placeholder="e.g., UBA 234J" className="rounded-xl" />
-              </div>
-            </div>
-          </div>
-
-          {/* Status */}
-          <div>
-            <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Status</h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1.5 block">Driver Status</Label>
-                <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
-                  <SelectTrigger className="rounded-xl"><SelectValue placeholder="Select status" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="on_leave">On Leave</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          {/* Financial (only when editing) */}
-          {editing && (
-            <div>
-              <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">Financial Tracking</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block">Expected Bankings (KES)</Label>
-                  <Input type="number" value={form.expectedBankings} onChange={e => setForm({ ...form, expectedBankings: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block">Banked (KES)</Label>
-                  <Input type="number" value={form.banked} onChange={e => setForm({ ...form, banked: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block">Damages (KES)</Label>
-                  <Input type="number" value={form.damages} onChange={e => setForm({ ...form, damages: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-                <div>
-                  <Label className="text-gray-700 font-medium mb-1.5 block">Loss (KES)</Label>
-                  <Input type="number" value={form.loss} onChange={e => setForm({ ...form, loss: e.target.value })} placeholder="0" className="rounded-xl" />
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </DetailSlideOver>
-
       {/* ── Help Dialog ── */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
         <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -1203,6 +1225,8 @@ export default function DriversModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
