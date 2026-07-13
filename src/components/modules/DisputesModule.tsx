@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,9 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Eye, Check, X, Filter, AlertTriangle, Clock, CheckCircle2, FileText } from 'lucide-react'
+import { Plus, Eye, Check, X, Filter, AlertTriangle, Clock, CheckCircle2, FileText, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
@@ -84,7 +85,7 @@ export default function DisputesModule() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [selected, setSelected] = useState<Dispute | null>(null)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [resolveOpen, setResolveOpen] = useState(false)
   const [resolveAction, setResolveAction] = useState<'credit' | 'reject'>('credit')
   const [resolveForm, setResolveForm] = useState({ creditAmountApproved: '', resolutionNotes: '' })
@@ -140,7 +141,7 @@ export default function DisputesModule() {
       })
       if (res.ok) {
         toast.success('Dispute opened')
-        setCreateOpen(false)
+        setView('list')
         setCreateForm({ statementId: '', merchantId: '', merchantName: '', lineItemReference: '', disputeType: 'overcharge', reason: '', creditAmountRequested: '' })
         fetchData()
       } else { const e = await res.json(); toast.error(e.error || 'Failed') }
@@ -199,8 +200,79 @@ export default function DisputesModule() {
     })
   }
 
+  // ── Render: Open Dispute (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><AlertTriangle size={16} className="text-[#FF6B35]" /> Open Dispute</h1>
+                  <p className="text-[11px] text-gray-500">Merchant challenges a charge on their statement</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Dispute Details</h2>
+                  <p className="text-xs text-gray-500">Select the statement being disputed, enter the credit amount requested, and explain the reason. Finance reviews and may issue a credit memo.</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Statement <span className="text-red-400">*</span></Label>
+                  <select value={createForm.statementId} onChange={e => handleStatementSelect(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select statement...</option>
+                    {statements.slice(0, 100).map(s => <option key={s.id} value={s.statementId}>{s.statementId}, {s.merchantName} ({s.period})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Dispute Type</Label>
+                    <select value={createForm.disputeType} onChange={e => setCreateForm({ ...createForm, disputeType: e.target.value })}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                      {DISPUTE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Credit Requested (UGX) <span className="text-red-400">*</span></Label>
+                    <Input type="number" value={createForm.creditAmountRequested} onChange={e => setCreateForm({ ...createForm, creditAmountRequested: e.target.value })} placeholder="0" className="rounded-xl" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Line Item Reference (optional)</Label>
+                  <Input value={createForm.lineItemReference} onChange={e => setCreateForm({ ...createForm, lineItemReference: e.target.value })} placeholder="e.g. IN001234 or storage-2026-06" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Reason <span className="text-red-400">*</span></Label>
+                  <textarea value={createForm.reason} onChange={e => setCreateForm({ ...createForm, reason: e.target.value })}
+                    placeholder="What is being disputed and why?" rows={3}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleCreate}>Open Dispute</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Disputes & Credit Memos"
         description="Merchant challenges to statement charges. issue credit memos with audit trail"
@@ -208,9 +280,14 @@ export default function DisputesModule() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by dispute ID, merchant, or statement..."
-        actionLabel="Open Dispute"
-        onAction={() => setCreateOpen(true)}
       />
+
+      {/* Action bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => setView('add')}>
+          <Plus size={12} className="mr-1" /> Open Dispute
+        </Button>
+      </div>
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -392,53 +469,6 @@ export default function DisputesModule() {
         })()}
       </DetailSlideOver>
 
-      {/* Create dispute dialog */}
-      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><AlertTriangle size={18} /> Open Dispute</AlertDialogTitle>
-            <AlertDialogDescription>Merchant challenges a charge on their statement. Finance reviews and may issue a credit memo.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 space-y-3">
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Statement <span className="text-red-400">*</span></Label>
-              <select value={createForm.statementId} onChange={e => handleStatementSelect(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                <option value="">Select statement...</option>
-                {statements.slice(0, 100).map(s => <option key={s.id} value={s.statementId}>{s.statementId}, {s.merchantName} ({s.period})</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-medium mb-1 block">Dispute Type</Label>
-                <select value={createForm.disputeType} onChange={e => setCreateForm({ ...createForm, disputeType: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                  {DISPUTE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs font-medium mb-1 block">Credit Requested (UGX) <span className="text-red-400">*</span></Label>
-                <Input type="number" value={createForm.creditAmountRequested} onChange={e => setCreateForm({ ...createForm, creditAmountRequested: e.target.value })} placeholder="0" className="rounded-xl" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Line Item Reference (optional)</Label>
-              <Input value={createForm.lineItemReference} onChange={e => setCreateForm({ ...createForm, lineItemReference: e.target.value })} placeholder="e.g. IN001234 or storage-2026-06" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Reason <span className="text-red-400">*</span></Label>
-              <textarea value={createForm.reason} onChange={e => setCreateForm({ ...createForm, reason: e.target.value })}
-                placeholder="What is being disputed and why?" rows={3}
-                className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm" />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreate} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Open Dispute</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Resolve dialog */}
       <AlertDialog open={resolveOpen} onOpenChange={setResolveOpen}>
         <AlertDialogContent className="rounded-2xl max-w-lg">
@@ -479,6 +509,8 @@ export default function DisputesModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

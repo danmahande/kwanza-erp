@@ -542,67 +542,39 @@ export default function CustomersModule() {
 
       {/* Help Dialog */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AlertDialogContent className="rounded-2xl max-w-md">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2">
-              <HelpCircle size={18} />
-              How the Customers Module Works
-            </AlertDialogTitle>
+            <AlertDialogTitle>Customers</AlertDialogTitle>
             <AlertDialogDescription>
-              The Customers module tracks every person who has placed an order through your warehouse. Customers are created automatically when orders are placed — you don't need to add them manually. Each customer gets a fresh risk profile that grades them over time based on their delivery outcomes. Here is how it works.
+              Customers are created automatically when orders are placed. Each gets a risk profile that grades over time based on delivery outcomes.
             </AlertDialogDescription>
           </AlertDialogHeader>
-
-          <div className="space-y-4 py-2">
-            <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">What this module is for:</strong> Every order has a customer — a name, phone number, and delivery address. This module tracks those customers across all their orders, so you can see their order history, their lifetime value, and their risk profile (how reliably they accept and pay for COD deliveries). Without it, every order is an island — you can't tell if "John at 0700123456" has placed 5 successful orders or 3 failed ones.
-              </p>
-            </div>
-
+          <div className="space-y-3 py-2 text-xs text-gray-700">
             <div>
-              <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">How It Works</p>
-              <div className="space-y-2">
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-100">
-                  <p className="text-xs text-blue-900 leading-relaxed">
-                    <strong>1. Auto-creation.</strong> When a customer places an order (via the Outbound module), the system checks if a customer with that phone number already exists. If not, it creates a new Customer record AND a fresh CustomerRiskProfile (score 0, no history). Every customer starts with a clean slate.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-green-50 border border-green-100">
-                  <p className="text-xs text-green-900 leading-relaxed">
-                    <strong>2. Risk grading over time.</strong> As the customer's orders are delivered, the system updates their risk profile. Successful COD deliveries increase their codDelivered90d count. Failed deliveries or returns increase their codRefusals90d count. The COD acceptance rate (delivered / total) is visible in the customer detail view. A customer with a 90% acceptance rate is low risk; one with 30% is high risk.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-purple-50 border border-purple-100">
-                  <p className="text-xs text-purple-900 leading-relaxed">
-                    <strong>3. Customer 360 view.</strong> Click any customer to see their full profile: contact details, order history (last 10 orders with status and amount), risk profile (COD refusals, acceptance rate, blocklist status), and lifetime value. You can edit their details if needed.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-red-50 border border-red-100">
-                  <p className="text-xs text-red-900 leading-relaxed">
-                    <strong>4. Blocklist integration.</strong> If a customer's phone is on the fraud blocklist (added in the Risk & Fraud module), a red warning appears in their profile and in the customer list. Orders from blocklisted customers are hard-blocked at intake — they cannot be released to the pick floor without a manager override.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>5. Edit and Delete.</strong> You can edit a customer's name, phone, email, or address at any time. If you change the phone number, a new risk profile is created for the new number (the old profile stays for the old number). You can only delete customers with zero orders — customers with order history must be kept for audit. Deleting a customer preserves their risk profile in case someone re-registers with the same phone.
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <p className="text-xs text-gray-700 leading-relaxed">
-                    <strong>6. CSV Import.</strong> If you have a customer list from another system, you can import it via CSV. Each imported customer gets a fresh risk profile. This is useful for pre-loading customers before orders start flowing in.
-                  </p>
-                </div>
-              </div>
+              <p className="font-semibold text-gray-900 mb-1">Auto-Creation</p>
+              <p>When an order is placed, the system checks if a customer with that phone exists. If not, it creates one with a fresh risk profile (score 0, no history).</p>
             </div>
-
-            <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
-              <p className="text-xs leading-relaxed">
-                <strong className="text-sm">Why this is different:</strong> Most e-commerce systems treat customers as just a name and phone number. This module treats each customer as a tracked entity with a risk lifecycle. Every delivery outcome — success or failure — feeds into their risk profile. Over time, the system learns which customers are reliable and which are risky, and that intelligence is automatically applied when they place their next order. A customer with 3 COD refusals doesn't get the same treatment as one with 10 successful deliveries — the system knows the difference, and the Outbound module uses that knowledge at intake.
-              </p>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Risk Grading</p>
+              <p>Successful COD deliveries increase the customer's score. Refusals and returns lower it. The COD acceptance rate (delivered / total) is visible in each profile.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Customer 360</p>
+              <p>Click any customer to see contact details, order history (last 10), risk profile, and lifetime value. Edit from the profile footer.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Blocklist Integration</p>
+              <p>If a customer's phone is on the fraud blocklist, a red warning appears here. Orders from blocklisted customers are hard-blocked at intake.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Edit and Delete</p>
+              <p>Edit name, phone, email, or address at any time. Changing the phone creates a new risk profile. Only customers with zero orders can be deleted — history is preserved for audit.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">CSV Import</p>
+              <p>Import a customer list from another system. Each imported customer gets a fresh risk profile.</p>
             </div>
           </div>
-
           <AlertDialogFooter>
             <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
           </AlertDialogFooter>

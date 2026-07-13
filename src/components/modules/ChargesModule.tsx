@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,9 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Plus, Check, X, Trash2, Filter, Layers, CheckCircle2, Clock, AlertOctagon } from 'lucide-react'
+import { Plus, Check, X, Trash2, Filter, Layers, CheckCircle2, Clock, AlertOctagon, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
@@ -91,7 +92,7 @@ export default function ChargesModule() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [selected, setSelected] = useState<Charge | null>(null)
   const [profileOpen, setProfileOpen] = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [rejectOpen, setRejectOpen] = useState(false)
   const [rejectIds, setRejectIds] = useState<string[]>([])
   const [rejectReason, setRejectReason] = useState('')
@@ -189,7 +190,7 @@ export default function ChargesModule() {
       })
       if (res.ok) {
         toast.success('Charge created')
-        setCreateOpen(false)
+        setView('list')
         setForm({ merchantId: '', chargeType: 'inbound_receiving', amount: '', description: '', period: new Date().toISOString().slice(0, 7) })
         fetchData()
       } else { const e = await res.json(); toast.error(e.error || 'Failed') }
@@ -204,8 +205,77 @@ export default function ChargesModule() {
 
   const openProfile = (c: Charge) => { setSelected(c); setProfileOpen(true) }
 
+  // ── Render: Add Charge (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Plus size={16} className="text-[#FF6B35]" /> Add Manual Charge</h1>
+                  <p className="text-[11px] text-gray-500">Manual ad-hoc charge to be reviewed before invoicing</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Charge Details</h2>
+                  <p className="text-xs text-gray-500">Select the merchant, charge type, and period. The charge enters pending status and must be approved before invoicing.</p>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Merchant <span className="text-red-400">*</span></Label>
+                  <select value={form.merchantId} onChange={e => setForm({ ...form, merchantId: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select merchant...</option>
+                    {merchants.map(m => <option key={m.id} value={m.merchantId}>{m.businessName} ({m.merchantId})</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Charge Type <span className="text-red-400">*</span></Label>
+                    <select value={form.chargeType} onChange={e => setForm({ ...form, chargeType: e.target.value })}
+                      className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                      {CHARGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label className="text-xs font-medium mb-1 block">Period <span className="text-red-400">*</span></Label>
+                    <Input type="month" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} className="rounded-xl" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Amount (UGX) <span className="text-red-400">*</span></Label>
+                  <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium mb-1 block">Description</Label>
+                  <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="What is this charge for?" className="rounded-xl" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleCreate}>Create Charge</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Charge Ledger"
         description="Individual fee events awaiting review before they hit a statement"
@@ -213,8 +283,6 @@ export default function ChargesModule() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by merchant, charge ID, or description..."
-        actionLabel="Add Charge"
-        onAction={() => setCreateOpen(true)}
       >
         {selectedIds.size > 0 && (
           <>
@@ -227,6 +295,13 @@ export default function ChargesModule() {
           </>
         )}
       </OpsHeader>
+
+      {/* Action bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => setView('add')}>
+          <Plus size={12} className="mr-1" /> Add Charge
+        </Button>
+      </div>
 
       {/* Filter chips */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -425,51 +500,6 @@ export default function ChargesModule() {
         })()}
       </DetailSlideOver>
 
-      {/* Create dialog */}
-      <AlertDialog open={createOpen} onOpenChange={setCreateOpen}>
-        <AlertDialogContent className="rounded-2xl max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><Plus size={18} /> Add Manual Charge</AlertDialogTitle>
-            <AlertDialogDescription>Manual ad-hoc charge to be reviewed before invoicing.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-2 space-y-3">
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Merchant <span className="text-red-400">*</span></Label>
-              <select value={form.merchantId} onChange={e => setForm({ ...form, merchantId: e.target.value })}
-                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                <option value="">Select merchant...</option>
-                {merchants.map(m => <option key={m.id} value={m.merchantId}>{m.businessName} ({m.merchantId})</option>)}
-              </select>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs font-medium mb-1 block">Charge Type <span className="text-red-400">*</span></Label>
-                <select value={form.chargeType} onChange={e => setForm({ ...form, chargeType: e.target.value })}
-                  className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
-                  {CHARGE_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <Label className="text-xs font-medium mb-1 block">Period <span className="text-red-400">*</span></Label>
-                <Input type="month" value={form.period} onChange={e => setForm({ ...form, period: e.target.value })} className="rounded-xl" />
-              </div>
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Amount (UGX) <span className="text-red-400">*</span></Label>
-              <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0" className="rounded-xl" />
-            </div>
-            <div>
-              <Label className="text-xs font-medium mb-1 block">Description</Label>
-              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="What is this charge for?" className="rounded-xl" />
-            </div>
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCreate} className="bg-[#FF6B35] hover:bg-[#E55A25] rounded-xl">Create Charge</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
       {/* Bulk reject dialog */}
       <AlertDialog open={rejectOpen} onOpenChange={setRejectOpen}>
         <AlertDialogContent className="rounded-2xl">
@@ -487,6 +517,8 @@ export default function ChargesModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

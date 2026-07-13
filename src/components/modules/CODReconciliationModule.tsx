@@ -1,17 +1,19 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import {
   Wallet, AlertTriangle, CheckCircle2, Banknote, Search, Filter,
+  Plus, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
@@ -60,7 +62,7 @@ export default function CODReconciliationModule() {
   const [bankings, setBankings] = useState<DriverBanking[]>([])
   const [driverList, setDriverList] = useState<Driver[]>([])
   const [search, setSearch] = useState('')
-  const [open, setOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [bankingsOpen, setBankingsOpen] = useState(false)
   const [selectedDriver, setSelectedDriver] = useState<DriverRow | null>(null)
   const [form, setForm] = useState({
@@ -120,7 +122,7 @@ export default function CODReconciliationModule() {
       })
       if (res.ok) {
         toast.success('Banking recorded')
-        setOpen(false)
+        setView('list')
         setForm({ driverId: '', amount: '', bankName: '', bankReference: '', runsheetId: '', notes: '' })
         fetchData()
       } else {
@@ -154,21 +156,95 @@ export default function CODReconciliationModule() {
 
   const openCreate = () => {
     setForm({ driverId: '', amount: '', bankName: '', bankReference: '', runsheetId: '', notes: '' })
-    setOpen(true)
+    setView('add')
+  }
+
+  // ── Render: Record Banking (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Banknote size={16} className="text-[#FF6B35]" /> Record Driver Banking</h1>
+                  <p className="text-[11px] text-gray-500">Cash deposit made by a driver against their COD collections</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Banking Details</h2>
+                  <p className="text-xs text-gray-500">Select the driver, enter the amount banked, and provide a reference. The system reconciles this against the driver's COD collections.</p>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block">Driver <span className="text-red-400">*</span></Label>
+                  <select value={form.driverId} onChange={e => setForm({ ...form, driverId: e.target.value })} className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="">Select a driver...</option>
+                    {driverList.map((d) => (<option key={d.driverId} value={d.driverId}>{d.name} ({d.driverId})</option>))}
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block">Amount Banked (UGX) <span className="text-red-400">*</span></Label>
+                  <Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="e.g. 500000" className="rounded-xl" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank / Agent</Label>
+                    <Input value={form.bankName} onChange={e => setForm({ ...form, bankName: e.target.value })} placeholder="e.g. Stanbic, MTN MoMo" className="rounded-xl" />
+                  </div>
+                  <div>
+                    <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank Reference</Label>
+                    <Input value={form.bankReference} onChange={e => setForm({ ...form, bankReference: e.target.value })} placeholder="Slip / transaction ID" className="rounded-xl" />
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Runsheet ID (optional)</Label>
+                  <Input value={form.runsheetId} onChange={e => setForm({ ...form, runsheetId: e.target.value })} placeholder="If this banking covers a specific runsheet" className="rounded-xl" />
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Notes</Label>
+                  <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any extra context" className="rounded-xl" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleCreateBanking}>Record</Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
   }
 
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
-      <OpsHeader
-        title="COD Reconciliation"
-        description="Driver COD collections vs bankings. verify deposits, flag shortfalls"
-        kpiCells={kpiCells}
-        searchValue={search}
-        onSearchChange={setSearch}
-        searchPlaceholder="Search by driver name or ID..."
-        actionLabel="Record Banking"
-        onAction={openCreate}
-      />
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
+          <OpsHeader
+            title="COD Reconciliation"
+            description="Driver COD collections vs bankings. verify deposits, flag shortfalls"
+            kpiCells={kpiCells}
+            searchValue={search}
+            onSearchChange={setSearch}
+            searchPlaceholder="Search by driver name or ID..."
+          />
+
+          {/* Action bar */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={openCreate}>
+              <Plus size={12} className="mr-1" /> Record Banking
+            </Button>
+          </div>
 
       {/* Dense table */}
       {filteredDrivers.length === 0 ? (
@@ -210,84 +286,6 @@ export default function CODReconciliationModule() {
           </tbody>
         </DenseTable>
       )}
-
-      <DetailSlideOver
-        open={open}
-        onClose={() => setOpen(false)}
-        title="Record Driver Banking"
-        subtitle="Cash deposit made by a driver against their COD collections"
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => setOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleCreateBanking} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">Record</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Driver <span className="text-red-400">*</span></Label>
-            <select
-              value={form.driverId}
-              onChange={e => setForm({ ...form, driverId: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="">Select a driver...</option>
-              {driverList.map((d, i) => (
-                <option key={d.driverId} value={d.driverId}>{d.name} ({d.driverId})</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Amount Banked (UGX) <span className="text-red-400">*</span></Label>
-            <Input
-              type="number"
-              value={form.amount}
-              onChange={e => setForm({ ...form, amount: e.target.value })}
-              placeholder="e.g. 500000"
-              className="rounded-xl"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank / Agent</Label>
-              <Input
-                value={form.bankName}
-                onChange={e => setForm({ ...form, bankName: e.target.value })}
-                placeholder="e.g. Stanbic, MTN MoMo"
-                className="rounded-xl"
-              />
-            </div>
-            <div>
-              <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Bank Reference</Label>
-              <Input
-                value={form.bankReference}
-                onChange={e => setForm({ ...form, bankReference: e.target.value })}
-                placeholder="Slip / transaction ID"
-                className="rounded-xl"
-              />
-            </div>
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Runsheet ID (optional)</Label>
-            <Input
-              value={form.runsheetId}
-              onChange={e => setForm({ ...form, runsheetId: e.target.value })}
-              placeholder="If this banking covers a specific runsheet"
-              className="rounded-xl"
-            />
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Notes</Label>
-            <Input
-              value={form.notes}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any extra context"
-              className="rounded-xl"
-            />
-          </div>
-        </div>
-      </DetailSlideOver>
 
       <DetailSlideOver
         open={bankingsOpen}
@@ -385,6 +383,8 @@ export default function CODReconciliationModule() {
           </div>
         </div>
       </DetailSlideOver>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { motion } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,10 +13,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   CreditCard, Wallet, CheckCircle2, Clock, Search, Layers, Banknote, Filter,
+  ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
+import PageTransition from '@/components/shared/PageTransition'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 
@@ -51,7 +53,7 @@ export default function PaymentBatchesModule() {
   const [batches, setBatches] = useState<PaymentBatch[]>([])
   const [search, setSearch] = useState('')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [createOpen, setCreateOpen] = useState(false)
+  const [view, setView] = useState<'list' | 'add'>('list')
   const [viewBatch, setViewBatch] = useState<PaymentBatch | null>(null)
   const [form, setForm] = useState({
     paymentMethod: 'bank_transfer',
@@ -131,7 +133,7 @@ export default function PaymentBatchesModule() {
       const result = await res.json()
       if (res.ok) {
         toast.success(`Batch created: ${result.paymentsCreated} payments totalling ${formatCurrency(result.totalAmount)}`)
-        setCreateOpen(false)
+        setView('list')
         setSelectedIds(new Set())
         setForm({ paymentMethod: 'bank_transfer', notes: '' })
         fetchData()
@@ -168,8 +170,68 @@ export default function PaymentBatchesModule() {
     }
   }
 
+  // ── Render: Create Batch (full-page) ──
+  if (view === 'add') {
+    return (
+      <AnimatePresence mode="wait">
+        <PageTransition key="add">
+          <div className="min-h-full flex flex-col">
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
+              <div className="px-6 py-3 flex items-center gap-3">
+                <Button variant="ghost" size="sm" className="rounded-lg text-gray-600" onClick={() => setView('list')}>
+                  <BackIcon size={14} className="mr-1" /> Back
+                </Button>
+                <div className="h-5 w-px bg-gray-200" />
+                <div>
+                  <h1 className="text-base font-bold text-gray-900 flex items-center gap-1.5"><Banknote size={16} className="text-[#FF6B35]" /> Create Payment Batch</h1>
+                  <p className="text-[11px] text-gray-500">{selectedIds.size} statements selected · Total: {formatCurrency(selectedTotal)}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-2xl mx-auto px-6 py-8 space-y-5">
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 mb-1">Batch Details</h2>
+                  <p className="text-xs text-gray-500">This will create one MerchantPayment per selected statement and mark them all as paid in a single batch.</p>
+                </div>
+                <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-800">
+                  <InfoTip term="paymentBatch" size={12} className="mr-1" />
+                  This will create one MerchantPayment per selected statement and mark them all as paid in a single batch.
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block">Payment Method</Label>
+                  <select value={form.paymentMethod} onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm">
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="mobile_money">Mobile Money (MTN/Airtel)</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+                <div>
+                  <Label className="text-gray-700 font-medium mb-1.5 block">Notes (optional)</Label>
+                  <Input value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Any reference notes for this batch" className="rounded-xl" />
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border-t border-gray-200 sticky bottom-0">
+              <div className="max-w-2xl mx-auto px-6 py-3 flex items-center justify-end gap-2">
+                <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setView('list')}>Cancel</Button>
+                <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleCreateBatch} disabled={selectedIds.size === 0}>
+                  <Banknote size={14} className="mr-1.5" /> Create Batch
+                </Button>
+              </div>
+            </div>
+          </div>
+        </PageTransition>
+      </AnimatePresence>
+    )
+  }
+
   return (
-    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.3 }} className="space-y-3">
+    <AnimatePresence mode="wait">
+      <PageTransition key="list">
+        <div className="space-y-3">
       <OpsHeader
         title="Payment Batches"
         description="Group unpaid statements into batch payouts"
@@ -177,9 +239,14 @@ export default function PaymentBatchesModule() {
         searchValue={search}
         onSearchChange={setSearch}
         searchPlaceholder="Search by merchant, statement, or batch..."
-        actionLabel={selectedIds.size > 0 ? `Create Batch (${selectedIds.size})` : 'Create Batch'}
-        onAction={() => selectedIds.size > 0 ? setCreateOpen(true) : toast.error('Select statements first')}
       />
+
+      {/* Action bar */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" className="h-8 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={() => selectedIds.size > 0 ? setView('add') : toast.error('Select statements first')} disabled={selectedIds.size === 0}>
+          <Banknote size={12} className="mr-1" /> {selectedIds.size > 0 ? `Create Batch (${selectedIds.size})` : 'Create Batch'}
+        </Button>
+      </div>
 
       {/* Unpaid Statements, DenseTable */}
       <div className="space-y-1">
@@ -266,51 +333,6 @@ export default function PaymentBatchesModule() {
           </DenseTable>
         )}
       </div>
-
-      <DetailSlideOver
-        open={createOpen}
-        onClose={() => setCreateOpen(false)}
-        title="Create Payment Batch"
-        subtitle={`${selectedIds.size} statements selected, Total: ${formatCurrency(selectedTotal)}`}
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" onClick={() => setCreateOpen(false)} className="rounded-xl">Cancel</Button>
-            <Button onClick={handleCreateBatch} className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl">
-              <Banknote size={14} className="mr-2" /> Create Batch
-            </Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <div className="p-3 rounded-xl bg-blue-50 border border-blue-100 text-xs text-blue-800">
-            <InfoTip term="paymentBatch" size={12} className="mr-1" />
-            This will create one MerchantPayment per selected statement and mark them all as paid in a single batch.
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Payment Method</Label>
-            <select
-              value={form.paymentMethod}
-              onChange={e => setForm({ ...form, paymentMethod: e.target.value })}
-              className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm"
-            >
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="mobile_money">Mobile Money (MTN/Airtel)</option>
-              <option value="cheque">Cheque</option>
-              <option value="cash">Cash</option>
-            </select>
-          </div>
-          <div>
-            <Label className="text-gray-700 font-medium mb-1.5 block">Notes (optional)</Label>
-            <Input
-              value={form.notes}
-              onChange={e => setForm({ ...form, notes: e.target.value })}
-              placeholder="Any reference notes for this batch"
-              className="rounded-xl"
-            />
-          </div>
-        </div>
-      </DetailSlideOver>
 
       <DetailSlideOver
         open={!!viewBatch}
@@ -419,6 +441,8 @@ export default function PaymentBatchesModule() {
           </div>
         )}
       </DetailSlideOver>
-    </motion.div>
+        </div>
+      </PageTransition>
+    </AnimatePresence>
   )
 }
