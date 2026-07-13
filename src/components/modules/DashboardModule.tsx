@@ -280,6 +280,77 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         <ModuleStatusBoard data={data} onNavigate={onNavigate} />
       </div>
 
+      {/* ── Inventory Health Gauge + COD Reconciliation Bar ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        {/* Inventory health gauge */}
+        {(() => {
+          const total = data.inventory.healthy + data.inventory.low + data.inventory.critical
+          const healthyPct = total > 0 ? (data.inventory.healthy / total) * 100 : 100
+          const lowPct = total > 0 ? (data.inventory.low / total) * 100 : 0
+          const critPct = total > 0 ? (data.inventory.critical / total) * 100 : 0
+          const isCrisis = data.inventory.critical > 0 && (data.inventory.critical / Math.max(total, 1)) > 0.1
+          return (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Inventory Health</span>
+                <span className={`text-[10px] font-bold ${isCrisis ? 'text-red-600' : data.inventory.critical > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {isCrisis ? 'CRITICAL' : data.inventory.critical > 0 ? 'AT RISK' : 'HEALTHY'}
+                </span>
+              </div>
+              {/* Stacked bar */}
+              <div className="h-6 rounded-lg overflow-hidden flex bg-gray-100">
+                {healthyPct > 0 && <div className="bg-green-500 flex items-center justify-center" style={{ width: `${healthyPct}%` }} title={`${data.inventory.healthy} healthy`}>{healthyPct > 15 && <span className="text-[9px] text-white font-mono font-bold">{data.inventory.healthy}</span>}</div>}
+                {lowPct > 0 && <div className="bg-amber-400 flex items-center justify-center" style={{ width: `${lowPct}%` }} title={`${data.inventory.low} low`}>{lowPct > 10 && <span className="text-[9px] text-white font-mono font-bold">{data.inventory.low}</span>}</div>}
+                {critPct > 0 && <div className="bg-red-500 flex items-center justify-center" style={{ width: `${critPct}%` }} title={`${data.inventory.critical} critical`}>{critPct > 5 && <span className="text-[9px] text-white font-mono font-bold">{data.inventory.critical}</span>}</div>}
+              </div>
+              {/* Legend */}
+              <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />{data.inventory.healthy} healthy</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400" />{data.inventory.low} low</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />{data.inventory.critical} critical</span>
+                <span className="ml-auto text-gray-400 font-mono">{total} total SKUs</span>
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* COD reconciliation progress bar */}
+        {(() => {
+          const collected = data.cod.collectedTotal || 0
+          const banked = data.cod.banked || 0
+          const pending = data.cod.pendingBankings || 0
+          const bankedPct = collected > 0 ? Math.round((banked / collected) * 100) : 0
+          const pendingPct = collected > 0 ? 100 - bankedPct : 0
+          const isGood = bankedPct >= 90
+          const isWarning = bankedPct >= 70 && bankedPct < 90
+          return (
+            <div className="bg-white rounded-lg border border-gray-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">COD Reconciliation</span>
+                <span className={`text-[10px] font-bold ${isGood ? 'text-green-600' : isWarning ? 'text-amber-600' : 'text-red-600'}`}>
+                  {bankedPct}% banked
+                </span>
+              </div>
+              {/* Progress bar */}
+              <div className="h-6 rounded-lg overflow-hidden flex bg-gray-100">
+                <div className={`flex items-center justify-center ${isGood ? 'bg-green-500' : isWarning ? 'bg-amber-400' : 'bg-red-500'}`} style={{ width: `${bankedPct}%` }} title={`${formatCurrencyCompact(banked)} banked`}>
+                  {bankedPct > 20 && <span className="text-[9px] text-white font-mono font-bold">{formatCurrencyCompact(banked)}</span>}
+                </div>
+                {pendingPct > 0 && <div className="bg-gray-300 flex items-center justify-center" style={{ width: `${pendingPct}%` }} title={`${formatCurrencyCompact(pending)} pending`}>
+                  {pendingPct > 15 && <span className="text-[9px] text-gray-600 font-mono font-bold">{formatCurrencyCompact(pending)}</span>}
+                </div>}
+              </div>
+              {/* Legend */}
+              <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Banked: {formatCurrencyCompact(banked)}</span>
+                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-gray-300" />Pending: {formatCurrencyCompact(pending)}</span>
+                <span className="ml-auto text-gray-400 font-mono">Collected: {formatCurrencyCompact(collected)}</span>
+              </div>
+            </div>
+          )
+        })()}
+      </div>
+
       {/* ── Streaks (single line) ── */}
       {data.pulse?.streaks && (
         <div className="flex items-center gap-4 text-[11px] text-gray-600 px-1">
@@ -326,6 +397,40 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
         </div>
       </div>
 
+      {/* ── Merchant Profitability (top 5 by net) ── */}
+      {data.merchantProfitability.length > 0 && (() => {
+        const sorted = [...data.merchantProfitability].sort((a, b) => Math.abs(b.net) - Math.abs(a.net)).slice(0, 5)
+        const maxAbs = Math.max(...sorted.map(m => Math.abs(m.net)), 1)
+        return (
+          <div>
+            <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 block">Top Merchants by Net Profit</span>
+            <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-2">
+              {sorted.map((m, i) => {
+                const isProfit = m.net >= 0
+                const barPct = Math.min(100, (Math.abs(m.net) / maxAbs) * 100)
+                return (
+                  <div key={i} className="flex items-center gap-3">
+                    <span className="text-xs font-medium text-gray-700 w-32 truncate shrink-0">{m.name}</span>
+                    <div className="flex-1 h-5 bg-gray-50 rounded overflow-hidden relative">
+                      <div
+                        className={`h-full rounded ${isProfit ? 'bg-green-400' : 'bg-red-400'}`}
+                        style={{ width: `${barPct}%` }}
+                      />
+                    </div>
+                    <span className={`text-xs font-mono font-bold w-24 text-right shrink-0 ${isProfit ? 'text-green-700' : 'text-red-600'}`}>
+                      {isProfit ? '+' : ''}{formatCurrencyCompact(m.net)}
+                    </span>
+                  </div>
+                )
+              })}
+              <p className="text-[10px] text-gray-400 pt-1 border-t border-gray-50">
+                Showing top {sorted.length} of {data.merchantProfitability.length} merchants · {data.merchantProfitability.filter(m => m.net < 0).length} at a loss
+              </p>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── Help Dialog (terse, professional) ── */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>
         <AlertDialogContent className="rounded-2xl max-w-md">
@@ -345,12 +450,24 @@ export default function DashboardModule({ onNavigate }: DashboardModuleProps = {
               <p>One row per module with a status indicator. Click any row with an action link to jump to that module.</p>
             </div>
             <div>
+              <p className="font-semibold text-gray-900 mb-1">Inventory Health</p>
+              <p>Stacked bar showing the proportion of healthy, low, and critical stock. Label changes from HEALTHY to AT RISK to CRITICAL based on critical count.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">COD Reconciliation</p>
+              <p>Progress bar showing what percentage of collected COD cash has been banked. Green (90%+), amber (70-89%), red (below 70%).</p>
+            </div>
+            <div>
               <p className="font-semibold text-gray-900 mb-1">Streaks</p>
               <p>Positive trends: days without stockout, hours since last failed delivery, best week this quarter.</p>
             </div>
             <div>
               <p className="font-semibold text-gray-900 mb-1">Revenue Trend</p>
               <p>Six-month area chart showing monthly revenue and commission. Orange is revenue, navy is commission earned.</p>
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">Top Merchants by Net Profit</p>
+              <p>Horizontal bars showing the top 5 merchants by net profit magnitude. Green bars are profitable, red bars are loss-making. Footer shows total merchant count and how many are at a loss.</p>
             </div>
             <div>
               <p className="font-semibold text-gray-900 mb-1">Export</p>
