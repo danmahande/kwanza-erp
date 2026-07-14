@@ -545,6 +545,36 @@ export default function InventoryModule() {
     return Math.floor(qty / velocity) <= 7
   }).length
 
+  // ── IAS 2 / CPA Uganda Accounting Calculations ──
+  // COGS = total outbound value (units shipped × unit cost)
+  const totalCOGS = data.reduce((s, p) => s + (safe(p.outQty) * p.unitCost), 0)
+  // Total sales revenue from delivered orders
+  const totalSalesRevenue = data.reduce((s, p) => s + (safe(p.outQty) * p.unitSellingPrice), 0)
+  // Gross profit = revenue - COGS
+  const grossProfit = totalSalesRevenue - totalCOGS
+  // Gross margin %
+  const grossMarginPct = totalSalesRevenue > 0 ? Math.round((grossProfit / totalSalesRevenue) * 100) : 0
+  // Average inventory value = (beginning + ending) / 2
+  // Beginning = total inbound value, Ending = current stock value
+  const totalInboundValue = data.reduce((s, p) => s + (safe(p.inQty) * p.unitCost), 0)
+  const avgInventoryValue = (totalInboundValue + totalStockValue) / 2
+  // Inventory turnover ratio = COGS / average inventory
+  const inventoryTurnover = avgInventoryValue > 0 ? Math.round((totalCOGS / avgInventoryValue) * 10) / 10 : 0
+  // Days inventory outstanding (DIO) = 365 / turnover
+  const daysInventoryOutstanding = inventoryTurnover > 0 ? Math.round(365 / inventoryTurnover) : 0
+  // NRV check: products where selling price < cost (should be written down)
+  const nrvWriteDowns = data.filter(p => p.unitSellingPrice < p.unitCost && safe(p.computedCurrentQty) > 0)
+  const totalWriteDown = nrvWriteDowns.reduce((s, p) => s + ((p.unitCost - p.unitSellingPrice) * safe(p.computedCurrentQty)), 0)
+  // Inventory carrying cost (estimated: 25% of average inventory value annually — industry standard)
+  const carryingCostAnnual = Math.round(avgInventoryValue * 0.25)
+  // Carrying cost as % of stock value
+  const carryingCostPct = totalStockValue > 0 ? 25 : 0 // fixed at industry standard 25%
+  // Shrinkage value
+  const totalShrinkageValue = data.reduce((s, p) => s + (safe(p.shrinkQty) * p.unitCost), 0)
+  // Shrinkage rate % (shrinkage / total handled)
+  const totalHandled = data.reduce((s, p) => s + safe(p.inQty), 0)
+  const shrinkageRatePct = totalHandled > 0 ? Math.round((data.reduce((s, p) => s + safe(p.shrinkQty), 0) / totalHandled) * 1000) / 10 : 0
+
   // ── Range presets ──
   const qtyPresets = [
     { label: '< 0', min: null, max: 0 },
@@ -892,6 +922,94 @@ export default function InventoryModule() {
               <Button variant="outline" className="rounded-xl" onClick={() => fileInputRef.current?.click()}>
                 <Upload size={14} className="mr-1.5" /> Import CSV
               </Button>
+            </div>
+          )}
+
+          {/* ── Inventory Accounting Panel (IAS 2 / CPA Uganda) ── */}
+          {data.length > 0 && !loading && (
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-1 block">Inventory Accounting (IAS 2)</span>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {/* Left: Profitability & Turnover */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Profitability & Turnover</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Cost of Goods Sold (COGS)</span>
+                      <span className="font-mono font-bold text-red-600">{fmt(totalCOGS)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Sales Revenue</span>
+                      <span className="font-mono font-bold text-green-600">{fmt(totalSalesRevenue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Gross Profit</span>
+                      <span className={`font-mono font-bold ${grossProfit >= 0 ? 'text-green-700' : 'text-red-700'}`}>{fmt(grossProfit)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Gross Margin %</span>
+                      <span className={`font-mono font-bold ${grossMarginPct >= 30 ? 'text-green-600' : grossMarginPct >= 10 ? 'text-amber-600' : 'text-red-600'}`}>{grossMarginPct}%</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Inventory Turnover Ratio</span>
+                      <span className="font-mono font-bold text-gray-900">{inventoryTurnover}x</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Days Inventory Outstanding (DIO)</span>
+                      <span className="font-mono font-bold text-gray-900">{daysInventoryOutstanding > 0 ? `${daysInventoryOutstanding} days` : '—'}</span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-500">Avg Inventory Value</span>
+                      <span className="font-mono font-bold text-gray-900">{fmt(Math.round(avgInventoryValue))}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right: Valuation & Risk */}
+                <div className="bg-white rounded-lg border border-gray-200 p-4">
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Valuation & Risk (IAS 2)</h3>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Stock at Cost</span>
+                      <span className="font-mono font-bold text-gray-900">{fmt(totalStockValue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Total Inbound Value</span>
+                      <span className="font-mono font-bold text-gray-900">{fmt(totalInboundValue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Carrying Cost (est. 25%/yr)</span>
+                      <span className="font-mono font-bold text-orange-600">{fmt(carryingCostAnnual)}/yr</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Shrinkage Value</span>
+                      <span className={`font-mono font-bold ${totalShrinkageValue > 0 ? 'text-red-600' : 'text-gray-400'}`}>{fmt(totalShrinkageValue)}</span>
+                    </div>
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">Shrinkage Rate</span>
+                      <span className={`font-mono font-bold ${shrinkageRatePct > 2 ? 'text-red-600' : 'text-gray-700'}`}>{shrinkageRatePct}%</span>
+                    </div>
+                    {/* NRV write-down check */}
+                    <div className="flex justify-between py-1 border-b border-gray-100">
+                      <span className="text-gray-500">NRV Write-Down Needed</span>
+                      <span className={`font-mono font-bold ${totalWriteDown > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {totalWriteDown > 0 ? `${fmt(totalWriteDown)} (${nrvWriteDowns.length} SKUs)` : 'None — all above NRV'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between py-1">
+                      <span className="text-gray-500">Lower of Cost or NRV (IAS 2)</span>
+                      <span className="font-mono font-bold text-gray-900">{fmt(totalStockValue - totalWriteDown)}</span>
+                    </div>
+                  </div>
+                  {totalWriteDown > 0 && (
+                    <div className="mt-3 pt-3 border-t border-gray-100 bg-red-50 -mx-4 -mb-4 px-4 py-2 rounded-b-lg">
+                      <p className="text-[10px] text-red-700">
+                        <strong>IAS 2 requires:</strong> {nrvWriteDowns.length} product(s) have selling price below cost. Inventory must be written down to NRV. Write-down: {fmt(totalWriteDown)}.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
 
