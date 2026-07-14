@@ -491,6 +491,7 @@ function NrvWriteDownModal({ open, onClose, products, onSubmit }: {
 export default function InventoryValuationModule() {
   const [data, setData] = useState<ValuationResponse | null>(null)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [subTab, setSubTab] = useState<SubTab>('valuation')
   const [search, setSearch] = useState('')
   const [methodFilter, setMethodFilter] = useState<string | null>(null)
@@ -505,12 +506,21 @@ export default function InventoryValuationModule() {
     setLoading(true)
     try {
       const res = await fetch('/api/inventory-valuation', { cache: 'no-store' })
-      if (!res.ok) throw new Error('Failed to load valuation')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        const msg = err?.error || `HTTP ${res.status}`
+        // Show the actionable part only — the API includes "run `npx prisma db push`" hint when relevant
+        throw new Error(msg)
+      }
       const json = await res.json()
       setData(json)
-    } catch (e) {
+    } catch (e: any) {
       console.error(e)
-      toast.error('Failed to load inventory valuation')
+      // Surface the actual cause — the API gives specific hints for stale Prisma client / missing tables
+      const msg = e?.message || 'Unknown error'
+      toast.error(msg.length > 200 ? msg.slice(0, 200) + '…' : msg)
+      // Also show the full message in an inline error panel so the user can read it
+      setLoadError(msg)
     } finally {
       setLoading(false)
     }
@@ -648,6 +658,40 @@ export default function InventoryValuationModule() {
       <div className="flex items-center justify-center py-12 text-gray-400">
         <Loader2 size={20} className="animate-spin mr-2" />
         Computing inventory valuation...
+      </div>
+    )
+  }
+
+  // ── Inline error panel — surfaces the actual cause (missing migration, stale client, etc.) ──
+  if (loadError && !data) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-red-900 mb-1">Failed to load Inventory Valuation</h3>
+              <p className="text-xs text-red-700 leading-relaxed mb-3 font-mono break-words">{loadError}</p>
+              <div className="mt-3 pt-3 border-t border-red-200">
+                <p className="text-xs font-semibold text-red-900 mb-2">Most likely cause — your local DB hasn't been migrated yet. Run these in order:</p>
+                <ol className="text-xs text-red-800 space-y-1.5 list-decimal list-inside font-mono">
+                  <li><code className="bg-red-100 px-1.5 py-0.5 rounded">npx prisma generate</code> <span className="font-sans text-red-600">— regenerate the Prisma client with the new models</span></li>
+                  <li><code className="bg-red-100 px-1.5 py-0.5 rounded">npx prisma db push</code> <span className="font-sans text-red-600">— create the new tables &amp; columns in your local SQLite</span></li>
+                  <li><code className="bg-red-100 px-1.5 py-0.5 rounded">npx tsx scripts/backfill-standard-cost.ts</code> <span className="font-sans text-red-600">— backfill standardCost from unitCost for existing products</span></li>
+                  <li>Restart <code className="bg-red-100 px-1.5 py-0.5 rounded">npm run dev</code></li>
+                </ol>
+              </div>
+              <div className="mt-3 pt-3 border-t border-red-200">
+                <button
+                  onClick={() => { setLoadError(null); load() }}
+                  className="text-xs font-medium text-red-700 hover:bg-red-100 px-3 py-1.5 rounded-md border border-red-200"
+                >
+                  Try again
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

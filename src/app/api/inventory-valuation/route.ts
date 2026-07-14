@@ -35,6 +35,17 @@ export async function GET(req: NextRequest) {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
 
+    // ── Defensive check: ensure Prisma client knows about the new models ──
+    // If the user pulled the latest code but didn't run `npx prisma generate`,
+    // these properties will be undefined and the call below will throw a confusing
+    // "Cannot read properties of undefined" error. Give them an actionable message instead.
+    if (!db.inventoryValuationSetting || !db.nrvWriteDown) {
+      return NextResponse.json({
+        error: 'Prisma client is out of date. Run `npx prisma generate` then `npx prisma db push` and restart the dev server.',
+        code: 'PRISMA_CLIENT_STALE',
+      }, { status: 500 })
+    }
+
     // ── 1. Load settings (single-row table) ──
     let settingsRow = await db.inventoryValuationSetting.findUnique({ where: { key: 'default' } })
     if (!settingsRow) {
@@ -287,7 +298,17 @@ export async function GET(req: NextRequest) {
     })
   } catch (error) {
     console.error('GET /api/inventory-valuation error:', error)
-    return NextResponse.json({ error: 'Failed to compute inventory valuation' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Unknown error'
+    // Surface a hint if the error looks like a missing-table / missing-column issue
+    const hint = message.toLowerCase().includes('no such table') || message.toLowerCase().includes('does not exist')
+      ? ' — run `npx prisma db push` to create the new tables, then restart the dev server.'
+      : message.toLowerCase().includes('unknown column') || message.toLowerCase().includes('no such column')
+      ? ' — run `npx prisma db push` to add the new Product columns, then restart the dev server.'
+      : ''
+    return NextResponse.json({
+      error: `Failed to compute inventory valuation: ${message}${hint}`,
+      code: 'VALUATION_ENGINE_ERROR',
+    }, { status: 500 })
   }
 }
 
