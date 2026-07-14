@@ -65,14 +65,33 @@ export async function POST(req: NextRequest) {
       const created = await tx.merchantRateCard.create({
         data: {
           merchantId: body.merchantId,
+          // Receiving
+          receivingFlatFee: body.receivingFlatFee ?? 0,
+          receivingFlatHours: body.receivingFlatHours ?? 2,
+          receivingHourlyAfter: body.receivingHourlyAfter ?? 0,
           inboundReceivingPerUnit: body.inboundReceivingPerUnit ?? 0,
+          // Storage
+          storagePerBinMonth: body.storagePerBinMonth ?? 0,
+          storagePerShelfMonth: body.storagePerShelfMonth ?? 0,
+          storagePerPalletMonth: body.storagePerPalletMonth ?? 0,
           storagePerUnitPerDay: body.storagePerUnitPerDay ?? 0,
-          pickPerUnit: body.pickPerUnit ?? 0,
+          // Pick & Pack
+          pickFirstItemsIncluded: body.pickFirstItemsIncluded ?? 4,
+          pickPerAdditionalItem: body.pickPerAdditionalItem ?? 0,
           packPerOrder: body.packPerOrder ?? 0,
+          pickPerUnit: body.pickPerUnit ?? 0,
+          // Fulfillment
+          fulfillmentFeePerOrder: body.fulfillmentFeePerOrder ?? 0,
+          fulfillmentMinimumFee: body.fulfillmentMinimumFee ?? 0,
+          // Returns
           returnProcessingPerUnit: body.returnProcessingPerUnit ?? 0,
+          returnsPerOrder: body.returnsPerOrder ?? 0,
+          // Commission
           commissionPercent: body.commissionPercent ?? 0,
+          // COD
           codRemittanceFeePerOrder: body.codRemittanceFeePerOrder ?? 0,
           codShortfallPenalty: body.codShortfallPenalty ?? 0,
+          // Meta
           validFrom: body.validFrom ? new Date(body.validFrom) : new Date(),
           validTo: body.validTo ? new Date(body.validTo) : null,
           isActive: body.isActive ?? true,

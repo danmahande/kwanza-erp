@@ -135,14 +135,33 @@ model DriverCommunication {
 model MerchantRateCard {
   id                    String   @id @default(cuid())
   merchantId            String   // references Merchant.merchantId
+  // ── Receiving (ShipBob-style: flat first hours + hourly after) ──
+  receivingFlatFee          Float @default(0)
+  receivingFlatHours        Float @default(2)
+  receivingHourlyAfter      Float @default(0)
   inboundReceivingPerUnit   Float @default(0)
+  // ── Storage (ShipBob-style: bin/shelf/pallet monthly) ──
+  storagePerBinMonth        Float @default(0)
+  storagePerShelfMonth      Float @default(0)
+  storagePerPalletMonth     Float @default(0)
   storagePerUnitPerDay      Float @default(0)
-  pickPerUnit               Float @default(0)
+  // ── Pick & Pack (ShipBob-style: first items included + per additional) ──
+  pickFirstItemsIncluded    Int   @default(4)
+  pickPerAdditionalItem     Float @default(0)
   packPerOrder              Float @default(0)
+  pickPerUnit               Float @default(0)
+  // ── Fulfillment ──
+  fulfillmentFeePerOrder    Float @default(0)
+  fulfillmentMinimumFee     Float @default(0)
+  // ── Returns ──
   returnProcessingPerUnit   Float @default(0)
+  returnsPerOrder           Float @default(0)
+  // ── Commission ──
   commissionPercent         Float @default(0)
+  // ── COD-specific (Kwanza differentiator) ──
   codRemittanceFeePerOrder  Float @default(0)
   codShortfallPenalty       Float @default(0)
+  // ── Metadata ──
   validFrom              DateTime  @default(now())
   validTo                DateTime?
   isActive               Boolean   @default(true)

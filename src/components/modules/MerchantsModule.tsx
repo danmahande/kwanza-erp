@@ -756,7 +756,14 @@ export default function MerchantsModule() {
   const [holdMerchant, setHoldMerchant] = useState<Merchant | null>(null)
   const [rateCardOpen, setRateCardOpen] = useState(false)
   const [rateCard, setRateCard] = useState<Record<string, unknown> | null>(null)
-  const [rateForm, setRateForm] = useState({ inboundReceivingPerUnit: 0, storagePerUnitPerDay: 0, pickPerUnit: 0, packPerOrder: 0, returnProcessingPerUnit: 0, commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0 })
+  const [rateForm, setRateForm] = useState({
+    receivingFlatFee: 0, receivingFlatHours: 2, receivingHourlyAfter: 0, inboundReceivingPerUnit: 0,
+    storagePerBinMonth: 0, storagePerShelfMonth: 0, storagePerPalletMonth: 0, storagePerUnitPerDay: 0,
+    pickFirstItemsIncluded: 4, pickPerAdditionalItem: 0, packPerOrder: 0, pickPerUnit: 0,
+    fulfillmentFeePerOrder: 0, fulfillmentMinimumFee: 0,
+    returnProcessingPerUnit: 0, returnsPerOrder: 0,
+    commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0,
+  })
   const [statementOpen, setStatementOpen] = useState(false)
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [bulkStmtOpen, setBulkStmtOpen] = useState(false)
@@ -865,11 +872,22 @@ export default function MerchantsModule() {
         const active = cards.find((c: Record<string, unknown>) => c.isActive) || cards[0]
         setRateCard(active)
         setRateForm({
+          receivingFlatFee: Number(active.receivingFlatFee) || 0,
+          receivingFlatHours: Number(active.receivingFlatHours) || 2,
+          receivingHourlyAfter: Number(active.receivingHourlyAfter) || 0,
           inboundReceivingPerUnit: Number(active.inboundReceivingPerUnit) || 0,
+          storagePerBinMonth: Number(active.storagePerBinMonth) || 0,
+          storagePerShelfMonth: Number(active.storagePerShelfMonth) || 0,
+          storagePerPalletMonth: Number(active.storagePerPalletMonth) || 0,
           storagePerUnitPerDay: Number(active.storagePerUnitPerDay) || 0,
-          pickPerUnit: Number(active.pickPerUnit) || 0,
+          pickFirstItemsIncluded: Number(active.pickFirstItemsIncluded) || 4,
+          pickPerAdditionalItem: Number(active.pickPerAdditionalItem) || 0,
           packPerOrder: Number(active.packPerOrder) || 0,
+          pickPerUnit: Number(active.pickPerUnit) || 0,
+          fulfillmentFeePerOrder: Number(active.fulfillmentFeePerOrder) || 0,
+          fulfillmentMinimumFee: Number(active.fulfillmentMinimumFee) || 0,
           returnProcessingPerUnit: Number(active.returnProcessingPerUnit) || 0,
+          returnsPerOrder: Number(active.returnsPerOrder) || 0,
           commissionPercent: Number(active.commissionPercent) || 0,
           codRemittanceFeePerOrder: Number(active.codRemittanceFeePerOrder) || 0,
           codShortfallPenalty: Number(active.codShortfallPenalty) || 0,
@@ -1338,8 +1356,8 @@ export default function MerchantsModule() {
         open={rateCardOpen}
         onClose={() => setRateCardOpen(false)}
         title="Rate Card"
-        subtitle={selectedMerchant?.businessName || ''}
-        width="md"
+        subtitle={selectedMerchant ? `${selectedMerchant.businessName} · ${selectedMerchant.currency}` : ''}
+        width="lg"
         footer={
           <div className="flex gap-3 ml-auto">
             <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setRateCardOpen(false)}>Cancel</Button>
@@ -1347,39 +1365,152 @@ export default function MerchantsModule() {
           </div>
         }
       >
-        <div className="space-y-3">
-          <p className="text-[11px] text-gray-500">Fees charged to this merchant per unit or per order. Changing these rates creates a new active rate card (the old one is superseded).</p>
+        <div className="space-y-4">
+          <p className="text-[11px] text-gray-500">Fees charged to this merchant. Organized by category (ShipBob-style). Changing these rates creates a new active rate card (the old one is superseded).</p>
 
-          {/* Dynamic rate insight banner */}
+          {/* Rate insight banner */}
           {selectedMerchant && selectedMerchant.profitability.revenue > 0 && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <p className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold mb-1 flex items-center gap-1"><TrendingUp size={10} /> Rate Insight</p>
               <p className="text-[11px] text-blue-800">
                 Current commission: <span className="font-mono font-bold">{rateForm.commissionPercent}%</span>.
-                {selectedMerchant.profitability.revenue > 0 && (
-                  <> A 1% increase would add <span className="font-mono font-bold">{formatCurrencyCompact(selectedMerchant.profitability.revenue * 0.01, selectedMerchant.currency)}</span> in commission revenue per period.</>
-                )}
+                A 1% increase would add <span className="font-mono font-bold">{formatCurrencyCompact(selectedMerchant.profitability.revenue * 0.01, selectedMerchant.currency)}</span> in commission revenue per period.
               </p>
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { key: 'inboundReceivingPerUnit', label: 'Receiving per unit' },
-              { key: 'storagePerUnitPerDay', label: 'Storage per unit/day' },
-              { key: 'pickPerUnit', label: 'Pick per unit' },
-              { key: 'packPerOrder', label: 'Pack per order' },
-              { key: 'returnProcessingPerUnit', label: 'Return processing' },
-              { key: 'commissionPercent', label: 'Commission %' },
-              { key: 'codRemittanceFeePerOrder', label: 'COD fee per order' },
-              { key: 'codShortfallPenalty', label: 'COD shortfall penalty' },
-            ].map(f => (
-              <div key={f.key}>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">{f.label}</Label>
-                <Input type="number" value={String((rateForm as Record<string, number>)[f.key] || 0)} onChange={e => setRateForm({ ...rateForm, [f.key]: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+          {/* ── RECEIVING ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Receiving</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Flat fee (first hours)</Label>
+                <Input type="number" value={String(rateForm.receivingFlatFee)} onChange={e => setRateForm({ ...rateForm, receivingFlatFee: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
               </div>
-            ))}
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Hours included in flat fee</Label>
+                <Input type="number" value={String(rateForm.receivingFlatHours)} onChange={e => setRateForm({ ...rateForm, receivingFlatHours: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Hourly rate (after flat hours)</Label>
+                <Input type="number" value={String(rateForm.receivingHourlyAfter)} onChange={e => setRateForm({ ...rateForm, receivingHourlyAfter: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per-unit receiving fee</Label>
+                <Input type="number" value={String(rateForm.inboundReceivingPerUnit)} onChange={e => setRateForm({ ...rateForm, inboundReceivingPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
           </div>
+
+          {/* ── STORAGE ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Storage (Monthly)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per bin / month</Label>
+                <Input type="number" value={String(rateForm.storagePerBinMonth)} onChange={e => setRateForm({ ...rateForm, storagePerBinMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per shelf / month</Label>
+                <Input type="number" value={String(rateForm.storagePerShelfMonth)} onChange={e => setRateForm({ ...rateForm, storagePerShelfMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per pallet / month</Label>
+                <Input type="number" value={String(rateForm.storagePerPalletMonth)} onChange={e => setRateForm({ ...rateForm, storagePerPalletMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per unit / day (legacy accrual)</Label>
+                <Input type="number" value={String(rateForm.storagePerUnitPerDay)} onChange={e => setRateForm({ ...rateForm, storagePerUnitPerDay: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── PICK & PACK ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Pick & Pack</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">First items included (free picks)</Label>
+                <Input type="number" value={String(rateForm.pickFirstItemsIncluded)} onChange={e => setRateForm({ ...rateForm, pickFirstItemsIncluded: parseInt(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per additional item picked</Label>
+                <Input type="number" value={String(rateForm.pickPerAdditionalItem)} onChange={e => setRateForm({ ...rateForm, pickPerAdditionalItem: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Pack fee per order</Label>
+                <Input type="number" value={String(rateForm.packPerOrder)} onChange={e => setRateForm({ ...rateForm, packPerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per-unit pick fee (legacy)</Label>
+                <Input type="number" value={String(rateForm.pickPerUnit)} onChange={e => setRateForm({ ...rateForm, pickPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── FULFILLMENT ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Fulfillment</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Fulfillment fee per order</Label>
+                <Input type="number" value={String(rateForm.fulfillmentFeePerOrder)} onChange={e => setRateForm({ ...rateForm, fulfillmentFeePerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Minimum fee per order</Label>
+                <Input type="number" value={String(rateForm.fulfillmentMinimumFee)} onChange={e => setRateForm({ ...rateForm, fulfillmentMinimumFee: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── RETURNS ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Returns</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Return processing per unit</Label>
+                <Input type="number" value={String(rateForm.returnProcessingPerUnit)} onChange={e => setRateForm({ ...rateForm, returnProcessingPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Flat return fee per order</Label>
+                <Input type="number" value={String(rateForm.returnsPerOrder)} onChange={e => setRateForm({ ...rateForm, returnsPerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── COMMISSION ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Commission</p>
+            <div className="grid grid-cols-1 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Commission % (on delivered sales)</Label>
+                <Input type="number" step="0.1" value={String(rateForm.commissionPercent)} onChange={e => setRateForm({ ...rateForm, commissionPercent: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* ── COD (Kwanza differentiator) ── */}
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">COD (Cash on Delivery)</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">COD remittance fee per order</Label>
+                <Input type="number" value={String(rateForm.codRemittanceFeePerOrder)} onChange={e => setRateForm({ ...rateForm, codRemittanceFeePerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">COD shortfall penalty</Label>
+                <Input type="number" value={String(rateForm.codShortfallPenalty)} onChange={e => setRateForm({ ...rateForm, codShortfallPenalty: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
+              </div>
+            </div>
+          </div>
+
+          {/* Existing card info */}
+          {rateCard && (
+            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-[10px] text-gray-500">
+              <p>Current rate card valid from: {new Date((rateCard as Record<string, string>).validFrom).toLocaleDateString()}</p>
+              <p>Saving will supersede this card and create a new active one.</p>
+            </div>
+          )}
         </div>
       </DetailSlideOver>
 
