@@ -12,7 +12,7 @@ import { Separator } from '@/components/ui/separator'
 import {
   LayoutDashboard, Store, CreditCard, Users, Package, ArrowUpRight,
   RotateCcw, UserCog, Truck, Settings, LogOut, Menu, X,
-  ChevronRight, ClipboardList, ShieldAlert, Navigation,
+  ChevronRight, ClipboardList, ShieldAlert, Navigation, Calculator,
 } from 'lucide-react'
 import { toast, Toaster } from 'sonner'
 
@@ -31,8 +31,9 @@ import UsersModule from '@/components/modules/UsersModule'
 import DriversModule from '@/components/modules/DriversModule'
 import SettingsModule from '@/components/modules/SettingsModule'
 import AuditLogModule from '@/components/modules/AuditLogModule'
+import InventoryValuationModule from '@/components/modules/InventoryValuationModule'
 
-type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'outbound' | 'runsheets' | 'returns' | 'risk' | 'drivers' | 'users' | 'settings' | 'audit_log'
+type ModuleKey = 'hub_today' | 'dashboard' | 'merchants' | 'payments' | 'customers' | 'products' | 'inventory' | 'valuation' | 'outbound' | 'runsheets' | 'returns' | 'risk' | 'drivers' | 'users' | 'settings' | 'audit_log'
 
 interface NavItem {
   key: ModuleKey
@@ -68,6 +69,7 @@ const navItems: NavItem[] = [
   { key: 'drivers', label: 'Drivers', icon: Truck, section: 'Delivery' },
   { key: 'customers', label: 'Customers', icon: Users, section: 'Delivery' },
   { key: 'payments', label: 'Payments', icon: CreditCard, section: 'Finance' },
+  { key: 'valuation', label: 'Inventory Valuation', icon: Calculator, section: 'Finance' },
   { key: 'users', label: 'Users', icon: UserCog, section: 'System' },
   { key: 'settings', label: 'Settings', icon: Settings, section: 'System' },
   { key: 'audit_log', label: 'Audit Log', icon: ClipboardList, section: 'System' },
@@ -81,6 +83,7 @@ const moduleComponents: Record<ModuleKey, React.ComponentType<{ onNavigate?: (mo
   customers: CustomersModule,
   products: ProductsModule,
   inventory: InventoryParentModule,
+  valuation: InventoryValuationModule,
   outbound: OutboundParentModule,
   runsheets: RunsheetModule,
   returns: ReturnsParentModule,

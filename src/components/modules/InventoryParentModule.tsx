@@ -85,7 +85,7 @@ export default function InventoryParentModule() {
               How the Inventory Module Works
             </AlertDialogTitle>
             <AlertDialogDescription>
-              The Inventory module is where stock enters your warehouse, lives on shelves, and is tracked down to the individual unit. It has four tabs that cover the full lifecycle of physical goods: receiving stock, viewing what is on shelves, tracking individual items by barcode, and reconciling system numbers with reality. Here is how to use each one.
+              The Inventory module is where stock enters your warehouse, lives on shelves, and is tracked down to the individual unit. It has four tabs that cover the full lifecycle of physical goods: receiving stock, viewing what is on shelves, tracking individual items by barcode, and reconciling system numbers with reality. Here is how to use each one. Inventory valuation (FIFO, AVCO, NRV, variance, holding cost) lives in its own top-level module — "Inventory Valuation" — under the Finance section.
             </AlertDialogDescription>
           </AlertDialogHeader>
 

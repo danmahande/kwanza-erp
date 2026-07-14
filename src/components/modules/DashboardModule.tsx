@@ -46,6 +46,13 @@ interface DashboardData {
       hoursSinceLastFailure: number; isBestWeekThisQuarter: boolean
     }
   }
+  // Inventory valuation summary — surfaces NRV write-down exposure
+  valuation?: {
+    activeNrvWriteDownCount: number
+    activeNrvWriteDownTotal: number
+    reversalCount: number
+    reversalTotal: number
+  }
 }
 
 interface DashboardModuleProps { onNavigate?: (module: string) => void }
@@ -98,6 +105,23 @@ function ModuleStatusBoard({ data, onNavigate }: { data: DashboardData; onNaviga
   if (lossMakers > 0) rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'warning', label: `${lossMakers} at a loss`, action: 'Review →' })
   else if (data.stats.totalMerchants > 0) rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'ok', label: `${data.stats.totalMerchants} profitable`, action: '' })
   else rows.push({ key: 'mch', name: 'Merchants', module: 'merchants', status: 'quiet', label: 'No merchants', action: '' })
+
+  // Inventory Valuation — alert when NRV write-downs are active (IAS 2 §9)
+  if (data.valuation) {
+    const v = data.valuation
+    if (v.activeNrvWriteDownCount > 0) {
+      rows.push({
+        key: 'val',
+        name: 'Valuation',
+        module: 'valuation',
+        status: 'warning',
+        label: `${v.activeNrvWriteDownCount} NRV write-down${v.activeNrvWriteDownCount > 1 ? 's' : ''} active`,
+        action: 'Review →',
+      })
+    } else {
+      rows.push({ key: 'val', name: 'Valuation', module: 'valuation', status: 'ok', label: 'All at cost (NRV OK)', action: '' })
+    }
+  }
 
   const order = { critical: 0, warning: 1, active: 2, ok: 3, quiet: 4 }
   rows.sort((a, b) => order[a.status] - order[b.status])

@@ -552,9 +552,49 @@ export async function GET(request: NextRequest) {
       exceptionRate,
       exceptionCount,
       pulse,
+      // Inventory valuation summary — surfaces NRV write-down exposure at a glance.
+      // Full detail lives in the Inventory Valuation module (Finance section).
+      valuation: await getValuationSummary(),
     })
   } catch (error) {
     console.error('Dashboard error:', error)
     return NextResponse.json({ error: 'Failed to fetch dashboard data' }, { status: 500 })
+  }
+}
+
+/**
+ * Lightweight valuation summary for the dashboard status board.
+ * Returns counts + totals — full calculation lives in /api/inventory-valuation.
+ */
+async function getValuationSummary(): Promise<{
+  activeNrvWriteDownCount: number
+  activeNrvWriteDownTotal: number
+  reversalCount: number
+  reversalTotal: number
+}> {
+  try {
+    const active = await db.nrvWriteDown.findMany({
+      where: { status: 'active', kind: 'write_down' },
+      select: { totalAmount: true },
+    })
+    const reversals = await db.nrvWriteDown.findMany({
+      where: { kind: 'reversal' },
+      select: { totalAmount: true },
+    })
+    return {
+      activeNrvWriteDownCount: active.length,
+      activeNrvWriteDownTotal: active.reduce((s, r) => s + r.totalAmount, 0),
+      reversalCount: reversals.length,
+      reversalTotal: reversals.reduce((s, r) => s + r.totalAmount, 0),
+    }
+  } catch (err) {
+    // Non-fatal — dashboard should still render if valuation table is empty/migrating
+    console.error('getValuationSummary failed (non-blocking):', err)
+    return {
+      activeNrvWriteDownCount: 0,
+      activeNrvWriteDownTotal: 0,
+      reversalCount: 0,
+      reversalTotal: 0,
+    }
   }
 }

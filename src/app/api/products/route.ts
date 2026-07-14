@@ -70,6 +70,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Prices cannot be negative' }, { status: 400 })
     }
 
+    // Block LIFO at API layer — IAS 2 §25 prohibits it
+    const VALID_COSTING_METHODS = ['fifo', 'avco', 'standard', 'specific_id']
+    if (body.costingMethod && !VALID_COSTING_METHODS.includes(body.costingMethod)) {
+      return NextResponse.json(
+        { error: `Invalid costing method. Permitted: ${VALID_COSTING_METHODS.join(', ')}. LIFO is prohibited under IAS 2 §25.` },
+        { status: 400 },
+      )
+    }
+
     // Warn (not block) if selling price < cost (loss-making product)
     let priceWarning: string | null = null
     if (unitSellingPrice > 0 && unitCost > 0 && unitSellingPrice < unitCost) {
@@ -158,6 +167,15 @@ export async function PUT(req: NextRequest) {
         return NextResponse.json({ error: 'unitCost must be a non-negative number' }, { status: 400 })
       }
       data.unitCost = cost
+    }
+
+    // Block LIFO at API layer — IAS 2 §25 prohibits it
+    const VALID_COSTING_METHODS = ['fifo', 'avco', 'standard', 'specific_id']
+    if (data.costingMethod !== undefined && !VALID_COSTING_METHODS.includes(data.costingMethod)) {
+      return NextResponse.json(
+        { error: `Invalid costing method. Permitted: ${VALID_COSTING_METHODS.join(', ')}. LIFO is prohibited under IAS 2 §25.` },
+        { status: 400 },
+      )
     }
 
     // ═══════════════════════════════════════════════════════════════

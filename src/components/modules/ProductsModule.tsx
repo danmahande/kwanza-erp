@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import {
   Search, Package, Plus, Trash2, Edit3, AlertTriangle,
-  HelpCircle, Layers, ArrowLeft as BackIcon, ChevronRight, Filter,
+  HelpCircle, Layers, ArrowLeft as BackIcon, ChevronRight, Filter, Calculator,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
@@ -40,6 +40,14 @@ interface Product {
   currentStock: number
   isActive: boolean
   createdAt: string
+  // Valuation fields (IAS 2 + ACCA MDC)
+  costingMethod?: string
+  standardCost?: number | null
+  costToSell?: number
+  holdingCostPerUnit?: number | null
+  orderingCost?: number
+  leadTimeDays?: number
+  safetyStock?: number
 }
 
 interface Merchant {
@@ -53,6 +61,9 @@ interface FormState {
   category: string; merchantId: string; merchantName: string
   unit: string; weight: string; minStock: string
   unitCost: string; unitSellingPrice: string; commissionPercent: string; isActive: boolean
+  // Valuation fields
+  costingMethod: string; standardCost: string; costToSell: string
+  orderingCost: string; leadTimeDays: string; safetyStock: string
 }
 
 // ── Constants ──
@@ -70,6 +81,9 @@ const CATEGORIES = ['Produce', 'Dairy', 'Bakery', 'Beverages', 'Household', 'Ele
 const emptyForm: FormState = {
   productLabel: '', description: '', brand: '', variant: '', category: '', merchantId: '', merchantName: '',
   unit: 'pcs', weight: '', minStock: '10', unitCost: '', unitSellingPrice: '', commissionPercent: '0', isActive: true,
+  // Valuation defaults — FIFO is the default per IAS 2; standardCost defaults to unitCost on save if blank
+  costingMethod: 'fifo', standardCost: '', costToSell: '0',
+  orderingCost: '50000', leadTimeDays: '7', safetyStock: '0',
 }
 
 // ── Helpers ──
@@ -201,6 +215,61 @@ function AddProductView({
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* ── Valuation section (IAS 2 + ACCA MDC) ── */}
+        <div className="bg-indigo-50/30 border-t border-indigo-100">
+          <div className="max-w-2xl mx-auto px-6 py-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Calculator size={14} className="text-indigo-600" />
+              <h3 className="text-xs font-bold text-indigo-900 uppercase tracking-wider">Inventory Valuation — IAS 2 + ACCA MDC</h3>
+            </div>
+            <p className="text-[11px] text-gray-500 leading-relaxed -mt-1">
+              Costing method drives how inventory is valued. Standard cost is the benchmark for variance analysis.
+              Lead time, safety stock, and order cost drive EOQ and Reorder Point calculations in the Inventory Valuation module.
+            </p>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Costing Method (IAS 2)</Label>
+                <select
+                  value={form.costingMethod}
+                  onChange={e => setForm({ ...form, costingMethod: e.target.value })}
+                  className="w-full h-9 px-3 rounded-xl border border-gray-200 text-sm bg-white"
+                >
+                  <option value="fifo">FIFO — First-In, First-Out</option>
+                  <option value="avco">AVCO — Weighted Average</option>
+                  <option value="standard">Standard Cost</option>
+                  <option value="specific_id">Specific Identification (serialized)</option>
+                </select>
+                <p className="text-[10px] text-gray-400 mt-1">LIFO is blocked — prohibited under IAS 2 §25.</p>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Standard Cost (UGX)</Label>
+                <Input type="number" value={form.standardCost} onChange={e => setForm({ ...form, standardCost: e.target.value })} placeholder="Defaults to unit cost" className="rounded-xl" />
+                <p className="text-[10px] text-gray-400 mt-1">Benchmark for Material Price Variance.</p>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Cost to Sell (UGX/unit)</Label>
+                <Input type="number" value={form.costToSell} onChange={e => setForm({ ...form, costToSell: e.target.value })} className="rounded-xl" />
+                <p className="text-[10px] text-gray-400 mt-1">Used in NRV = selling price − cost to sell.</p>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Order Cost (UGX/order)</Label>
+                <Input type="number" value={form.orderingCost} onChange={e => setForm({ ...form, orderingCost: e.target.value })} className="rounded-xl" />
+                <p className="text-[10px] text-gray-400 mt-1">Used in EOQ = √(2DS/H).</p>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Lead Time (days)</Label>
+                <Input type="number" value={form.leadTimeDays} onChange={e => setForm({ ...form, leadTimeDays: e.target.value })} className="rounded-xl" />
+                <p className="text-[10px] text-gray-400 mt-1">Supplier → warehouse lead time.</p>
+              </div>
+              <div>
+                <Label className="text-gray-700 font-medium mb-1.5 block text-xs">Safety Stock (units)</Label>
+                <Input type="number" value={form.safetyStock} onChange={e => setForm({ ...form, safetyStock: e.target.value })} className="rounded-xl" />
+                <p className="text-[10px] text-gray-400 mt-1">Buffer for demand / lead time variability.</p>
+              </div>
             </div>
           </div>
         </div>
@@ -428,6 +497,13 @@ export default function ProductsModule() {
       unitSellingPrice: String(p.unitSellingPrice),
       commissionPercent: String(p.commissionPercent),
       isActive: p.isActive,
+      // Valuation fields
+      costingMethod: p.costingMethod || 'fifo',
+      standardCost: p.standardCost != null ? String(p.standardCost) : '',
+      costToSell: String(p.costToSell ?? 0),
+      orderingCost: String(p.orderingCost ?? 50000),
+      leadTimeDays: String(p.leadTimeDays ?? 7),
+      safetyStock: String(p.safetyStock ?? 0),
     })
     setProfileOpen(false)
     setView('add')
@@ -439,6 +515,7 @@ export default function ProductsModule() {
       return
     }
     const merchant = merchants.find(m => m.merchantId === form.merchantId)
+    const unitCostNum = parseFloat(form.unitCost) || 0
     const payload = {
       productLabel: form.productLabel,
       description: form.description || null,
@@ -450,11 +527,18 @@ export default function ProductsModule() {
       unit: form.unit,
       weight: form.weight || null,
       minStock: parseInt(form.minStock) || 0,
-      unitCost: parseFloat(form.unitCost) || 0,
+      unitCost: unitCostNum,
       unitSellingPrice: parseFloat(form.unitSellingPrice) || 0,
       commissionPercent: parseFloat(form.commissionPercent) || 0,
       currentStock: editing ? editing.currentStock : 0,
       isActive: editing ? form.isActive : true,
+      // Valuation fields — standardCost defaults to unitCost when blank
+      costingMethod: form.costingMethod,
+      standardCost: form.standardCost ? parseFloat(form.standardCost) : unitCostNum,
+      costToSell: parseFloat(form.costToSell) || 0,
+      orderingCost: parseFloat(form.orderingCost) || 50000,
+      leadTimeDays: parseInt(form.leadTimeDays) || 7,
+      safetyStock: parseInt(form.safetyStock) || 0,
     }
     try {
       if (editing) {

@@ -404,6 +404,25 @@ model Product {
   unitSellingPrice Float
   commissionPercent Float
   currentStock     Int      @default(0)
+  /// IAS 2 costing method for this product. Permitted: "fifo" | "avco" | "standard" | "specific_id".
+  /// LIFO is BLOCKED at the application layer (not permitted under IAS 2).
+  /// Defaults to "fifo". Override per product when needed (e.g. serialized high-value SKUs use "specific_id").
+  costingMethod    String   @default("fifo")
+  /// Standard cost used for variance analysis (per ACCA MDC). Defaults to unitCost if not set.
+  /// Variance = (Standard Cost - Actual Cost) × Qty. Adverse (A) if positive (actual > standard).
+  standardCost     Float?
+  /// Estimated cost to sell one unit — used in NRV calculation per IAS 2.
+  /// NRV = unitSellingPrice - costToSell. Defaults to 0 (no selling cost) if not set.
+  costToSell       Float    @default(0)
+  /// Annual holding cost per unit (UGX). Used by EOQ formula: √(2DS/H).
+  /// If 0, derived from InventoryValuationSetting.holdingCostPct × unitCost.
+  holdingCostPerUnit Float?
+  /// Order cost per replenishment (UGX). Used by EOQ. Defaults to 50000 UGX if not set.
+  orderingCost     Float    @default(50000)
+  /// Lead time in days from supplier to warehouse. Used by Reorder Point (ROP).
+  leadTimeDays     Int      @default(7)
+  /// Safety stock in units. Buffer against demand/lead-time variability.
+  safetyStock      Int      @default(0)
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -1044,4 +1063,80 @@ model RateCardTemplate {
   createdBy                 String?
   createdAt                 DateTime @default(now())
   updatedAt                 DateTime @updatedAt
+}
+
+// ── INVENTORY VALUATION (CPA Uganda MDC / ACCA Management Decision & Control) ──
+// Single-row table (key = 'default') holding global inventory-valuation parameters.
+// Per IAS 2 + ACCA MDC syllabus: costing method, holding-cost components,
+// materiality threshold for variance investigation, and NRV write-down rules.
+
+model InventoryValuationSetting {
+  id              String   @id @default(cuid())
+  // Always 'default' — single-row table
+  key             String   @unique @default("default")
+  /// Global default costing method: "fifo" | "avco" | "standard" | "specific_id".
+  /// Per-product override lives on Product.costingMethod.
+  /// LIFO is BLOCKED here (IAS 2 §25).
+  defaultCostingMethod String @default("fifo")
+  /// Capital (opportunity) cost rate — % of average inventory value. Typically 10–20%.
+  capitalCostRate Float    @default(0.12)
+  /// Storage cost rate — % of average inventory value (space, handling, security).
+  /// Alternatively, derived from storagePerUnitPerDay × avg days held.
+  storageCostRate Float    @default(0.06)
+  /// Risk cost rate — % of average inventory value (obsolescence, deterioration, shrinkage).
+  riskCostRate    Float    @default(0.03)
+  /// Service cost rate — % of average inventory value (insurance, taxes, IT systems).
+  serviceCostRate Float    @default(0.02)
+  /// Materiality threshold for variance investigation (per ACCA MDC management-by-exception).
+  /// Variances above this % of standard cost are flagged for investigation.
+  varianceMaterialityPct Float @default(0.05)
+  /// Default cost-to-sell % of selling price (used when product.costToSell is 0).
+  /// Per IAS 2: NRV = estimated selling price − cost to complete − cost to sell.
+  defaultCostToSellPct Float @default(0.05)
+  /// Days in financial year (365 normally; 360 for some accounting conventions).
+  daysInYear      Int      @default(365)
+  updatedBy       String?
+  updatedAt       DateTime @updatedAt
+  createdAt       DateTime @default(now())
+}
+
+/// NRV write-down register — per IAS 2 §9 (Lower of Cost or NRV).
+/// Each row records either:
+///   • an initial write-down (kind = "write_down") — expense in P&L when NRV < cost
+///   • a reversal (kind = "reversal") — capped at the original write-down (IAS 2 §33)
+/// Reversals are REQUIRED under IFRS when the NRV recovers (US-GAAP forbids this — CPA Uganda = IFRS).
+model NrvWriteDown {
+  id              String   @id @default(cuid())
+  productId       String
+  productName     String
+  merchantId      String?
+  merchantName    String?
+  /// "write_down" or "reversal"
+  kind            String   @default("write_down")
+  /// Quantity of units the write-down applies to
+  qty             Int
+  /// Original cost per unit at time of write-down
+  unitCost        Float
+  /// Net realisable value per unit = sellingPrice − costToSell − costToComplete
+  nrvPerUnit      Float
+  /// Write-down amount per unit = max(0, unitCost − nrvPerUnit)
+  /// For reversals: amount being reversed (capped at cumulative write-down balance)
+  amountPerUnit   Float
+  /// Total amount = qty × amountPerUnit
+  totalAmount     Float
+  /// Reason / justification (free text)
+  reason          String
+  /// Status: "active" | "reversed"
+  /// — active: still depressing carrying value
+  /// — reversed: fully reversed by subsequent reversal entry
+  status          String   @default("active")
+  /// If this row is a reversal, link to the original write-down row
+  reversesId      String?
+  recordedBy      String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
 }
