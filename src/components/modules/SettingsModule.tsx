@@ -5,14 +5,16 @@ import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
 import {
   AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2 } from 'lucide-react'
+import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2, Settings as SettingsIcon, Copy, Trash2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import PageTransition from '@/components/shared/PageTransition'
+import DetailSlideOver from '@/components/shared/DetailSlideOver'
 
 interface SettingItem {
   key: string
@@ -21,6 +23,46 @@ interface SettingItem {
   updatedBy: string | null
   updatedAt: string | null
 }
+
+const FEE_SECTIONS = [
+  { title: 'Receiving', fields: [
+    { key: 'receivingFlatFee', label: 'Flat fee (first hours)', type: 'number' },
+    { key: 'receivingFlatHours', label: 'Hours included', type: 'number' },
+    { key: 'receivingHourlyAfter', label: 'Hourly rate after', type: 'number' },
+    { key: 'inboundReceivingPerUnit', label: 'Per-unit receiving', type: 'number' },
+  ]},
+  { title: 'Storage (Monthly)', fields: [
+    { key: 'storagePerBinMonth', label: 'Per bin / month', type: 'number' },
+    { key: 'storagePerShelfMonth', label: 'Per shelf / month', type: 'number' },
+    { key: 'storagePerPalletMonth', label: 'Per pallet / month', type: 'number' },
+    { key: 'storagePerUnitPerDay', label: 'Per unit / day (legacy)', type: 'number' },
+  ]},
+  { title: 'Pick & Pack', fields: [
+    { key: 'pickFirstItemsIncluded', label: 'First items included', type: 'int' },
+    { key: 'pickPerAdditionalItem', label: 'Per additional item', type: 'number' },
+    { key: 'packPerOrder', label: 'Pack per order', type: 'number' },
+    { key: 'pickPerUnit', label: 'Per-unit pick (legacy)', type: 'number' },
+  ]},
+  { title: 'Fulfillment', fields: [
+    { key: 'fulfillmentFeePerOrder', label: 'Fee per order', type: 'number' },
+    { key: 'fulfillmentMinimumFee', label: 'Minimum fee per order', type: 'number' },
+  ]},
+  { title: 'Returns', fields: [
+    { key: 'returnProcessingPerUnit', label: 'Processing per unit', type: 'number' },
+    { key: 'returnsPerOrder', label: 'Flat fee per order', type: 'number' },
+  ]},
+  { title: 'Commission', fields: [
+    { key: 'commissionPercent', label: 'Commission %', type: 'number' },
+  ]},
+  { title: 'COD', fields: [
+    { key: 'codRemittanceFeePerOrder', label: 'Remittance fee per order', type: 'number' },
+    { key: 'codShortfallPenalty', label: 'Shortfall penalty', type: 'number' },
+  ]},
+]
+
+const ALL_FEE_KEYS = FEE_SECTIONS.flatMap(s => s.fields.map(f => f.key))
+
+const emptyFeeForm: Record<string, number> = Object.fromEntries(ALL_FEE_KEYS.map(k => [k, k === 'pickFirstItemsIncluded' ? 4 : 0]))
 
 const ICON_MAP: Record<string, { icon: typeof Tag; color: string }> = {
   categories: { icon: Tag, color: '#FF6B35' },
@@ -133,6 +175,16 @@ export default function SettingsModule() {
   const [saving, setSaving] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
+  // Default rate card
+  const [defaultRates, setDefaultRates] = useState<Record<string, number>>(emptyFeeForm)
+  const [defaultRatesLoading, setDefaultRatesLoading] = useState(true)
+  const [defaultRatesSaving, setDefaultRatesSaving] = useState(false)
+  const [defaultRatesDirty, setDefaultRatesDirty] = useState(false)
+  // Templates
+  const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([])
+  const [templateModalOpen, setTemplateModalOpen] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<Record<string, unknown> | null>(null)
+  const [templateForm, setTemplateForm] = useState<{ name: string; description: string; fees: Record<string, number> }>({ name: '', description: '', fees: emptyFeeForm })
 
   const fetchData = useCallback(async () => {
     try {
@@ -148,6 +200,61 @@ export default function SettingsModule() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  // Fetch default rate card
+  useEffect(() => {
+    fetch('/api/rate-card-default').then(r => r.json()).then(d => {
+      const form: Record<string, number> = { ...emptyFeeForm }
+      for (const key of ALL_FEE_KEYS) { form[key] = Number(d[key]) || (key === 'pickFirstItemsIncluded' ? 4 : 0) }
+      setDefaultRates(form)
+      setDefaultRatesLoading(false)
+    }).catch(() => setDefaultRatesLoading(false))
+    // Fetch templates
+    fetch('/api/rate-card-templates').then(r => r.json()).then(d => setTemplates(Array.isArray(d) ? d : [])).catch(() => {})
+  }, [])
+
+  const handleSaveDefaultRates = async () => {
+    setDefaultRatesSaving(true)
+    try {
+      await fetch('/api/rate-card-default', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(defaultRates) })
+      toast.success('Default rate card saved')
+      setDefaultRatesDirty(false)
+    } catch { toast.error('Failed to save') } finally { setDefaultRatesSaving(false) }
+  }
+
+  const handleSaveTemplate = async () => {
+    if (!templateForm.name.trim()) { toast.error('Template name is required'); return }
+    const payload = { name: templateForm.name, description: templateForm.description, ...templateForm.fees, ...(editingTemplate ? { id: (editingTemplate as Record<string, string>).id } : {}) }
+    try {
+      const method = editingTemplate ? 'PUT' : 'POST'
+      await fetch('/api/rate-card-templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+      toast.success(editingTemplate ? 'Template updated' : 'Template created')
+      setTemplateModalOpen(false)
+      setEditingTemplate(null)
+      setTemplateForm({ name: '', description: '', fees: { ...defaultRates } })
+      fetch('/api/rate-card-templates').then(r => r.json()).then(d => setTemplates(Array.isArray(d) ? d : []))
+    } catch { toast.error('Failed to save template') }
+  }
+
+  const handleDeleteTemplate = async (id: string) => {
+    await fetch(`/api/rate-card-templates?id=${id}`, { method: 'DELETE' })
+    toast.success('Template deleted')
+    setTemplates(prev => prev.filter(t => t.id !== id))
+  }
+
+  const handleEditTemplate = (t: Record<string, unknown>) => {
+    const fees: Record<string, number> = { ...emptyFeeForm }
+    for (const key of ALL_FEE_KEYS) { fees[key] = Number(t[key]) || 0 }
+    setTemplateForm({ name: String(t.name), description: String(t.description || ''), fees })
+    setEditingTemplate(t)
+    setTemplateModalOpen(true)
+  }
+
+  const handleNewTemplate = () => {
+    setTemplateForm({ name: '', description: '', fees: { ...defaultRates } })
+    setEditingTemplate(null)
+    setTemplateModalOpen(true)
+  }
 
   // Update a setting in local state (marks dirty)
   const updateSetting = (key: string, newValue: string[]) => {
@@ -266,6 +373,120 @@ export default function SettingsModule() {
           ))}
         </div>
       )}
+
+      {/* ── Default Rate Card ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Default Rate Card</span>
+          {defaultRatesDirty && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { fetch('/api/rate-card-default').then(r => r.json()).then(d => { const f: Record<string, number> = { ...emptyFeeForm }; for (const k of ALL_FEE_KEYS) f[k] = Number(d[k]) || 0; setDefaultRates(f); setDefaultRatesDirty(false) }) }}>Discard</Button>
+              <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveDefaultRates} disabled={defaultRatesSaving}>{defaultRatesSaving ? 'Saving...' : 'Save Defaults'}</Button>
+            </div>
+          )}
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <p className="text-[11px] text-gray-500 mb-3">Standard pricing applied automatically when onboarding a new merchant. Override per merchant from the Merchant rate card.</p>
+          {!defaultRatesLoading && (
+            <div className="space-y-4">
+              {FEE_SECTIONS.map(section => (
+                <div key={section.title}>
+                  <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">{section.title}</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {section.fields.map(f => (
+                      <div key={f.key}>
+                        <Label className="text-gray-600 mb-1 block text-[10px]">{f.label}</Label>
+                        <Input type="number" value={String(defaultRates[f.key])} onChange={e => { setDefaultRates(prev => ({ ...prev, [f.key]: f.type === 'int' ? parseInt(e.target.value) || 0 : parseFloat(e.target.value) || 0 })); setDefaultRatesDirty(true) }} className="rounded-lg text-xs h-8" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {defaultRatesLoading && <div className="py-4 text-center text-xs text-gray-400">Loading...</div>}
+        </div>
+      </div>
+
+      {/* ── Rate Card Templates ── */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Rate Card Templates</span>
+          <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={handleNewTemplate}><Plus size={12} className="mr-1" /> New Template</Button>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          {templates.length === 0 ? (
+            <div className="py-6 text-center text-xs text-gray-400">No templates yet. Create named pricing tiers (e.g., Standard, Premium, Consignment) to apply to merchants in one click.</div>
+          ) : (
+            <table className="w-full text-xs">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr className="text-gray-500 uppercase tracking-wider text-[10px]">
+                  <th className="text-left px-4 py-2 font-semibold">Template Name</th>
+                  <th className="text-left px-4 py-2 font-semibold">Description</th>
+                  <th className="text-right px-4 py-2 font-semibold">Commission</th>
+                  <th className="text-right px-4 py-2 font-semibold">Fulfillment</th>
+                  <th className="text-right px-4 py-2 font-semibold">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {templates.map(t => (
+                  <tr key={String(t.id)} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="px-4 py-2 font-semibold text-gray-900">{String(t.name)}</td>
+                    <td className="px-4 py-2 text-gray-500 text-[11px] truncate max-w-xs">{String(t.description || '—')}</td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-700">{Number(t.commissionPercent) || 0}%</td>
+                    <td className="px-4 py-2 text-right font-mono text-gray-700">{Number(t.fulfillmentFeePerOrder) || 0}</td>
+                    <td className="px-4 py-2 text-right">
+                      <button onClick={() => handleEditTemplate(t)} className="p-1 text-gray-400 hover:text-[#FF6B33] mr-1" title="Edit"><SettingsIcon size={12} /></button>
+                      <button onClick={() => handleDeleteTemplate(String(t.id))} className="p-1 text-gray-400 hover:text-red-500" title="Delete"><Trash2 size={12} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Template Modal */}
+      <DetailSlideOver
+        open={templateModalOpen}
+        onClose={() => setTemplateModalOpen(false)}
+        title={editingTemplate ? `Edit: ${String((editingTemplate as Record<string, string>).name)}` : 'New Rate Card Template'}
+        subtitle="Named pricing tier — apply to merchants in one click"
+        width="lg"
+        footer={
+          <div className="flex gap-3 ml-auto">
+            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setTemplateModalOpen(false)}>Cancel</Button>
+            <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSaveTemplate}>{editingTemplate ? 'Update' : 'Create'} Template</Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-gray-700 font-medium mb-1 block text-xs">Template Name <span className="text-red-400">*</span></Label>
+              <Input value={templateForm.name} onChange={e => setTemplateForm({ ...templateForm, name: e.target.value })} placeholder="e.g., Standard, Premium, Consignment" className="rounded-xl" />
+            </div>
+            <div>
+              <Label className="text-gray-700 font-medium mb-1 block text-xs">Description</Label>
+              <Input value={templateForm.description} onChange={e => setTemplateForm({ ...templateForm, description: e.target.value })} placeholder="What is this tier for?" className="rounded-xl" />
+            </div>
+          </div>
+          {FEE_SECTIONS.map(section => (
+            <div key={section.title}>
+              <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">{section.title}</p>
+              <div className="grid grid-cols-2 gap-3">
+                {section.fields.map(f => (
+                  <div key={f.key}>
+                    <Label className="text-gray-600 mb-1 block text-[10px]">{f.label}</Label>
+                    <Input type="number" value={String(templateForm.fees[f.key])} onChange={e => setTemplateForm({ ...templateForm, fees: { ...templateForm.fees, [f.key]: f.type === 'int' ? parseInt(e.target.value) || 0 : parseFloat(e.target.value) || 0 } })} className="rounded-lg text-xs h-8" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </DetailSlideOver>
 
       {/* Help Dialog */}
       <AlertDialog open={helpOpen} onOpenChange={setHelpOpen}>

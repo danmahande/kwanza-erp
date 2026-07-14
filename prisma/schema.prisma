@@ -969,3 +969,79 @@ model SystemSetting {
   updatedAt DateTime @updatedAt
   createdAt DateTime @default(now())
 }
+
+/// Default rate card — the 3PL operator's standard pricing.
+/// Applied automatically when onboarding a new merchant.
+/// Stored as a single row (key = 'default').
+model DefaultRateCard {
+  id                        String  @id @default(cuid())
+  // Receiving
+  receivingFlatFee          Float   @default(0)
+  receivingFlatHours        Float   @default(2)
+  receivingHourlyAfter      Float   @default(0)
+  inboundReceivingPerUnit   Float   @default(0)
+  // Storage
+  storagePerBinMonth        Float   @default(0)
+  storagePerShelfMonth      Float   @default(0)
+  storagePerPalletMonth     Float   @default(0)
+  storagePerUnitPerDay      Float   @default(0)
+  // Pick & Pack
+  pickFirstItemsIncluded    Int     @default(4)
+  pickPerAdditionalItem     Float   @default(0)
+  packPerOrder              Float   @default(0)
+  pickPerUnit               Float   @default(0)
+  // Fulfillment
+  fulfillmentFeePerOrder    Float   @default(0)
+  fulfillmentMinimumFee     Float   @default(0)
+  // Returns
+  returnProcessingPerUnit   Float   @default(0)
+  returnsPerOrder           Float   @default(0)
+  // Commission
+  commissionPercent         Float   @default(0)
+  // COD
+  codRemittanceFeePerOrder  Float   @default(0)
+  codShortfallPenalty       Float   @default(0)
+  // Meta
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
+}
+
+/// Rate card templates — named pricing tiers the 3PL can create and apply.
+/// E.g., "Standard", "Premium", "Consignment", "Bulk Discount".
+model RateCardTemplate {
+  id                        String  @id @default(cuid())
+  name                      String
+  description               String?
+  // Receiving
+  receivingFlatFee          Float   @default(0)
+  receivingFlatHours        Float   @default(2)
+  receivingHourlyAfter      Float   @default(0)
+  inboundReceivingPerUnit   Float   @default(0)
+  // Storage
+  storagePerBinMonth        Float   @default(0)
+  storagePerShelfMonth      Float   @default(0)
+  storagePerPalletMonth     Float   @default(0)
+  storagePerUnitPerDay      Float   @default(0)
+  // Pick & Pack
+  pickFirstItemsIncluded    Int     @default(4)
+  pickPerAdditionalItem     Float   @default(0)
+  packPerOrder              Float   @default(0)
+  pickPerUnit               Float   @default(0)
+  // Fulfillment
+  fulfillmentFeePerOrder    Float   @default(0)
+  fulfillmentMinimumFee     Float   @default(0)
+  // Returns
+  returnProcessingPerUnit   Float   @default(0)
+  returnsPerOrder           Float   @default(0)
+  // Commission
+  commissionPercent         Float   @default(0)
+  // COD
+  codRemittanceFeePerOrder  Float   @default(0)
+  codShortfallPenalty       Float   @default(0)
+  // Meta
+  isActive                  Boolean @default(true)
+  createdBy                 String?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+}

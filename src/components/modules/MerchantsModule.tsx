@@ -865,6 +865,10 @@ export default function MerchantsModule() {
 
   const handleOpenRateCard = async (m: Merchant) => {
     setSelectedMerchant(m); setProfileOpen(false)
+    // Fetch templates if not already loaded
+    if (templates.length === 0) {
+      fetch('/api/rate-card-templates').then(r => r.json()).then(d => setTemplates(Array.isArray(d) ? d : [])).catch(() => {})
+    }
     try {
       const res = await fetch(`/api/rate-card?merchantId=${m.merchantId}`)
       const cards = await res.json()
@@ -895,6 +899,63 @@ export default function MerchantsModule() {
       } else { setRateCard(null) }
       setRateCardOpen(true)
     } catch { toast.error('Failed to load rate card') }
+  }
+
+  const handleLoadDefaultRates = async () => {
+    try {
+      const res = await fetch('/api/rate-card-default')
+      const d = await res.json()
+      setRateForm({
+        receivingFlatFee: Number(d.receivingFlatFee) || 0,
+        receivingFlatHours: Number(d.receivingFlatHours) || 2,
+        receivingHourlyAfter: Number(d.receivingHourlyAfter) || 0,
+        inboundReceivingPerUnit: Number(d.inboundReceivingPerUnit) || 0,
+        storagePerBinMonth: Number(d.storagePerBinMonth) || 0,
+        storagePerShelfMonth: Number(d.storagePerShelfMonth) || 0,
+        storagePerPalletMonth: Number(d.storagePerPalletMonth) || 0,
+        storagePerUnitPerDay: Number(d.storagePerUnitPerDay) || 0,
+        pickFirstItemsIncluded: Number(d.pickFirstItemsIncluded) || 4,
+        pickPerAdditionalItem: Number(d.pickPerAdditionalItem) || 0,
+        packPerOrder: Number(d.packPerOrder) || 0,
+        pickPerUnit: Number(d.pickPerUnit) || 0,
+        fulfillmentFeePerOrder: Number(d.fulfillmentFeePerOrder) || 0,
+        fulfillmentMinimumFee: Number(d.fulfillmentMinimumFee) || 0,
+        returnProcessingPerUnit: Number(d.returnProcessingPerUnit) || 0,
+        returnsPerOrder: Number(d.returnsPerOrder) || 0,
+        commissionPercent: Number(d.commissionPercent) || 0,
+        codRemittanceFeePerOrder: Number(d.codRemittanceFeePerOrder) || 0,
+        codShortfallPenalty: Number(d.codShortfallPenalty) || 0,
+      })
+      toast.success('Loaded default rate card')
+    } catch { toast.error('Failed to load defaults') }
+  }
+
+  const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([])
+  const handleLoadTemplate = async (templateId: string) => {
+    const t = templates.find(t => t.id === templateId)
+    if (!t) return
+    setRateForm({
+      receivingFlatFee: Number(t.receivingFlatFee) || 0,
+      receivingFlatHours: Number(t.receivingFlatHours) || 2,
+      receivingHourlyAfter: Number(t.receivingHourlyAfter) || 0,
+      inboundReceivingPerUnit: Number(t.inboundReceivingPerUnit) || 0,
+      storagePerBinMonth: Number(t.storagePerBinMonth) || 0,
+      storagePerShelfMonth: Number(t.storagePerShelfMonth) || 0,
+      storagePerPalletMonth: Number(t.storagePerPalletMonth) || 0,
+      storagePerUnitPerDay: Number(t.storagePerUnitPerDay) || 0,
+      pickFirstItemsIncluded: Number(t.pickFirstItemsIncluded) || 4,
+      pickPerAdditionalItem: Number(t.pickPerAdditionalItem) || 0,
+      packPerOrder: Number(t.packPerOrder) || 0,
+      pickPerUnit: Number(t.pickPerUnit) || 0,
+      fulfillmentFeePerOrder: Number(t.fulfillmentFeePerOrder) || 0,
+      fulfillmentMinimumFee: Number(t.fulfillmentMinimumFee) || 0,
+      returnProcessingPerUnit: Number(t.returnProcessingPerUnit) || 0,
+      returnsPerOrder: Number(t.returnsPerOrder) || 0,
+      commissionPercent: Number(t.commissionPercent) || 0,
+      codRemittanceFeePerOrder: Number(t.codRemittanceFeePerOrder) || 0,
+      codShortfallPenalty: Number(t.codShortfallPenalty) || 0,
+    })
+    toast.success(`Loaded template: ${String(t.name)}`)
   }
 
   const handleSaveRateCard = async () => {
@@ -1367,6 +1428,23 @@ export default function MerchantsModule() {
       >
         <div className="space-y-4">
           <p className="text-[11px] text-gray-500">Fees charged to this merchant. Organized by category (ShipBob-style). Changing these rates creates a new active rate card (the old one is superseded).</p>
+
+          {/* Quick-fill: Load Defaults + Template Dropdown */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-md" onClick={handleLoadDefaultRates}>
+              <SettingsIcon size={11} className="mr-1" /> Load Defaults
+            </Button>
+            {templates.length > 0 && (
+              <select
+                className="h-7 text-[11px] rounded-md border border-gray-200 bg-white px-2 text-gray-600"
+                defaultValue=""
+                onChange={e => { if (e.target.value) handleLoadTemplate(e.target.value); e.target.value = '' }}
+              >
+                <option value="">Apply Template...</option>
+                {templates.map(t => <option key={String(t.id)} value={String(t.id)}>{String(t.name)}</option>)}
+              </select>
+            )}
+          </div>
 
           {/* Rate insight banner */}
           {selectedMerchant && selectedMerchant.profitability.revenue > 0 && (
