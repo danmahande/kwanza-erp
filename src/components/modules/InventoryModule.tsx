@@ -535,6 +535,15 @@ export default function InventoryModule() {
   const totalStockValue = data.reduce((s, p) => s + safe(p.currentStockValue), 0)
   const lowStockCount = data.filter(p => safe(p.computedCurrentQty) <= p.minStock && safe(p.computedCurrentQty) > 0).length
   const outOfStockCount = data.filter(p => safe(p.computedCurrentQty) <= 0).length
+  const runningOutSoonCount = data.filter(p => {
+    const qty = safe(p.computedCurrentQty)
+    if (qty <= 0) return false
+    const outQty = safe(p.outQty)
+    const days = Math.max(1, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    const velocity = outQty / days
+    if (velocity <= 0) return false
+    return Math.floor(qty / velocity) <= 7
+  }).length
 
   // ── Range presets ──
   const qtyPresets = [
@@ -584,6 +593,46 @@ export default function InventoryModule() {
     })
     return map
   }, [data])
+
+  // FSN classification: Fast/Slow/Non-moving based on outbound velocity
+  // Fast = >1 unit/day shipped, Slow = 1 unit/week to 1/day, Non-moving = <1/week or 0
+  const fsnClass = useMemo(() => {
+    const map: Record<string, { label: string; color: string }> = {}
+    data.forEach(p => {
+      const outQty = safe(p.outQty)
+      // Approximate days since product was created (proxy for time on shelf)
+      const days = Math.max(1, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+      const velocity = outQty / days // units per day
+      if (velocity >= 1) map[p.id] = { label: 'F', color: 'bg-green-100 text-green-700' }
+      else if (velocity >= 1 / 7) map[p.id] = { label: 'S', color: 'bg-amber-100 text-amber-700' }
+      else map[p.id] = { label: 'N', color: 'bg-red-100 text-red-700' }
+    })
+    return map
+  }, [data])
+
+  // SKU velocity: units shipped per day (based on outQty and product age)
+  const skuVelocity = useCallback((p: Product): number => {
+    const outQty = safe(p.outQty)
+    const days = Math.max(1, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    return Math.round((outQty / days) * 10) / 10
+  }, [])
+
+  // Days on hand: how many days until stock runs out at current velocity
+  const daysOnHand = useCallback((p: Product): number | null => {
+    const qty = safe(p.computedCurrentQty)
+    if (qty <= 0) return 0
+    const velocity = skuVelocity(p)
+    if (velocity <= 0) return null // no sales = infinite days
+    return Math.floor(qty / velocity)
+  }, [skuVelocity])
+
+  // Sell-through rate: % of received stock that has been shipped
+  const sellThroughRate = useCallback((p: Product): number => {
+    const inQty = safe(p.inQty)
+    if (inQty <= 0) return 0
+    const outQty = safe(p.outQty)
+    return Math.min(100, Math.round((outQty / inQty) * 100))
+  }, [])
 
   // Stock age: days since product was created
   const stockAge = (createdAt: string) => {
@@ -698,11 +747,12 @@ export default function InventoryModule() {
                         <DenseTh>Product</DenseTh>
                         <DenseTh>Merchant</DenseTh>
                         <DenseTh className="w-16 text-right">On Hand</DenseTh>
-                        <DenseTh className="w-16 text-right">In</DenseTh>
-                        <DenseTh className="w-16 text-right">Out</DenseTh>
+                        <DenseTh className="w-14 text-right">Vel/day</DenseTh>
+                        <DenseTh className="w-14 text-right">Days Left</DenseTh>
+                        <DenseTh className="w-14 text-right">Sell %</DenseTh>
+                        <DenseTh className="w-12 text-center">FSN</DenseTh>
                         <DenseTh className="w-16 text-right">Min</DenseTh>
                         <DenseTh className="w-20 text-center">Status</DenseTh>
-                        <DenseTh className="w-12 text-center">ABC</DenseTh>
                         <DenseTh className="w-12 text-right">Age</DenseTh>
                         <DenseTh className="w-24 text-right">Stock Value</DenseTh>
                       </tr>
@@ -711,8 +761,10 @@ export default function InventoryModule() {
                       {paginatedData.map((p, i) => {
                         const status = stockStatus(p)
                         const qty = safe(p.computedCurrentQty)
-                        const inQty = safe(p.inQty)
-                        const outQty = safe(p.outQty)
+                        const velocity = skuVelocity(p)
+                        const doh = daysOnHand(p)
+                        const str = sellThroughRate(p)
+                        const fsn = fsnClass[p.id] || { label: 'N', color: 'bg-red-100 text-red-700' }
                         return (
                           <AnimatedDenseTr key={p.id} index={i} onClick={() => { setSelectedRecord(p); setDetailOpen(true) }}
                             tint={qty < 0 ? 'bg-red-50/30' : qty === 0 ? 'bg-gray-50/30' : qty <= p.minStock ? 'bg-orange-50/30' : ''}>
@@ -725,14 +777,21 @@ export default function InventoryModule() {
                             <DenseTd mono right className={qty < 0 ? 'text-red-600 font-bold' : qty === 0 ? 'text-gray-400' : 'text-gray-900 font-bold'}>
                               {fmt(qty)}
                             </DenseTd>
-                            <DenseTd mono right className="text-blue-600 text-[11px]">{inQty > 0 ? `+${fmt(inQty)}` : '—'}</DenseTd>
-                            <DenseTd mono right className="text-orange-600 text-[11px]">{outQty > 0 ? `-${fmt(outQty)}` : '—'}</DenseTd>
+                            <DenseTd mono right className={velocity > 0 ? 'text-blue-600 text-[11px]' : 'text-gray-300'}>
+                              {velocity > 0 ? velocity.toFixed(1) : '—'}
+                            </DenseTd>
+                            <DenseTd mono right className={doh === null ? 'text-gray-300' : doh <= 7 ? 'text-red-600 font-bold' : doh <= 30 ? 'text-amber-600 font-bold' : 'text-gray-700'}>
+                              {doh === null ? '∞' : doh === 0 ? '0' : `${doh}d`}
+                            </DenseTd>
+                            <DenseTd mono right className={str >= 80 ? 'text-green-600 font-bold' : str >= 50 ? 'text-gray-700' : 'text-gray-400'}>
+                              {str > 0 ? `${str}%` : '—'}
+                            </DenseTd>
+                            <DenseTd className="text-center">
+                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${fsn.color}`} title={fsn.label === 'F' ? 'Fast-moving' : fsn.label === 'S' ? 'Slow-moving' : 'Non-moving'}>{fsn.label}</span>
+                            </DenseTd>
                             <DenseTd mono right className="text-gray-400">{p.minStock}</DenseTd>
                             <DenseTd className="text-center">
                               <span className={`inline-block w-2 h-2 rounded-full ${status.dot}`} title={status.label} />
-                            </DenseTd>
-                            <DenseTd className="text-center">
-                              <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${abcClass[p.id] === 'A' ? 'bg-red-100 text-red-700' : abcClass[p.id] === 'B' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'}`} title={`ABC Class ${abcClass[p.id] || 'C'}`}>{abcClass[p.id] || 'C'}</span>
                             </DenseTd>
                             <DenseTd mono right className="text-gray-400 text-[10px]">{stockAge(p.createdAt)}</DenseTd>
                             <DenseTd mono right className={p.currentStockValue < 0 ? 'text-red-600 font-bold' : 'text-gray-900 font-bold'}>
@@ -803,14 +862,16 @@ export default function InventoryModule() {
           </div>
 
           {/* ── Reorder alert banner ── */}
-          {(lowStockCount > 0 || outOfStockCount > 0) && (
+          {(lowStockCount > 0 || outOfStockCount > 0 || runningOutSoonCount > 0) && (
             <div className={`rounded-lg px-4 py-2.5 flex items-center gap-3 flex-wrap ${outOfStockCount > 0 ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
               <AlertTriangle size={16} className={outOfStockCount > 0 ? 'text-red-600 shrink-0' : 'text-orange-600 shrink-0'} />
               <span className="text-xs text-gray-700 font-medium flex-1">
                 {outOfStockCount > 0 && `${outOfStockCount} product${outOfStockCount !== 1 ? 's' : ''} out of stock`}
                 {outOfStockCount > 0 && lowStockCount > 0 && ', '}
                 {lowStockCount > 0 && `${lowStockCount} product${lowStockCount !== 1 ? 's' : ''} below min stock`}
-                . Reorder now to avoid fulfillment delays.
+                {runningOutSoonCount > 0 && (outOfStockCount > 0 || lowStockCount > 0) && ', '}
+                {runningOutSoonCount > 0 && `${runningOutSoonCount} running out within 7 days`}
+                {' '}— reorder now to avoid fulfillment delays.
               </span>
               <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-md bg-white" onClick={() => setView('table')}>
                 View All <ChevronRight size={11} className="ml-1" />
@@ -964,7 +1025,7 @@ export default function InventoryModule() {
 
                 {/* Movement summary */}
                 <div className="bg-white rounded-lg border border-gray-200 p-4">
-                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement Summary</h3>
+                  <h3 className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-3">Movement & Analytics</h3>
                   <div className="space-y-2 text-xs">
                     <div className="flex items-center justify-between py-1 border-b border-gray-100">
                       <span className="text-gray-500 flex items-center gap-1"><ArrowDownRight size={11} className="text-green-600" /> Received (In)</span>
@@ -978,9 +1039,35 @@ export default function InventoryModule() {
                       <span className="text-gray-500 flex items-center gap-1"><TrendingDown size={11} className="text-red-500" /> Shrinkage</span>
                       <span className="font-mono font-bold text-red-600">{fmt(safe(selectedRecord.shrinkQty))}</span>
                     </div>
-                    <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center justify-between py-1 border-b border-gray-100">
                       <span className="text-gray-500 flex items-center gap-1"><RotateCcw size={11} className="text-purple-500" /> RTV</span>
                       <span className="font-mono font-bold text-purple-700">{fmt(safe(selectedRecord.rtvQty))}</span>
+                    </div>
+                    <div className="border-t border-gray-200 pt-2 mt-2">
+                      <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                        <span className="text-gray-500">SKU Velocity</span>
+                        <span className="font-mono font-bold text-blue-600">{skuVelocity(selectedRecord).toFixed(1)} units/day</span>
+                      </div>
+                      <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                        <span className="text-gray-500">Days on Hand</span>
+                        <span className={`font-mono font-bold ${(() => { const d = daysOnHand(selectedRecord); return d === null ? 'text-gray-400' : d <= 7 ? 'text-red-600' : d <= 30 ? 'text-amber-600' : 'text-green-600' })()}`}>
+                          {(() => { const d = daysOnHand(selectedRecord); return d === null ? '∞ (no sales)' : d === 0 ? '0 days (out now)' : `${d} days` })()}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-1 border-b border-gray-100">
+                        <span className="text-gray-500">Sell-Through Rate</span>
+                        <span className="font-mono font-bold text-gray-700">{sellThroughRate(selectedRecord)}%</span>
+                      </div>
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-gray-500">FSN Classification</span>
+                        <span className={`font-mono font-bold ${fsnClass[selectedRecord.id]?.label === 'F' ? 'text-green-600' : fsnClass[selectedRecord.id]?.label === 'S' ? 'text-amber-600' : 'text-red-600'}`}>
+                          {fsnClass[selectedRecord.id]?.label === 'F' ? 'Fast-moving' : fsnClass[selectedRecord.id]?.label === 'S' ? 'Slow-moving' : 'Non-moving'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between py-1">
+                        <span className="text-gray-500">ABC Classification</span>
+                        <span className="font-mono font-bold text-gray-700">{abcClass[selectedRecord.id] || 'C'} (by value)</span>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1004,27 +1091,31 @@ export default function InventoryModule() {
               <div className="space-y-3 py-2 text-xs text-gray-700">
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">View All</p>
-                  <p>Opens a full-page table with all products, filter chips (In Stock, Low, Out, Negative), vendor and category dropdowns, ABC classification, stock age, and pagination.</p>
+                  <p>Full-page table with On Hand, Velocity (units/day), Days Left, Sell-Through %, FSN classification, and Stock Value. Filter by status, vendor, and category.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">Export</p>
-                  <p>Download the current stock list as a CSV file. Includes product ID, label, category, vendor, quantity, cost, price, and status.</p>
+                  <p className="font-semibold text-gray-900 mb-1">SKU Velocity</p>
+                  <p>Units shipped per day. Shows how fast a product moves through the warehouse.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">Import</p>
-                  <p>Bulk-import products from a TSV/CSV file. Paste tab-separated data with headers: product label, unit cost, selling price (required).</p>
+                  <p className="font-semibold text-gray-900 mb-1">Days on Hand</p>
+                  <p>Days until stock runs out at current sell rate. Red (7 or less), amber (30 or less), green (more than 30). Infinity if no sales.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">Stock Indicators</p>
-                  <p>Colored dots show stock health: green = in stock, amber = low (at or below min), gray = out of stock, red = negative (data error).</p>
+                  <p className="font-semibold text-gray-900 mb-1">Sell-Through Rate</p>
+                  <p>Percentage of received stock that has been shipped. 80%+ is selling well. Below 50% may indicate overstock.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">ABC Classification</p>
-                  <p>Top 20% by stock value = A (high value), next 30% = B, bottom 50% = C. Helps prioritize cycle counts and reorder decisions.</p>
+                  <p className="font-semibold text-gray-900 mb-1">FSN Classification</p>
+                  <p>Fast (green) = more than 1 unit/day. Slow (amber) = 1/week to 1/day. Non-moving (red) = less than 1/week.</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-900 mb-1">Profile</p>
-                  <p>Click any row to see product details, stock and pricing breakdown, and movement summary (received, sent, shrinkage, RTV).</p>
+                  <p className="font-semibold text-gray-900 mb-1">Reorder Alerts</p>
+                  <p>Alert banner shows out-of-stock, below-min, and running-out-within-7-days products based on velocity.</p>
+                </div>
+                <div>
+                  <p className="font-semibold text-gray-900 mb-1">Export / Import</p>
+                  <p>Export stock list as CSV. Bulk-import products from TSV/CSV (product label, unit cost, selling price required).</p>
                 </div>
               </div>
               <AlertDialogFooter>
