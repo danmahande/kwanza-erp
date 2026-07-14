@@ -630,7 +630,7 @@ function ProfitabilityView({ data, onBack, onSelect }: {
 
 function AllMerchantsView({
   data, activeFilter, onFilterChange, onBack, onSelect,
-  onToggleActive, onHoldToggle, onOpenRateCard, onOpenStatement,
+  onToggleActive, onHoldToggle, onOpenStatement,
 }: {
   data: Merchant[]
   activeFilter: string
@@ -639,7 +639,6 @@ function AllMerchantsView({
   onSelect: (m: Merchant) => void
   onToggleActive: (m: Merchant) => void
   onHoldToggle: (m: Merchant) => void
-  onOpenRateCard: (m: Merchant) => void
   onOpenStatement: (m: Merchant) => void
 }) {
   return (
@@ -716,7 +715,6 @@ function AllMerchantsView({
                   <DenseTd right>
                     <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
                       <button onClick={() => onHoldToggle(m)} title={m.isOnHold ? 'Release' : 'Hold'} className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${m.isOnHold ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-500'}`}>Hold</button>
-                      <button onClick={() => onOpenRateCard(m)} title="Rate card" className="p-1 text-gray-400 hover:text-[#FF6B35]"><SettingsIcon size={12} /></button>
                       <button onClick={() => onOpenStatement(m)} title="Statement" className="p-1 text-gray-400 hover:text-[#FF6B35]"><FileText size={12} /></button>
                     </div>
                   </DenseTd>
@@ -754,16 +752,6 @@ export default function MerchantsModule() {
   const [holdDialogOpen, setHoldDialogOpen] = useState(false)
   const [holdReason, setHoldReason] = useState('')
   const [holdMerchant, setHoldMerchant] = useState<Merchant | null>(null)
-  const [rateCardOpen, setRateCardOpen] = useState(false)
-  const [rateCard, setRateCard] = useState<Record<string, unknown> | null>(null)
-  const [rateForm, setRateForm] = useState({
-    receivingFlatFee: 0, receivingFlatHours: 2, receivingHourlyAfter: 0, inboundReceivingPerUnit: 0,
-    storagePerBinMonth: 0, storagePerShelfMonth: 0, storagePerPalletMonth: 0, storagePerUnitPerDay: 0,
-    pickFirstItemsIncluded: 4, pickPerAdditionalItem: 0, packPerOrder: 0, pickPerUnit: 0,
-    fulfillmentFeePerOrder: 0, fulfillmentMinimumFee: 0,
-    returnProcessingPerUnit: 0, returnsPerOrder: 0,
-    commissionPercent: 0, codRemittanceFeePerOrder: 0, codShortfallPenalty: 0,
-  })
   const [statementOpen, setStatementOpen] = useState(false)
   const [statementPeriod, setStatementPeriod] = useState(new Date().toISOString().slice(0, 7))
   const [bulkStmtOpen, setBulkStmtOpen] = useState(false)
@@ -863,109 +851,6 @@ export default function MerchantsModule() {
     setEditing(m); setProfileOpen(false); setView('onboard')
   }
 
-  const handleOpenRateCard = async (m: Merchant) => {
-    setSelectedMerchant(m); setProfileOpen(false)
-    // Fetch templates if not already loaded
-    if (templates.length === 0) {
-      fetch('/api/rate-card-templates').then(r => r.json()).then(d => setTemplates(Array.isArray(d) ? d : [])).catch(() => {})
-    }
-    try {
-      const res = await fetch(`/api/rate-card?merchantId=${m.merchantId}`)
-      const cards = await res.json()
-      if (Array.isArray(cards) && cards.length > 0) {
-        const active = cards.find((c: Record<string, unknown>) => c.isActive) || cards[0]
-        setRateCard(active)
-        setRateForm({
-          receivingFlatFee: Number(active.receivingFlatFee) || 0,
-          receivingFlatHours: Number(active.receivingFlatHours) || 2,
-          receivingHourlyAfter: Number(active.receivingHourlyAfter) || 0,
-          inboundReceivingPerUnit: Number(active.inboundReceivingPerUnit) || 0,
-          storagePerBinMonth: Number(active.storagePerBinMonth) || 0,
-          storagePerShelfMonth: Number(active.storagePerShelfMonth) || 0,
-          storagePerPalletMonth: Number(active.storagePerPalletMonth) || 0,
-          storagePerUnitPerDay: Number(active.storagePerUnitPerDay) || 0,
-          pickFirstItemsIncluded: Number(active.pickFirstItemsIncluded) || 4,
-          pickPerAdditionalItem: Number(active.pickPerAdditionalItem) || 0,
-          packPerOrder: Number(active.packPerOrder) || 0,
-          pickPerUnit: Number(active.pickPerUnit) || 0,
-          fulfillmentFeePerOrder: Number(active.fulfillmentFeePerOrder) || 0,
-          fulfillmentMinimumFee: Number(active.fulfillmentMinimumFee) || 0,
-          returnProcessingPerUnit: Number(active.returnProcessingPerUnit) || 0,
-          returnsPerOrder: Number(active.returnsPerOrder) || 0,
-          commissionPercent: Number(active.commissionPercent) || 0,
-          codRemittanceFeePerOrder: Number(active.codRemittanceFeePerOrder) || 0,
-          codShortfallPenalty: Number(active.codShortfallPenalty) || 0,
-        })
-      } else { setRateCard(null) }
-      setRateCardOpen(true)
-    } catch { toast.error('Failed to load rate card') }
-  }
-
-  const handleLoadDefaultRates = async () => {
-    try {
-      const res = await fetch('/api/rate-card-default')
-      const d = await res.json()
-      setRateForm({
-        receivingFlatFee: Number(d.receivingFlatFee) || 0,
-        receivingFlatHours: Number(d.receivingFlatHours) || 2,
-        receivingHourlyAfter: Number(d.receivingHourlyAfter) || 0,
-        inboundReceivingPerUnit: Number(d.inboundReceivingPerUnit) || 0,
-        storagePerBinMonth: Number(d.storagePerBinMonth) || 0,
-        storagePerShelfMonth: Number(d.storagePerShelfMonth) || 0,
-        storagePerPalletMonth: Number(d.storagePerPalletMonth) || 0,
-        storagePerUnitPerDay: Number(d.storagePerUnitPerDay) || 0,
-        pickFirstItemsIncluded: Number(d.pickFirstItemsIncluded) || 4,
-        pickPerAdditionalItem: Number(d.pickPerAdditionalItem) || 0,
-        packPerOrder: Number(d.packPerOrder) || 0,
-        pickPerUnit: Number(d.pickPerUnit) || 0,
-        fulfillmentFeePerOrder: Number(d.fulfillmentFeePerOrder) || 0,
-        fulfillmentMinimumFee: Number(d.fulfillmentMinimumFee) || 0,
-        returnProcessingPerUnit: Number(d.returnProcessingPerUnit) || 0,
-        returnsPerOrder: Number(d.returnsPerOrder) || 0,
-        commissionPercent: Number(d.commissionPercent) || 0,
-        codRemittanceFeePerOrder: Number(d.codRemittanceFeePerOrder) || 0,
-        codShortfallPenalty: Number(d.codShortfallPenalty) || 0,
-      })
-      toast.success('Loaded default rate card')
-    } catch { toast.error('Failed to load defaults') }
-  }
-
-  const [templates, setTemplates] = useState<Array<Record<string, unknown>>>([])
-  const handleLoadTemplate = async (templateId: string) => {
-    const t = templates.find(t => t.id === templateId)
-    if (!t) return
-    setRateForm({
-      receivingFlatFee: Number(t.receivingFlatFee) || 0,
-      receivingFlatHours: Number(t.receivingFlatHours) || 2,
-      receivingHourlyAfter: Number(t.receivingHourlyAfter) || 0,
-      inboundReceivingPerUnit: Number(t.inboundReceivingPerUnit) || 0,
-      storagePerBinMonth: Number(t.storagePerBinMonth) || 0,
-      storagePerShelfMonth: Number(t.storagePerShelfMonth) || 0,
-      storagePerPalletMonth: Number(t.storagePerPalletMonth) || 0,
-      storagePerUnitPerDay: Number(t.storagePerUnitPerDay) || 0,
-      pickFirstItemsIncluded: Number(t.pickFirstItemsIncluded) || 4,
-      pickPerAdditionalItem: Number(t.pickPerAdditionalItem) || 0,
-      packPerOrder: Number(t.packPerOrder) || 0,
-      pickPerUnit: Number(t.pickPerUnit) || 0,
-      fulfillmentFeePerOrder: Number(t.fulfillmentFeePerOrder) || 0,
-      fulfillmentMinimumFee: Number(t.fulfillmentMinimumFee) || 0,
-      returnProcessingPerUnit: Number(t.returnProcessingPerUnit) || 0,
-      returnsPerOrder: Number(t.returnsPerOrder) || 0,
-      commissionPercent: Number(t.commissionPercent) || 0,
-      codRemittanceFeePerOrder: Number(t.codRemittanceFeePerOrder) || 0,
-      codShortfallPenalty: Number(t.codShortfallPenalty) || 0,
-    })
-    toast.success(`Loaded template: ${String(t.name)}`)
-  }
-
-  const handleSaveRateCard = async () => {
-    if (!selectedMerchant) return
-    const method = rateCard ? 'PUT' : 'POST'
-    const body = rateCard ? { id: (rateCard as Record<string, string>).id, ...rateForm } : { merchantId: selectedMerchant.merchantId, ...rateForm }
-    await fetch('/api/rate-card', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-    toast.success('Rate card saved'); setRateCardOpen(false)
-  }
-
   const handleOpenStatement = (m: Merchant) => {
     setSelectedMerchant(m); setProfileOpen(false); setStatementPeriod(new Date().toISOString().slice(0, 7)); setStatementOpen(true)
   }
@@ -1047,7 +932,6 @@ export default function MerchantsModule() {
             onSelect={(m) => { setView('list'); handleExpand(m) }}
             onToggleActive={handleToggleActive}
             onHoldToggle={handleHoldToggle}
-            onOpenRateCard={handleOpenRateCard}
             onOpenStatement={handleOpenStatement}
           />
         </PageTransition>
@@ -1201,7 +1085,6 @@ export default function MerchantsModule() {
           <div className="flex items-center justify-between w-full">
             <div className="flex gap-2">
               <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleEdit(selectedMerchant)}><SettingsIcon size={12} className="mr-1" /> Edit</Button>
-              <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleOpenRateCard(selectedMerchant)}><FileText size={12} className="mr-1" /> Rate Card</Button>
               <Button variant="outline" size="sm" className="rounded-xl text-xs" onClick={() => handleOpenStatement(selectedMerchant)}><Calendar size={12} className="mr-1" /> Statement</Button>
             </div>
             <div className="flex gap-2">
@@ -1411,186 +1294,6 @@ export default function MerchantsModule() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* ══ RATE CARD SLIDE-OVER ══ */}
-      <DetailSlideOver
-        open={rateCardOpen}
-        onClose={() => setRateCardOpen(false)}
-        title="Rate Card"
-        subtitle={selectedMerchant ? `${selectedMerchant.businessName} · ${selectedMerchant.currency}` : ''}
-        width="lg"
-        footer={
-          <div className="flex gap-3 ml-auto">
-            <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setRateCardOpen(false)}>Cancel</Button>
-            <Button size="sm" className="bg-[#FF6B35] hover:bg-[#E55A25] text-white rounded-xl" onClick={handleSaveRateCard}>Save</Button>
-          </div>
-        }
-      >
-        <div className="space-y-4">
-          <p className="text-[11px] text-gray-500">Fees charged to this merchant. Organized by category (ShipBob-style). Changing these rates creates a new active rate card (the old one is superseded).</p>
-
-          {/* Quick-fill: Load Defaults + Template Dropdown */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-md" onClick={handleLoadDefaultRates}>
-              <SettingsIcon size={11} className="mr-1" /> Load Defaults
-            </Button>
-            {templates.length > 0 && (
-              <select
-                className="h-7 text-[11px] rounded-md border border-gray-200 bg-white px-2 text-gray-600"
-                defaultValue=""
-                onChange={e => { if (e.target.value) handleLoadTemplate(e.target.value); e.target.value = '' }}
-              >
-                <option value="">Apply Template...</option>
-                {templates.map(t => <option key={String(t.id)} value={String(t.id)}>{String(t.name)}</option>)}
-              </select>
-            )}
-          </div>
-
-          {/* Rate insight banner */}
-          {selectedMerchant && selectedMerchant.profitability.revenue > 0 && (
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              <p className="text-[10px] uppercase tracking-wider text-blue-700 font-semibold mb-1 flex items-center gap-1"><TrendingUp size={10} /> Rate Insight</p>
-              <p className="text-[11px] text-blue-800">
-                Current commission: <span className="font-mono font-bold">{rateForm.commissionPercent}%</span>.
-                A 1% increase would add <span className="font-mono font-bold">{formatCurrencyCompact(selectedMerchant.profitability.revenue * 0.01, selectedMerchant.currency)}</span> in commission revenue per period.
-              </p>
-            </div>
-          )}
-
-          {/* ── RECEIVING ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Receiving</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Flat fee (first hours)</Label>
-                <Input type="number" value={String(rateForm.receivingFlatFee)} onChange={e => setRateForm({ ...rateForm, receivingFlatFee: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Hours included in flat fee</Label>
-                <Input type="number" value={String(rateForm.receivingFlatHours)} onChange={e => setRateForm({ ...rateForm, receivingFlatHours: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Hourly rate (after flat hours)</Label>
-                <Input type="number" value={String(rateForm.receivingHourlyAfter)} onChange={e => setRateForm({ ...rateForm, receivingHourlyAfter: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per-unit receiving fee</Label>
-                <Input type="number" value={String(rateForm.inboundReceivingPerUnit)} onChange={e => setRateForm({ ...rateForm, inboundReceivingPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── STORAGE ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Storage (Monthly)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per bin / month</Label>
-                <Input type="number" value={String(rateForm.storagePerBinMonth)} onChange={e => setRateForm({ ...rateForm, storagePerBinMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per shelf / month</Label>
-                <Input type="number" value={String(rateForm.storagePerShelfMonth)} onChange={e => setRateForm({ ...rateForm, storagePerShelfMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per pallet / month</Label>
-                <Input type="number" value={String(rateForm.storagePerPalletMonth)} onChange={e => setRateForm({ ...rateForm, storagePerPalletMonth: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per unit / day (legacy accrual)</Label>
-                <Input type="number" value={String(rateForm.storagePerUnitPerDay)} onChange={e => setRateForm({ ...rateForm, storagePerUnitPerDay: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── PICK & PACK ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Pick & Pack</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">First items included (free picks)</Label>
-                <Input type="number" value={String(rateForm.pickFirstItemsIncluded)} onChange={e => setRateForm({ ...rateForm, pickFirstItemsIncluded: parseInt(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per additional item picked</Label>
-                <Input type="number" value={String(rateForm.pickPerAdditionalItem)} onChange={e => setRateForm({ ...rateForm, pickPerAdditionalItem: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Pack fee per order</Label>
-                <Input type="number" value={String(rateForm.packPerOrder)} onChange={e => setRateForm({ ...rateForm, packPerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Per-unit pick fee (legacy)</Label>
-                <Input type="number" value={String(rateForm.pickPerUnit)} onChange={e => setRateForm({ ...rateForm, pickPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── FULFILLMENT ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Fulfillment</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Fulfillment fee per order</Label>
-                <Input type="number" value={String(rateForm.fulfillmentFeePerOrder)} onChange={e => setRateForm({ ...rateForm, fulfillmentFeePerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Minimum fee per order</Label>
-                <Input type="number" value={String(rateForm.fulfillmentMinimumFee)} onChange={e => setRateForm({ ...rateForm, fulfillmentMinimumFee: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── RETURNS ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Returns</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Return processing per unit</Label>
-                <Input type="number" value={String(rateForm.returnProcessingPerUnit)} onChange={e => setRateForm({ ...rateForm, returnProcessingPerUnit: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Flat return fee per order</Label>
-                <Input type="number" value={String(rateForm.returnsPerOrder)} onChange={e => setRateForm({ ...rateForm, returnsPerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── COMMISSION ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">Commission</p>
-            <div className="grid grid-cols-1 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">Commission % (on delivered sales)</Label>
-                <Input type="number" step="0.1" value={String(rateForm.commissionPercent)} onChange={e => setRateForm({ ...rateForm, commissionPercent: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* ── COD (Kwanza differentiator) ── */}
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-[#FF6B35] font-semibold mb-2">COD (Cash on Delivery)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">COD remittance fee per order</Label>
-                <Input type="number" value={String(rateForm.codRemittanceFeePerOrder)} onChange={e => setRateForm({ ...rateForm, codRemittanceFeePerOrder: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-              <div>
-                <Label className="text-gray-700 font-medium mb-1 block text-[10px]">COD shortfall penalty</Label>
-                <Input type="number" value={String(rateForm.codShortfallPenalty)} onChange={e => setRateForm({ ...rateForm, codShortfallPenalty: parseFloat(e.target.value) || 0 })} className="rounded-lg text-xs h-8" />
-              </div>
-            </div>
-          </div>
-
-          {/* Existing card info */}
-          {rateCard && (
-            <div className="bg-gray-50 rounded-lg border border-gray-100 p-3 text-[10px] text-gray-500">
-              <p>Current rate card valid from: {new Date((rateCard as Record<string, string>).validFrom).toLocaleDateString()}</p>
-              <p>Saving will supersede this card and create a new active one.</p>
-            </div>
-          )}
-        </div>
-      </DetailSlideOver>
 
       {/* ══ STATEMENT DIALOG ══ */}
       <AlertDialog open={statementOpen} onOpenChange={setStatementOpen}>

@@ -217,7 +217,7 @@ export default function SettingsModule() {
     setDefaultRatesSaving(true)
     try {
       await fetch('/api/rate-card-default', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(defaultRates) })
-      toast.success('Default rate card saved')
+      toast.success('Rate card saved')
       setDefaultRatesDirty(false)
     } catch { toast.error('Failed to save') } finally { setDefaultRatesSaving(false) }
   }
@@ -377,16 +377,16 @@ export default function SettingsModule() {
       {/* ── Default Rate Card ── */}
       <div>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Default Rate Card</span>
+          <span className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">Rate Card (Universal)</span>
           {defaultRatesDirty && (
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" className="h-7 text-xs rounded-md" onClick={() => { fetch('/api/rate-card-default').then(r => r.json()).then(d => { const f: Record<string, number> = { ...emptyFeeForm }; for (const k of ALL_FEE_KEYS) f[k] = Number(d[k]) || 0; setDefaultRates(f); setDefaultRatesDirty(false) }) }}>Discard</Button>
-              <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveDefaultRates} disabled={defaultRatesSaving}>{defaultRatesSaving ? 'Saving...' : 'Save Defaults'}</Button>
+              <Button size="sm" className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSaveDefaultRates} disabled={defaultRatesSaving}>{defaultRatesSaving ? 'Saving...' : 'Save Rate Card'}</Button>
             </div>
           )}
         </div>
         <div className="bg-white rounded-lg border border-gray-200 p-4">
-          <p className="text-[11px] text-gray-500 mb-3">Standard pricing applied automatically when onboarding a new merchant. Override per merchant from the Merchant rate card.</p>
+          <p className="text-[11px] text-gray-500 mb-3">Universal pricing for all merchants. Changes here apply to every merchant immediately. Use templates for tiered pricing.</p>
           {!defaultRatesLoading && (
             <div className="space-y-4">
               {FEE_SECTIONS.map(section => (
