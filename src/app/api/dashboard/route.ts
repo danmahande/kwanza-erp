@@ -4,9 +4,9 @@ import { requireAuth } from '@/lib/auth-api'
 
 export async function GET(request: NextRequest) {
   try {
-    // Force this route to be dynamic — it reads search params (period filter)
-    // and is per-user, so static prerendering is wrong anyway.
-    // This suppresses the build-time "Dynamic server usage" warning.
+    // Use request.nextUrl.searchParams (typed) — Next.js's static analyzer
+    // can't see through `new URL(request.url)` and flags the route as
+    // "couldn't be rendered statically" at build time.
     const period = request.nextUrl.searchParams.get('period') || 'This Month'
 
     const now = new Date()

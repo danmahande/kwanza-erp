@@ -3,7 +3,13 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  // Migrated from SQLite to PostgreSQL on 2026-07-14.
+  // Rationale: SQLite is single-writer — concurrent dashboard polls + driver
+  // status updates + statement generation were starting to contend. PostgreSQL
+  // supports hundreds of concurrent writers, row-level locking, and proper
+  // aggregations. Migration was clean because the schema used only portable
+  // Prisma types (String/Int/Float/Boolean/DateTime) — no @db. modifiers.
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
