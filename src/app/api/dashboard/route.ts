@@ -4,8 +4,10 @@ import { requireAuth } from '@/lib/auth-api'
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const period = searchParams.get('period') || 'This Month'
+    // Force this route to be dynamic — it reads search params (period filter)
+    // and is per-user, so static prerendering is wrong anyway.
+    // This suppresses the build-time "Dynamic server usage" warning.
+    const period = request.nextUrl.searchParams.get('period') || 'This Month'
 
     const now = new Date()
     let startDate: Date
@@ -598,3 +600,7 @@ async function getValuationSummary(): Promise<{
     }
   }
 }
+
+// Force dynamic rendering — this route reads search params + cookies and is
+// per-user, so static prerendering is wrong. Suppresses the build warning.
+export const dynamic = 'force-dynamic'

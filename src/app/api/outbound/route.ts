@@ -8,15 +8,21 @@ export async function GET(req: NextRequest) {
     const authResult = requireAuth(req)
     if (authResult instanceof NextResponse) return authResult
     const search = req.nextUrl.searchParams.get('search') || ''
+    // When search is empty, the OR clause matches every row — without `take`,
+    // we'd load the ENTIRE OutboundRecord table on every page load.
+    // 500 is a sane ceiling for the overview; pagination can be added later.
     const records = await db.outboundRecord.findMany({
-      where: {
-        OR: [
-          { customerName: { contains: search } },
-          { productName: { contains: search } },
-          { outboundId: { contains: search } },
-        ],
-      },
+      where: search
+        ? {
+            OR: [
+              { customerName: { contains: search } },
+              { productName: { contains: search } },
+              { outboundId: { contains: search } },
+            ],
+          }
+        : {},
       orderBy: { createdAt: 'desc' },
+      take: 500,
     })
     return NextResponse.json(records)
   } catch {

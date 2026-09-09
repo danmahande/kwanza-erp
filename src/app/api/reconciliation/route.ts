@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     if (authResult instanceof NextResponse) return authResult
     const records = await db.reconciliationRecord.findMany({
       orderBy: { createdAt: 'desc' },
+      take: 500,
     })
     return NextResponse.json(records)
   } catch {

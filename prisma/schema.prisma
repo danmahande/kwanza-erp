@@ -74,6 +74,9 @@ model Merchant {
   createdBy       String
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
+
+  @@index([isActive])
+  @@index([isOnHold])
 }
 
 /// Merchant communication log — calls, WhatsApp, emails, visits, meetings.
@@ -193,6 +196,8 @@ model StorageLiability {
 
   @@index([merchantId])
   @@index([inboundId])
+  @@index([status])
+  @@index([productId])
 }
 
 /// Driver banking — daily deposit of COD cash collected.
@@ -349,6 +354,9 @@ model PaymentBatch {
   recordedBy      String
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 model MerchantPayment {
@@ -426,6 +434,11 @@ model Product {
   isActive         Boolean  @default(true)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+
+  @@index([merchantId])
+  @@index([category])
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 model Customer {
@@ -470,6 +483,11 @@ model InboundRecord {
   userComment     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([merchantId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model OutboundRecord {
@@ -530,6 +548,20 @@ model OutboundRecord {
   lastAttemptDate     DateTime?
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  // Performance indexes — these columns are queried in WHERE / ORDER BY in
+  // ~25 routes (dashboard, hub-today, runsheet, cod-reconciliation, drivers,
+  // merchants/performance, ops-search, day-close). Without them SQLite does
+  // a full-table scan on every query.
+  @@index([status])
+  @@index([assignedDriver])
+  @@index([runsheetId])
+  @@index([vendorId])
+  @@index([productId])
+  @@index([createdAt])
+  @@index([deliveredAt])
+  @@index([dispatchedAt])
+  @@index([customerContact])
 }
 
 model ReconciliationRecord {
@@ -543,6 +575,8 @@ model ReconciliationRecord {
   reconciledBy    String
   date            DateTime  @default(now())
   createdAt       DateTime  @default(now())
+
+  @@index([createdAt])
 }
 
 model RTVRecord {
@@ -558,6 +592,10 @@ model RTVRecord {
   processedBy     String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([merchantId])
+  @@index([productId])
+  @@index([status])
 }
 
 model ShrinkageRecord {
@@ -588,6 +626,9 @@ model ShrinkageRecord {
 
   @@index([merchantId])
   @@index([rtvId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model Driver {
@@ -722,6 +763,13 @@ model InventoryItem {
   /// Timestamps
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([productId])
+  @@index([merchantId])
+  @@index([inboundId])
+  @@index([outboundId])
+  @@index([status])
+  @@index([runsheetId])
 }
 
 /// Every event in an item's lifecycle — the 'checkout card inside the front cover'
@@ -800,6 +848,10 @@ model AfterSalesRecord {
   resolutionNotes String?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@index([originalOrderId])
+  @@index([returnStatus])
+  @@index([createdAt])
 }
 
 /// Order Processing Module — entry point for the order → outbound cascade.
@@ -826,6 +878,10 @@ model OrderProcessing {
   createdBy         String
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  @@index([customerId])
+  @@index([status])
+  @@index([orderDate])
 }
 
 model AuditLog {

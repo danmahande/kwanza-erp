@@ -30,15 +30,18 @@ export async function GET(req: NextRequest) {
     const _user = authResult as AuthUser
     const search = req.nextUrl.searchParams.get('search') || ''
     const orderProcessingRecords = await db.orderProcessing.findMany({
-      where: {
-        OR: [
-          { orderId: { contains: search } },
-          { orderNumber: { contains: search } },
-          { customerName: { contains: search } },
-          { trackingNumber: { contains: search } },
-        ],
-      },
+      where: search
+        ? {
+            OR: [
+              { orderId: { contains: search } },
+              { orderNumber: { contains: search } },
+              { customerName: { contains: search } },
+              { trackingNumber: { contains: search } },
+            ],
+          }
+        : {},
       orderBy: { createdAt: 'desc' },
+      take: 500,
     })
     return NextResponse.json(orderProcessingRecords)
   } catch (error) {
