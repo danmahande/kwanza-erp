@@ -35,12 +35,12 @@
  *   - Total migration time for 500k rows: ~1 minute
  */
 
+import 'dotenv/config'
 import { PrismaClient } from '@prisma/client'
 import * as fs from 'fs'
+import sqlite3 from 'sqlite3'
 
-// ── Two Prisma clients: one for SQLite (legacy), one for Postgres (new) ──
-// We use a runtime datasource override for the SQLite client so we can have
-// both clients alive in the same process without env conflicts.
+const { Database } = sqlite3
 
 const POSTGRES_URL = process.env.DATABASE_URL
 const SQLITE_URL = process.env.OLD_SQLITE_URL
@@ -50,8 +50,8 @@ if (!POSTGRES_URL || !POSTGRES_URL.startsWith('postgresql://')) {
   console.error('Current value:', POSTGRES_URL || '(unset)')
   process.exit(1)
 }
-if (!SQLITE_URL || !SQLITE_URL.startsWith('file:')) {
-  console.error('ERROR: OLD_SQLITE_URL must be a file: path to the SQLite database.')
+if (!SQLITE_URL || (!SQLITE_URL.startsWith('file:') && !SQLITE_URL.includes('/') && !SQLITE_URL.includes('\\') && !SQLITE_URL.startsWith('.'))) {
+  console.error('ERROR: OLD_SQLITE_URL must be a file path or file: URI to the SQLite database.')
   console.error('Current value:', SQLITE_URL || '(unset)')
   process.exit(1)
 }
@@ -60,17 +60,97 @@ if (!SQLITE_URL || !SQLITE_URL.startsWith('file:')) {
 // Bind to consts with non-null assertion for safe use throughout the script.
 const PG_URL: string = POSTGRES_URL
 const OLD_DB_URL: string = SQLITE_URL
+const SQLITE_FILE_PATH = normalizeSqlitePath(OLD_DB_URL)
 
-// ── Prisma clients ──
-const pg = new PrismaClient({
-  datasources: { db: { url: PG_URL } },
-  log: ['error', 'warn'],
+if (!fs.existsSync(SQLITE_FILE_PATH)) {
+  console.error(`ERROR: SQLite source database was not found at ${SQLITE_FILE_PATH}`)
+  console.error('Set OLD_SQLITE_URL in .env to the actual path of the legacy .db file on this machine.')
+  process.exit(1)
+}
+
+function normalizeSqlitePath(rawPath: string): string {
+  if (!rawPath.startsWith('file:')) return rawPath
+
+  const withoutProtocol = rawPath.slice('file:'.length)
+  if (/^\/\w:\//i.test(withoutProtocol)) {
+    return withoutProtocol.replace(/^\//, '')
+  }
+
+  return withoutProtocol
+}
+
+function isLikelyBooleanColumn(columnName: string): boolean {
+  return /^(is|has|can|should|was|did|enabled|verified|approved|deleted|archived|active|resolved|paid|locked|blocked|valid|required|submitted|completed|updated|visible|internal)/i.test(columnName)
+    || /^(is[A-Z])/.test(columnName)
+    || /^(has[A-Z])/.test(columnName)
+}
+
+function isLikelyDateColumn(columnName: string): boolean {
+  return columnName === 'date'
+    || columnName === 'dateHired'
+    || /(At|Date|Start|End|Through|From|To)$/.test(columnName)
+}
+
+function normalizeSqliteValue(columnName: string, value: unknown): unknown {
+  if (value === null || value === undefined) return null
+
+  if (typeof value === 'number' && isLikelyDateColumn(columnName)) {
+    return new Date(value)
+  }
+
+  if (typeof value === 'number' && (value === 0 || value === 1) && isLikelyBooleanColumn(columnName)) {
+    return Boolean(value)
+  }
+
+  return value
+}
+
+function escapeIdentifier(identifier: string): string {
+  return `"${identifier.replace(/"/g, '""')}"`
+}
+
+const sqlite = new Database(SQLITE_FILE_PATH, sqlite3.OPEN_READONLY)
+sqlite.on('error', (error: Error) => {
+  console.error(`ERROR: Could not open SQLite source database at ${SQLITE_FILE_PATH}: ${error.message}`)
+  process.exit(1)
 })
 
-// For SQLite we need a separate PrismaClient instance pointed at the old DB.
-// We override the datasource URL at runtime.
-const sqlite = new PrismaClient({
-  datasources: { db: { url: OLD_DB_URL } },
+async function sqliteQuery<T>(sql: string, params: unknown[] = []): Promise<T> {
+  return new Promise((resolve, reject) => {
+    sqlite.all(sql, params, (error: Error | null, rows: T) => {
+      if (error) return reject(error)
+      resolve(rows)
+    })
+  })
+}
+
+async function tableExists(tableName: string): Promise<boolean> {
+  const rows = await sqliteQuery<{ name: string }[]>(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`, [tableName])
+  return rows.length > 0
+}
+
+async function countRows(tableName: string): Promise<number> {
+  if (!(await tableExists(tableName))) return 0
+
+  const rows = await sqliteQuery<{ count: number }[]>(`SELECT COUNT(*) AS count FROM ${escapeIdentifier(tableName)}`)
+  return Number(rows[0]?.count ?? 0)
+}
+
+async function fetchRows(tableName: string): Promise<Record<string, unknown>[]> {
+  if (!(await tableExists(tableName))) return []
+
+  const rows = await sqliteQuery<Record<string, unknown>[]>(`SELECT * FROM ${escapeIdentifier(tableName)}`)
+  return rows.map((row) => {
+    const normalized: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(row)) {
+      normalized[key] = normalizeSqliteValue(key, value)
+    }
+    return normalized
+  })
+}
+
+const pg = new PrismaClient({
+  datasources: { db: { url: PG_URL } },
   log: ['error', 'warn'],
 })
 
@@ -131,15 +211,19 @@ const DRY_RUN = process.env.DRY_RUN === 'true'
 const VERIFY_ONLY = process.argv.includes('--verify')
 
 async function migrateModel(modelName: string): Promise<{ migrated: number; skipped: number; failed: number }> {
-  const sqliteDelegate = (sqlite as any)[modelName]
   const pgDelegate = (pg as any)[modelName]
-  if (!sqliteDelegate || !pgDelegate) {
-    console.warn(`  ! ${modelName}: model not found on one or both clients — skipping`)
+  if (!pgDelegate) {
+    console.warn(`  ! ${modelName}: model not found on Postgres client — skipping`)
+    return { migrated: 0, skipped: 0, failed: 0 }
+  }
+
+  if (!(await tableExists(modelName))) {
+    console.log(`  ✓ ${modelName}: source table not present in legacy SQLite database — skipped`)
     return { migrated: 0, skipped: 0, failed: 0 }
   }
 
   // Count source rows
-  const total = await sqliteDelegate.count()
+  const total = await countRows(modelName)
   if (total === 0) {
     console.log(`  ✓ ${modelName}: 0 rows — skipped`)
     return { migrated: 0, skipped: 0, failed: 0 }
@@ -160,7 +244,7 @@ async function migrateModel(modelName: string): Promise<{ migrated: number; skip
   // Read in batches from SQLite, write to Postgres
   // Note: we don't paginate the SQLite read — for very large tables we could
   // use cursor pagination, but most Kwanza tables are < 100k rows.
-  const rows = await sqliteDelegate.findMany({})
+  const rows = await fetchRows(modelName)
   const toInsert = rows // could filter existing, but createMany with skipDuplicates handles it
 
   let migrated = 0
@@ -204,11 +288,15 @@ async function migrateModel(modelName: string): Promise<{ migrated: number; skip
 }
 
 async function verifyModel(modelName: string): Promise<boolean> {
-  const sqliteDelegate = (sqlite as any)[modelName]
   const pgDelegate = (pg as any)[modelName]
-  if (!sqliteDelegate || !pgDelegate) return true
+  if (!pgDelegate) return true
 
-  const sqliteCount = await sqliteDelegate.count()
+  if (!(await tableExists(modelName))) {
+    console.log(`  ✓ ${modelName}: source table not present in legacy SQLite database — skipped`)
+    return true
+  }
+
+  const sqliteCount = await countRows(modelName)
   const pgCount = await pgDelegate.count()
   if (sqliteCount !== pgCount) {
     console.warn(`  ✗ ${modelName}: SQLite=${sqliteCount}, Postgres=${pgCount} — MISMATCH (${pgCount - sqliteCount > 0 ? '+' : ''}${pgCount - sqliteCount})`)
@@ -241,7 +329,7 @@ async function main() {
     console.log('\n' + '━'.repeat(70))
     console.log(allMatch ? '✓ ALL MODELS MATCH' : '✗ MISMATCHES FOUND — re-run migration to retry')
     console.log('━'.repeat(70))
-    await sqlite.$disconnect()
+    await closeSqliteDatabase()
     await pg.$disconnect()
     process.exit(allMatch ? 0 : 1)
   }
@@ -269,14 +357,25 @@ async function main() {
   // Suggest running verify mode
   console.log('\nNext step: run `npx tsx scripts/migrate-sqlite-to-postgres.ts --verify` to confirm all rows match.')
 
-  await sqlite.$disconnect()
+  await closeSqliteDatabase()
   await pg.$disconnect()
   process.exit(summary.failed > 0 ? 1 : 0)
 }
 
+function closeSqliteDatabase(): Promise<void> {
+  return new Promise((resolve) => {
+    sqlite.close((error) => {
+      if (error) {
+        console.warn('SQLite close warning:', error.message)
+      }
+      resolve()
+    })
+  })
+}
+
 main().catch(async (err) => {
   console.error('FATAL:', err)
-  await sqlite.$disconnect().catch(() => {})
+  await closeSqliteDatabase().catch(() => {})
   await pg.$disconnect().catch(() => {})
   process.exit(1)
 })
