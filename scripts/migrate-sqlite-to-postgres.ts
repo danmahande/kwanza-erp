@@ -10,8 +10,8 @@
  *
  * SAFETY:
  *   - Idempotent: if a row already exists in Postgres (same PK), it's skipped
- *   - Transactional: each model is migrated in its own transaction — if one
- *     fails, the others still commit. You can re-run to retry the failed ones.
+ *   - Batch-based: successful batches commit independently. If one fails, the
+ *     others still commit and the failed rows can be retried on the next run.
  *   - Dry-run mode: set DRY_RUN=true to see what would be migrated without
  *     writing anything.
  *
@@ -209,9 +209,25 @@ const MIGRATION_ORDER = [
 const BATCH_SIZE = 1000
 const DRY_RUN = process.env.DRY_RUN === 'true'
 const VERIFY_ONLY = process.argv.includes('--verify')
+const PRIMARY_KEY_BY_MODEL: Record<string, string> = {
+  CustomerRiskProfile: 'customerContact',
+}
+type PrismaDelegate = {
+  findMany(args?: unknown): Promise<Array<Record<string, unknown>>>
+  createMany(args: unknown): Promise<unknown>
+  create(args: unknown): Promise<unknown>
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function getPrimaryKey(modelName: string): string {
+  return PRIMARY_KEY_BY_MODEL[modelName] ?? 'id'
+}
 
 async function migrateModel(modelName: string): Promise<{ migrated: number; skipped: number; failed: number }> {
-  const pgDelegate = (pg as any)[modelName]
+  const pgDelegate = (pg as unknown as Record<string, PrismaDelegate | undefined>)[modelName]
   if (!pgDelegate) {
     console.warn(`  ! ${modelName}: model not found on Postgres client — skipping`)
     return { migrated: 0, skipped: 0, failed: 0 }
@@ -229,66 +245,62 @@ async function migrateModel(modelName: string): Promise<{ migrated: number; skip
     return { migrated: 0, skipped: 0, failed: 0 }
   }
 
-  // For idempotency, count existing rows in Postgres
-  const existingInPg = await pgDelegate.count()
-  if (existingInPg >= total) {
-    console.log(`  ✓ ${modelName}: ${existingInPg}/${total} already migrated — skipped`)
-    return { migrated: 0, skipped: total, failed: 0 }
-  }
-
-  if (DRY_RUN) {
-    console.log(`  [DRY RUN] ${modelName}: would migrate ${total - existingInPg} rows`)
-    return { migrated: 0, skipped: 0, failed: 0 }
-  }
-
   // Read in batches from SQLite, write to Postgres
   // Note: we don't paginate the SQLite read — for very large tables we could
   // use cursor pagination, but most Kwanza tables are < 100k rows.
   const rows = await fetchRows(modelName)
-  const toInsert = rows // could filter existing, but createMany with skipDuplicates handles it
-
+  const primaryKey = getPrimaryKey(modelName)
   let migrated = 0
+  let skipped = 0
   let failed = 0
-  try {
-    // createMany with skipDuplicates — if a row already exists (idempotent re-run),
-    // it's skipped without error.
-    // Note: Postgres supports createMany with skipDuplicates. SQLite does NOT —
-    // that's one reason we're moving.
-    for (let i = 0; i < toInsert.length; i += BATCH_SIZE) {
-      const batch = toInsert.slice(i, i + BATCH_SIZE)
-      try {
-        await pgDelegate.createMany({
-          data: batch,
-          skipDuplicates: true,
-        })
-        migrated += batch.length
-        if (i % (BATCH_SIZE * 5) === 0 && i > 0) {
-          process.stdout.write(`    ${modelName}: ${i}/${toInsert.length}\r`)
-        }
-      } catch (batchErr: any) {
-        // If the batch fails (e.g. FK constraint from missing parent), try
-        // row-by-row to identify the bad rows
-        console.warn(`    ${modelName}: batch ${i / BATCH_SIZE} failed (${batchErr.message}), retrying row-by-row...`)
-        for (const row of batch) {
-          try {
-            await pgDelegate.createMany({ data: [row], skipDuplicates: true })
-            migrated++
-          } catch {
-            failed++
-          }
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE)
+    const ids = batch.map((row) => String(row[primaryKey]))
+    const existingRows = await pgDelegate.findMany({
+      where: { [primaryKey]: { in: ids } },
+      select: { [primaryKey]: true },
+    })
+    const existingIds = new Set(existingRows.map((row: Record<string, unknown>) => String(row[primaryKey])))
+    const pendingRows = batch.filter((row) => !existingIds.has(String(row[primaryKey])))
+    skipped += batch.length - pendingRows.length
+
+    if (DRY_RUN) {
+      migrated += pendingRows.length
+      continue
+    }
+
+    if (pendingRows.length === 0) continue
+
+    try {
+      // Do not use skipDuplicates here: a conflict on a different unique
+      // field must be visible instead of being silently counted as migrated.
+      await pgDelegate.createMany({ data: pendingRows })
+      migrated += pendingRows.length
+    } catch (batchErr: unknown) {
+      // Identify bad rows individually after a batch failure, such as an FK
+      // violation or a conflict on a non-primary unique field.
+      console.warn(`    ${modelName}: batch ${i / BATCH_SIZE} failed (${getErrorMessage(batchErr)}), retrying row-by-row...`)
+      for (const row of pendingRows) {
+        try {
+          await pgDelegate.create({ data: row })
+          migrated++
+        } catch (rowErr: unknown) {
+          failed++
+          console.warn(`    ${modelName}: row ${String(row[primaryKey])} failed (${getErrorMessage(rowErr)})`)
         }
       }
     }
-    console.log(`  ✓ ${modelName}: ${migrated} migrated, ${failed} failed (of ${total} total)`)
-  } catch (err: any) {
-    console.error(`  ✗ ${modelName}: ${err.message}`)
-    failed = toInsert.length - migrated
+
+    if (i % (BATCH_SIZE * 5) === 0 && i > 0) {
+      process.stdout.write(`    ${modelName}: ${i}/${rows.length}\r`)
+    }
   }
-  return { migrated, skipped: 0, failed }
+  console.log(`  ✓ ${modelName}: ${migrated} migrated, ${skipped} skipped, ${failed} failed (of ${total} total)`)
+  return { migrated, skipped, failed }
 }
 
 async function verifyModel(modelName: string): Promise<boolean> {
-  const pgDelegate = (pg as any)[modelName]
+  const pgDelegate = (pg as unknown as Record<string, PrismaDelegate | undefined>)[modelName]
   if (!pgDelegate) return true
 
   if (!(await tableExists(modelName))) {
@@ -296,13 +308,18 @@ async function verifyModel(modelName: string): Promise<boolean> {
     return true
   }
 
-  const sqliteCount = await countRows(modelName)
-  const pgCount = await pgDelegate.count()
-  if (sqliteCount !== pgCount) {
-    console.warn(`  ✗ ${modelName}: SQLite=${sqliteCount}, Postgres=${pgCount} — MISMATCH (${pgCount - sqliteCount > 0 ? '+' : ''}${pgCount - sqliteCount})`)
+  const sqliteRows = await fetchRows(modelName)
+  const primaryKey = getPrimaryKey(modelName)
+  const sqliteIds = new Set(sqliteRows.map((row) => String(row[primaryKey])))
+  const pgRows = await pgDelegate.findMany({ select: { [primaryKey]: true } })
+  const pgIds = new Set<string>(pgRows.map((row: Record<string, unknown>) => String(row[primaryKey])))
+  const missingInPg = [...sqliteIds].filter((id) => !pgIds.has(id))
+  const extraInPg = [...pgIds].filter((id) => !sqliteIds.has(id))
+  if (missingInPg.length > 0 || extraInPg.length > 0) {
+    console.warn(`  ✗ ${modelName}: ${missingInPg.length} source IDs missing, ${extraInPg.length} unexpected Postgres IDs`)
     return false
   }
-  console.log(`  ✓ ${modelName}: ${sqliteCount} rows match`)
+  console.log(`  ✓ ${modelName}: ${sqliteIds.size} IDs match`)
   return true
 }
 

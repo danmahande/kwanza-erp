@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

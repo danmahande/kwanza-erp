@@ -3,8 +3,6 @@
 import { db } from '../src/lib/db'
 import {
   computeProductValuation,
-  holdingCostBreakdown,
-  abcClassify,
   DEFAULT_SETTINGS,
 } from '../src/lib/inventory-valuation'
 

@@ -2,7 +2,7 @@
 
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { RefreshCw, Plus, Search } from 'lucide-react'
+import { Plus, Search } from 'lucide-react'
 import { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 

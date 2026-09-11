@@ -7,8 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
   RefreshCw, Shield, AlertTriangle, Ban, Settings as SettingsIcon,
-  FileText, Users, Plus, X, CheckCircle2, ChevronDown, ChevronRight,
-  Search, Trash2, UserCog, Scale, ArrowLeft as BackIcon,
+  FileText, Users, Plus, X, CheckCircle2, Trash2, UserCog, Scale, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'

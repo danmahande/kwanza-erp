@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { getAllowedTransitions, getNextMainStep, getStage } from '@/lib/workflow'
+import { getNextMainStep, getStage } from '@/lib/workflow'
 import { logAudit } from '@/lib/audit'
 import { requireAuth, type AuthUser } from '@/lib/auth-api'
 import { notifyOrderDispatched, notifyOrderDelivered, notifyOrderFailed } from '@/lib/notifications'

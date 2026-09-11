@@ -4,16 +4,12 @@ import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
-  Search, Pencil, Trash2, Package, AlertTriangle,
-  BarChart3, Filter, X, Upload, CheckSquare, Square,
-  ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight,
-  Loader2, Building2, SlidersHorizontal, Warehouse,
+  Search, Package, AlertTriangle, Filter, X, Upload, CheckSquare, Square, ChevronLeft, ChevronRight,
+  Loader2, Building2, SlidersHorizontal,
   ArrowDownRight, ArrowUpRight, RotateCcw, TrendingDown,
   HelpCircle, Layers, ArrowLeft as BackIcon,
 } from 'lucide-react'
@@ -21,8 +17,7 @@ import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import PageTransition from '@/components/shared/PageTransition'
-import ViewToggle from '@/components/shared/ViewToggle'
-import DataTable, { type Column } from '@/components/shared/DataTable'
+import { type Column } from '@/components/shared/DataTable'
 
 // ── Types ──
 interface Merchant { id: string; merchantId: string; businessName: string }

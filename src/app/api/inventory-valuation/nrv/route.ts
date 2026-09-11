@@ -115,7 +115,13 @@ export async function POST(req: NextRequest) {
       const original = await db.nrvWriteDown.findUnique({ where: { id: body.reversesId } })
       if (!original) return NextResponse.json({ error: 'Original write-down not found' }, { status: 404 })
       if (original.kind !== 'write_down') return NextResponse.json({ error: 'Can only reverse write-downs, not reversals' }, { status: 400 })
-      if (original.status === 'reversed') return NextResponse.json({ error: 'Original write-down is already fully reversed' }, { status: 400 })
+
+      const priorReversals = await db.nrvWriteDown.aggregate({
+        where: { reversesId: original.id, kind: 'reversal', status: 'active' },
+        _sum: { totalAmount: true },
+      })
+      const remainingBalance = Math.max(0, original.totalAmount - (priorReversals._sum.totalAmount ?? 0))
+      if (remainingBalance <= 0) return NextResponse.json({ error: 'Original write-down is already fully reversed' }, { status: 400 })
 
       const qty: number = parseInt(body.qty ?? original.qty)
       const nrvPerUnitNew: number = parseFloat(body.nrvPerUnitNew)
@@ -124,9 +130,9 @@ export async function POST(req: NextRequest) {
       // Reversal amount = min(recovered amount, original write-down amount)
       // Recovered amount = qty × (new NRV − original NRV), capped at original.amountPerUnit × qty
       const recoveredPerUnit = Math.max(0, nrvPerUnitNew - original.nrvPerUnit)
-      const reversalPerUnit = Math.min(recoveredPerUnit, original.amountPerUnit)
       const reversalQty = Math.min(qty, original.qty)
-      const totalReversalAmount = reversalPerUnit * reversalQty
+      const totalReversalAmount = Math.min(recoveredPerUnit * reversalQty, remainingBalance)
+      const reversalPerUnit = reversalQty > 0 ? totalReversalAmount / reversalQty : 0
 
       if (totalReversalAmount <= 0) {
         return NextResponse.json(
@@ -154,8 +160,8 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      // Mark original as reversed (full reversal — partial not yet supported; could be extended)
-      if (reversalQty >= original.qty) {
+      // Mark original as reversed only when the cumulative balance is closed.
+      if (totalReversalAmount >= remainingBalance) {
         await db.nrvWriteDown.update({
           where: { id: original.id },
           data: { status: 'reversed' },

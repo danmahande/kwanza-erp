@@ -5,24 +5,21 @@ import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  PackageX, Search, Plus, CheckCircle2, XCircle, RotateCcw, Cpu, Filter, ChevronDown, ChevronRight,
-  HelpCircle, ArrowLeft as BackIcon,
+  PackageX, Plus, CheckCircle2, Cpu, Filter, ChevronDown, ChevronRight, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
-import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import PageTransition from '@/components/shared/PageTransition'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import {
-  WorkflowActions, NextStepBanner, StatusStepper, WorkflowStatusBadge,
+  WorkflowActions, NextStepBanner, StatusStepper,
 } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
 

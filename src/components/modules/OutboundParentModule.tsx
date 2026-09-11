@@ -6,8 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
-  Plus, Search, RefreshCw, Package, Boxes, Truck, CheckCircle2,
-  AlertTriangle, ChevronRight, X, Inbox, Upload, Layers, ShieldAlert,
+  Plus, RefreshCw, Package, Boxes, Truck, CheckCircle2, ChevronRight, Inbox, Upload, Layers, ShieldAlert,
   HelpCircle, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -15,7 +14,7 @@ import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import PageTransition from '@/components/shared/PageTransition'
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialog, AlertDialogAction, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'

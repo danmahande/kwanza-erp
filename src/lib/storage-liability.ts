@@ -118,6 +118,30 @@ export async function runDailyStorageAccrual(asOfDate: Date = new Date()) {
       },
     })
 
+    // Create one reviewable charge per liability/day. The deterministic ID
+    // makes rerunning the cron safe and gives finance an approval trail before
+    // the amount reaches a merchant statement.
+    const period = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`
+    const chargeId = `STORAGE-${liability.id}-${today.toISOString().slice(0, 10)}`
+    const existingCharge = await db.charge.findUnique({ where: { chargeId } })
+    if (!existingCharge) {
+      await db.charge.create({
+        data: {
+          chargeId,
+          merchantId: liability.merchantId,
+          merchantName: liability.merchantName,
+          chargeType: 'storage',
+          amount: charge,
+          description: `Storage: ${liability.unitsRemaining} units × ${liability.ratePerUnitPerDay} UGX/day (${liability.productName})`,
+          sourceType: 'storage_liability',
+          sourceId: liability.id,
+          period,
+          status: 'pending',
+          recordedBy: 'system:storage-accrual',
+        },
+      })
+    }
+
     totalAccrued += charge
     updated += 1
   }

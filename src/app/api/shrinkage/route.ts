@@ -211,8 +211,10 @@ export async function PUT(req: NextRequest) {
     // ═══════════════════════════════════════════════════════════════
 
     const shrinkageRecord = await db.$transaction(async (tx) => {
-      // If resolving with debitMerchant=true, increment the merchant's shrinkage total
-      if (data.status === 'resolved' && (data.debitMerchant || body.debitMerchant) && existing.merchantId && existing.totalValue) {
+      // Increment the merchant total only on the transition into a debited
+      // resolved state. Re-saving an already settled record must be idempotent.
+      const shouldDebit = data.status === 'resolved' && (data.debitMerchant || body.debitMerchant) && !existing.debitMerchant
+      if (shouldDebit && existing.merchantId && existing.totalValue) {
         await tx.merchant.update({
           where: { merchantId: existing.merchantId },
           data: {

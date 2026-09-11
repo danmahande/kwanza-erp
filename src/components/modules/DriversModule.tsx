@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,11 +9,9 @@ import { Badge } from '@/components/ui/badge'
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import {
-  Search, Truck, UserCheck, UserX, Phone,
-  Car, Shield, ShieldAlert, Loader2, Package,
-  X, CheckSquare, Upload, Trash2, TrendingUp,
-  Banknote, AlertTriangle, Bell, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
+import { Truck, UserCheck, UserX, Phone, ShieldAlert, Loader2, Package,
+  X, Upload, Trash2, TrendingUp,
+  Banknote,
   MessageSquare, Plus, CheckCircle2, HelpCircle, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'

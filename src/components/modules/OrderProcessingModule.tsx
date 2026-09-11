@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  ShoppingCart, Search, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight, Upload,
+  ShoppingCart, Plus, Printer, Download, Trash2, Filter, ChevronDown, ChevronRight, Upload,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
@@ -19,7 +19,7 @@ import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import { InfoTip } from '@/components/ui/info-tip'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
 import {
-  WorkflowActions, NextStepBanner, StatusStepper, WorkflowStatusBadge,
+  WorkflowActions, NextStepBanner, StatusStepper,
 } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
 

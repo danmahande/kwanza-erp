@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { hash } from 'bcryptjs'
+import { getRegionalAccountingProfile } from '../src/lib/regional-catalog'
 
 const db = new PrismaClient()
 
@@ -22,6 +23,43 @@ async function main() {
     create: { name: 'Warehouse Manager', email: 'warehouse@kwanza.com', password: warehousePassword, role: 'warehouse', isActive: true },
   })
   console.log('Users created')
+
+  // Seed Kwanza as the demo tenant. Regional values remain review_required so
+  // a real tenant must confirm tax and accounting treatment before activation.
+  const regionalProfile = getRegionalAccountingProfile('UG')
+  if (!regionalProfile) throw new Error('Uganda regional profile is missing')
+  const tenant = await db.tenant.upsert({
+    where: { slug: 'kwanza-demo' },
+    update: {},
+    create: {
+      slug: 'kwanza-demo',
+      name: 'Kwanza Demo',
+      countryCode: regionalProfile.countryCode,
+      currencyCode: regionalProfile.currencyCode,
+      currencyName: regionalProfile.currencyName,
+      taxRegime: regionalProfile.taxRegime,
+      standardTaxRate: regionalProfile.standardTaxRate,
+      fiscalYearStartMonth: regionalProfile.fiscalYearStartMonth,
+      accountingFramework: regionalProfile.accountingFramework,
+      inventoryCostingMethod: regionalProfile.inventoryCostingMethod,
+      revenueRecognitionPolicy: regionalProfile.revenueRecognitionPolicy,
+    },
+  })
+  await db.tenantTaxRate.deleteMany({ where: { tenantId: tenant.id } })
+  await db.tenantTaxRate.createMany({
+    data: regionalProfile.taxRates.map((taxRate) => ({
+      tenantId: tenant.id,
+      code: taxRate.code,
+      name: taxRate.name,
+      rate: taxRate.rate,
+      inclusive: taxRate.inclusive,
+      effectiveFrom: new Date('2026-01-01'),
+      sourceUrl: regionalProfile.sources[0]?.url,
+      sourceCheckedAt: new Date(regionalProfile.sources[0]?.checkedAt ?? new Date()),
+      status: 'review_required',
+    })),
+  })
+  console.log('Demo tenant regional profile created')
 
   // Create Merchants (Vendors) — matching real vendor IDs V001-V010
   const merchants = [

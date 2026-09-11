@@ -3,6 +3,7 @@ import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/auth-api'
 import {
   computeProductValuation,
+  fifoIssueCost,
   holdingCostBreakdown,
   abcClassify,
   type ValuationSettings,
@@ -106,29 +107,13 @@ export async function GET(req: NextRequest) {
     // Delivered outbound (for turnover / annual demand)
     const delivered = await db.outboundRecord.findMany({
       where: { status: 'delivered', deliveredAt: { gte: trailingStart } },
-      select: { productId: true, qty: true, saleAmount: true, unitSellingPrice: true },
-    })
-
-    // All outbound (for FIFO consumption)
-    const allOutbound = await db.outboundRecord.findMany({
-      where: { productId: { in: Array.from(productIdSet) } },
-      select: { productId: true, qty: true },
+      select: { productId: true, qty: true, deliveredAt: true, saleAmount: true },
     })
 
     // Shrinkage (trailing 365 days — for usage variance)
     const shrinkageTrailing = await db.shrinkageRecord.findMany({
       where: { createdAt: { gte: trailingStart } },
       select: { productId: true, qty: true, unitCost: true },
-    })
-
-    // All shrinkage (for FIFO consumption)
-    const allShrinkage = await db.shrinkageRecord.findMany({
-      select: { productId: true, qty: true },
-    })
-
-    // RTV (returns to vendor — also consumes from stock)
-    const allRtv = await db.rTVRecord.findMany({
-      select: { productId: true, qty: true },
     })
 
     // ── 5. NRV register ──
@@ -145,32 +130,16 @@ export async function GET(req: NextRequest) {
       inboundsByProduct.set(r.productId, arr)
     }
 
-    const outboundQtyByProduct = new Map<string, number>()
-    for (const r of allOutbound) {
-      outboundQtyByProduct.set(r.productId, (outboundQtyByProduct.get(r.productId) || 0) + r.qty)
-    }
-    const shrinkageAllByProduct = new Map<string, number>()
-    for (const r of allShrinkage) {
-      shrinkageAllByProduct.set(r.productId, (shrinkageAllByProduct.get(r.productId) || 0) + r.qty)
-    }
-    for (const r of allRtv) {
-      shrinkageAllByProduct.set(r.productId, (shrinkageAllByProduct.get(r.productId) || 0) + r.qty)
-    }
-    // Total consumption = outbound + shrinkage + RTV
-    const consumptionByProduct = new Map<string, number>()
-    for (const [pid, oq] of outboundQtyByProduct) consumptionByProduct.set(pid, oq)
-    for (const [pid, sq] of shrinkageAllByProduct) consumptionByProduct.set(pid, (consumptionByProduct.get(pid) || 0) + sq)
-
     const shrinkageTrailingByProduct = new Map<string, number>()
     for (const r of shrinkageTrailing) {
       shrinkageTrailingByProduct.set(r.productId, (shrinkageTrailingByProduct.get(r.productId) || 0) + r.qty)
     }
 
-    const deliveredByProduct = new Map<string, { qty: number; cogs: number }>()
+    const deliveredByProduct = new Map<string, { qty: number; issues: { qty: number; occurredAt: Date }[] }>()
     for (const r of delivered) {
-      const cur = deliveredByProduct.get(r.productId) || { qty: 0, cogs: 0 }
+      const cur = deliveredByProduct.get(r.productId) || { qty: 0, issues: [] }
       cur.qty += r.qty
-      cur.cogs += r.saleAmount ?? (r.qty * (r.unitSellingPrice ?? 0))
+      if (r.deliveredAt) cur.issues.push({ qty: r.qty, occurredAt: r.deliveredAt })
       deliveredByProduct.set(r.productId, cur)
     }
 
@@ -191,11 +160,12 @@ export async function GET(req: NextRequest) {
     // ── 8. Compute per-product valuation ──
     const productValuations = products.map(p => {
       const inbounds = inboundsByProduct.get(p.productId) || []
-      const consumption = consumptionByProduct.get(p.productId) || 0
+      const totalInbound = inbounds.reduce((sum, inbound) => sum + inbound.qtyIn, 0)
+      const consumption = Math.max(0, totalInbound - p.currentStock)
       const shrinkageTrailingQty = shrinkageTrailingByProduct.get(p.productId) || 0
       const delivered = deliveredByProduct.get(p.productId)
       const deliveredQty = delivered?.qty ?? 0
-      const cogsTrailing = deliveredQty * p.unitCost
+      const cogsTrailing = fifoIssueCost({ inbounds, issues: delivered?.issues ?? [] })
       const nrvRegister = nrvByProduct.get(p.productId) || []
       return computeProductValuation({
         p,
@@ -247,7 +217,10 @@ export async function GET(req: NextRequest) {
     let cogsTotal = 0
     for (const p of products) {
       const d = deliveredByProduct.get(p.productId)
-      if (d) cogsTotal += d.qty * p.unitCost
+      if (d) {
+        const inbounds = inboundsByProduct.get(p.productId) || []
+        cogsTotal += fifoIssueCost({ inbounds, issues: d.issues })
+      }
     }
 
     const avgInvValue = totalInventoryAtCost / 2 // (0 + closing) / 2 — opening snapshot unavailable

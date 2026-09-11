@@ -4,19 +4,18 @@ import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 import {
-  ArrowUpRight, Search, Download, AlertTriangle, ChevronDown, ChevronRight,
-  Boxes, ClipboardList, FileText, Layers, CheckCircle2, X, Filter,
+  ArrowUpRight, AlertTriangle, ChevronDown, ChevronRight,
+  Boxes, ClipboardList, FileText, Filter,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import { InfoTip } from '@/components/ui/info-tip'
-import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import { formatCurrency } from '@/lib/currency'
 import {
-  WorkflowActions, NextStepBanner, StatusStepper, WorkflowStatusBadge,
+  WorkflowActions, NextStepBanner, StatusStepper,
 } from '@/components/shared/workflow'
-import { getMainStages, getStage } from '@/lib/workflow'
+import { getStage } from '@/lib/workflow'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,

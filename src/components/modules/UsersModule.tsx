@@ -11,7 +11,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Shield, Users as UsersIcon, UserCheck, UserX, UserMinus, Pencil, Calendar, Lock, HelpCircle, Trash2, Plus, ArrowLeft as BackIcon } from 'lucide-react'
+import { Users as UsersIcon, UserCheck, UserX, Lock, HelpCircle, Trash2, Plus, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import PageTransition from '@/components/shared/PageTransition'

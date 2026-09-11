@@ -5,10 +5,9 @@ import { AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
-  FileText, Download, Search, Plus, Wallet, CheckCircle2, Clock,
-  Send, Check, X, AlertTriangle, Filter, ArrowLeft as BackIcon,
+  FileText, Download, Plus,
+  Send, Check, X, Filter, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'

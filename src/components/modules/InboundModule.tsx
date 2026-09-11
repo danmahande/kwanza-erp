@@ -13,17 +13,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import {
   Search, ArrowDownRight, Inbox, BarChart3,
   MapPin, DollarSign, Package, Calendar, Filter, X,
-  Loader2, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight,
-  CheckSquare, Square, Upload, Trash2, User, Building2, Clock,
+  Loader2, ChevronRight,
+  CheckSquare, Square, Trash2, User, Building2, Clock,
   HelpCircle, Layers, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
+import { OpsHeader } from '@/components/shared/ops-ui'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import PageTransition from '@/components/shared/PageTransition'
-import ViewToggle from '@/components/shared/ViewToggle'
 import DataTable, { type Column } from '@/components/shared/DataTable'
-import { WorkflowActions, NextStepBanner, StatusStepper } from '@/components/shared/workflow'
 import { getStage } from '@/lib/workflow'
 
 const MODULE = 'inbound'

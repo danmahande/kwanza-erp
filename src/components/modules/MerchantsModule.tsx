@@ -9,13 +9,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Search, Filter, ChevronRight,
-  AlertTriangle, Phone, Building2, Pause, Play,
+import { Filter, ChevronRight, Phone, Building2, Pause, Play,
   Plus, HelpCircle, Settings as SettingsIcon,
   FileText, Calendar, X, ArrowRight, ArrowLeft, MapPin,
   Crown, AlertCircle, BarChart3, ArrowLeft as BackIcon, Loader2,
-  TrendingUp, TrendingDown, Layers, Wallet, Clock,
+  TrendingUp, Layers, Wallet, Clock,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import DetailSlideOver from '@/components/shared/DetailSlideOver'

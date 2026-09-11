@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Package, TrendingUp, Wallet, FileText, Truck, AlertTriangle } from 'lucide-react'
+import { Package, FileText, Truck, AlertTriangle } from 'lucide-react'
 
 /**
  * B: Merchant Self-Service Portal

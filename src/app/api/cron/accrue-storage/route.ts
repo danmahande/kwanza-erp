@@ -19,13 +19,15 @@ import { runDailyStorageAccrual } from '@/lib/storage-liability'
  */
 export async function POST(req: NextRequest) {
   try {
-    // Check cron secret if configured
+    // Storage accrual changes merchant charges, so fail closed if the
+    // deployment has not configured its scheduler secret.
     const cronSecret = process.env.CRON_SECRET
-    if (cronSecret) {
-      const provided = req.headers.get('x-cron-secret')
-      if (provided !== cronSecret) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-      }
+    if (!cronSecret) {
+      return NextResponse.json({ error: 'Storage accrual is not configured' }, { status: 503 })
+    }
+    const provided = req.headers.get('x-cron-secret')
+    if (provided !== cronSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const result = await runDailyStorageAccrual()

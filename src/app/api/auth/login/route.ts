@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
-import { compare, hash } from 'bcryptjs'
+import { compare } from 'bcryptjs'
 import { randomBytes } from 'crypto'
 
 export async function POST(req: NextRequest) {

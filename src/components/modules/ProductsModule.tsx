@@ -9,8 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Search, Package, Plus, Trash2, Edit3, AlertTriangle,
+import { Package, Plus, Trash2, Edit3, AlertTriangle,
   HelpCircle, Layers, ArrowLeft as BackIcon, ChevronRight, Filter, Calculator,
 } from 'lucide-react'
 import { toast } from 'sonner'

@@ -9,10 +9,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  Search, User, Upload, HelpCircle, ShieldAlert, ShoppingBag,
-  Phone, Mail, MapPin, Calendar, TrendingUp, AlertTriangle, CheckCircle2,
-  Edit, Trash2, X, ArrowLeft as BackIcon,
+import { User, Upload, HelpCircle, ShieldAlert, ShoppingBag,
+  Phone, Mail, MapPin, Calendar, TrendingUp,
+  Edit, Trash2, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'

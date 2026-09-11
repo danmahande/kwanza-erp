@@ -9,11 +9,10 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Trash2, Filter, CreditCard, Banknote, Calendar, Upload, Plus, ArrowLeft as BackIcon } from 'lucide-react'
+import { Trash2, Filter, Calendar, Upload, Plus, ArrowLeft as BackIcon } from 'lucide-react'
 import { toast } from 'sonner'
-import DetailSlideOver from '@/components/shared/DetailSlideOver'
 import PageTransition from '@/components/shared/PageTransition'
-import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'
+import { formatCurrencyCompact } from '@/lib/currency'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'
 
 interface Merchant { id: string; merchantId: string; businessName: string }

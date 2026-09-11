@@ -5,7 +5,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -13,14 +12,13 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import {
-  Search, Settings as SettingsIcon, Plus, TrendingDown, TrendingUp, Calculator,
-  AlertTriangle, CheckCircle2, XCircle, ArrowDownRight, ArrowUpRight,
-  Download, Loader2, HelpCircle, Sliders, RefreshCw,
+import { Settings as SettingsIcon, Plus, TrendingDown,
+  AlertTriangle, CheckCircle2,
+  Download, Loader2, Sliders, RefreshCw,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  OpsHeader, KpiRibbon, DenseTable, DenseTh, DenseTd, AnimatedDenseTr, MiniTable,
+  OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr,
 } from '@/components/shared/ops-ui'
 
 // ── Types ──
@@ -514,10 +512,10 @@ export default function InventoryValuationModule() {
       }
       const json = await res.json()
       setData(json)
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error(e)
       // Surface the actual cause — the API gives specific hints for stale Prisma client / missing tables
-      const msg = e?.message || 'Unknown error'
+      const msg = e instanceof Error ? e.message : 'Unknown error'
       toast.error(msg.length > 200 ? msg.slice(0, 200) + '…' : msg)
       // Also show the full message in an inline error panel so the user can read it
       setLoadError(msg)
@@ -542,8 +540,8 @@ export default function InventoryValuationModule() {
       }
       toast.success('Valuation settings updated')
       await load()
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to save settings')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save settings')
     }
   }
 
@@ -561,8 +559,8 @@ export default function InventoryValuationModule() {
       }
       toast.success(`Costing method changed to ${method.toUpperCase()}`)
       await load()
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to change costing method')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to change costing method')
     }
   }
 
@@ -580,8 +578,8 @@ export default function InventoryValuationModule() {
       }
       toast.success('NRV write-down recorded (IAS 2 §9)')
       await load()
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to record write-down')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to record write-down')
     }
   }
 
@@ -609,8 +607,8 @@ export default function InventoryValuationModule() {
       }
       toast.success('NRV reversal recorded (IAS 2 §33 — required under IFRS)')
       await load()
-    } catch (e: any) {
-      toast.error(e.message || 'Failed to record reversal')
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : 'Failed to record reversal')
     }
   }
 

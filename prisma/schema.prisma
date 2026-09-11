@@ -13,23 +13,69 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// A customer organization using the platform. Kwanza is a seeded demo tenant.
+model Tenant {
+  id                       String   @id @default(cuid())
+  slug                     String   @unique
+  name                     String
+  countryCode              String
+  currencyCode             String
+  currencyName             String
+  taxRegime                String
+  standardTaxRate          Float
+  fiscalYearStartMonth     Int      @default(1)
+  accountingFramework      String   @default("IFRS")
+  inventoryCostingMethod   String   @default("fifo")
+  revenueRecognitionPolicy String   @default("delivery")
+  policyVersion            Int      @default(1)
+  policyStatus             String   @default("review_required")
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  taxRates TenantTaxRate[]
+
+  @@index([countryCode])
+}
+
+/// Tenant-specific tax rates copied from the selected regional defaults and
+/// editable only through an approved tenant configuration workflow.
+model TenantTaxRate {
+  id              String    @id @default(cuid())
+  tenantId        String
+  code            String
+  name            String
+  rate            Float
+  inclusive       Boolean   @default(false)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  sourceUrl       String?
+  sourceCheckedAt DateTime?
+  status          String    @default("review_required")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code, effectiveFrom])
+  @@index([tenantId, status])
+}
+
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  password      String
-  role          String    @default("viewer")
-  isActive      Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("viewer")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Merchant {
-  id              String            @id @default(cuid())
-  merchantId      String            @unique
-  businessName    String
-  contact         String
-  email           String
+  id                      String    @id @default(cuid())
+  merchantId              String    @unique
+  businessName            String
+  contact                 String
+  email                   String
   /// How goods move for this merchant:
   ///   "self-delivery" — merchant fulfils orders themselves using their own drivers / resources;
   ///                     we do NOT touch the stock or the delivery.
@@ -37,49 +83,49 @@ model Merchant {
   ///                     we receive it and fulfil the order from that just-in-time delivery.
   ///   "consignment"   — supplier places stock in our warehouse but retains ownership until sale;
   ///                     we store it and fulfil orders as they come.
-  deliveryType    String?           @default("self-delivery")
+  deliveryType            String?   @default("self-delivery")
   /// Currency for all monetary values for this merchant (default UGX for Uganda)
-  currency        String            @default("UGX")
+  currency                String    @default("UGX")
   /// Onboarding fields
-  taxId           String?
-  address         String?
-  bankName        String?
-  bankAccount     String?
-  contactPerson   String?
-  altPhone        String?
+  taxId                   String?
+  address                 String?
+  bankName                String?
+  bankAccount             String?
+  contactPerson           String?
+  altPhone                String?
   /// Payment terms: "net_7", "net_14", "net_30", "net_60", "prepaid", "cod"
-  paymentTerms    String?
+  paymentTerms            String?
   /// JSON array of preferred communication channels: ["whatsapp", "email", "phone"]
-  communicationChannels String?
+  communicationChannels   String?
   /// JSON array of delivery addresses (for self-delivery + drop-ship merchants):
   /// [{"label": "Main Warehouse", "address": "Plot 12, Kampala Rd", "type": "stock_delivery"}]
-  deliveryAddresses String?
+  deliveryAddresses       String?
   /// JSON array of product category IDs this merchant supplies: ["Produce", "Dairy"]
-  productCategories  String?
-  contractStart   DateTime?
-  contractEnd     DateTime?
-  notes           String?
+  productCategories       String?
+  contractStart           DateTime?
+  contractEnd             DateTime?
+  notes                   String?
   /// Cumulative values for reporting
-  totalInboundValue      Float      @default(0)
-  totalSalesValue        Float      @default(0)
-  totalShrinkageValue    Float      @default(0)
-  totalReturnValue       Float      @default(0)
-  expectedPayment        Float      @default(0)
-  actualPayment          Float      @default(0)
-  pendingPayment         Float      @default(0)
+  totalInboundValue       Float     @default(0)
+  totalSalesValue         Float     @default(0)
+  totalShrinkageValue     Float     @default(0)
+  totalReturnValue        Float     @default(0)
+  expectedPayment         Float     @default(0)
+  actualPayment           Float     @default(0)
+  pendingPayment          Float     @default(0)
   /// Outstanding storage liability (accrued daily, settled on statement generation)
   storageLiabilityBalance Float     @default(0)
   /// Operational hold — when true, blocks new inbounds/orders for this merchant.
   /// Lightweight replacement for formal credit control. Set manually by supervisor
   /// when merchant has overdue statement balance or service dispute.
-  isOnHold        Boolean           @default(false)
-  holdReason      String?
-  holdSetAt       DateTime?
-  holdSetBy       String?
-  isActive        Boolean           @default(true)
-  createdBy       String
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  isOnHold                Boolean   @default(false)
+  holdReason              String?
+  holdSetAt               DateTime?
+  holdSetBy               String?
+  isActive                Boolean   @default(true)
+  createdBy               String
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   @@index([isActive])
   @@index([isOnHold])
@@ -88,20 +134,20 @@ model Merchant {
 /// Merchant communication log — calls, WhatsApp, emails, visits, meetings.
 /// Fills the gap between system events (activity timeline) and human-to-human contact.
 model MerchantCommunication {
-  id              String    @id @default(cuid())
-  merchantId      String
+  id         String    @id @default(cuid())
+  merchantId String
   /// Type of contact: call | whatsapp | email | visit | meeting | other
-  type            String    @default("call")
+  type       String    @default("call")
   /// Direction: inbound | outbound
-  direction       String    @default("outbound")
-  subject         String
-  notes           String?
+  direction  String    @default("outbound")
+  subject    String
+  notes      String?
   /// Who on our side made/received the contact
-  recordedBy      String
+  recordedBy String
   /// Optional follow-up date — surfaces in "follow-ups due" banner
-  followUpAt      DateTime?
-  isResolved      Boolean   @default(true)
-  createdAt       DateTime  @default(now())
+  followUpAt DateTime?
+  isResolved Boolean   @default(true)
+  createdAt  DateTime  @default(now())
 
   @@index([merchantId])
   @@index([followUpAt])
@@ -142,40 +188,40 @@ model DriverCommunication {
 /// All amounts in the merchant's currency (UGX by default).
 /// NOTE: no per-pallet storage fee — storage is charged per unit per day only.
 model MerchantRateCard {
-  id                    String   @id @default(cuid())
-  merchantId            String   // references Merchant.merchantId
+  id                       String    @id @default(cuid())
+  merchantId               String // references Merchant.merchantId
   // ── Receiving (ShipBob-style: flat first hours + hourly after) ──
-  receivingFlatFee          Float @default(0)
-  receivingFlatHours        Float @default(2)
-  receivingHourlyAfter      Float @default(0)
-  inboundReceivingPerUnit   Float @default(0)
+  receivingFlatFee         Float     @default(0)
+  receivingFlatHours       Float     @default(2)
+  receivingHourlyAfter     Float     @default(0)
+  inboundReceivingPerUnit  Float     @default(0)
   // ── Storage (ShipBob-style: bin/shelf/pallet monthly) ──
-  storagePerBinMonth        Float @default(0)
-  storagePerShelfMonth      Float @default(0)
-  storagePerPalletMonth     Float @default(0)
-  storagePerUnitPerDay      Float @default(0)
+  storagePerBinMonth       Float     @default(0)
+  storagePerShelfMonth     Float     @default(0)
+  storagePerPalletMonth    Float     @default(0)
+  storagePerUnitPerDay     Float     @default(0)
   // ── Pick & Pack (ShipBob-style: first items included + per additional) ──
-  pickFirstItemsIncluded    Int   @default(4)
-  pickPerAdditionalItem     Float @default(0)
-  packPerOrder              Float @default(0)
-  pickPerUnit               Float @default(0)
+  pickFirstItemsIncluded   Int       @default(4)
+  pickPerAdditionalItem    Float     @default(0)
+  packPerOrder             Float     @default(0)
+  pickPerUnit              Float     @default(0)
   // ── Fulfillment ──
-  fulfillmentFeePerOrder    Float @default(0)
-  fulfillmentMinimumFee     Float @default(0)
+  fulfillmentFeePerOrder   Float     @default(0)
+  fulfillmentMinimumFee    Float     @default(0)
   // ── Returns ──
-  returnProcessingPerUnit   Float @default(0)
-  returnsPerOrder           Float @default(0)
+  returnProcessingPerUnit  Float     @default(0)
+  returnsPerOrder          Float     @default(0)
   // ── Commission ──
-  commissionPercent         Float @default(0)
+  commissionPercent        Float     @default(0)
   // ── COD-specific (Kwanza differentiator) ──
-  codRemittanceFeePerOrder  Float @default(0)
-  codShortfallPenalty       Float @default(0)
+  codRemittanceFeePerOrder Float     @default(0)
+  codShortfallPenalty      Float     @default(0)
   // ── Metadata ──
-  validFrom              DateTime  @default(now())
-  validTo                DateTime?
-  isActive               Boolean   @default(true)
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  validFrom                DateTime  @default(now())
+  validTo                  DateTime?
+  isActive                 Boolean   @default(true)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
 
   @@index([merchantId])
 }
@@ -234,42 +280,43 @@ model DriverBanking {
 /// Monthly merchant statement — the primary deliverable to merchants.
 /// Workflow 5: generated monthly, contains all line items, PDF + Excel versions.
 model MerchantStatement {
-  id                String    @id @default(cuid())
-  statementId       String    @unique
-  merchantId        String
-  merchantName      String
-  period            String
-  openingBalance    Float     @default(0)
-  inboundFees       Float     @default(0)
-  storageFees       Float     @default(0)
-  outboundFees      Float     @default(0)
-  returnFees        Float     @default(0)
-  shrinkageDebits   Float     @default(0)
-  codCollected      Float     @default(0)
-  codFees           Float     @default(0)
-  commissions       Float     @default(0)
-  salesValue        Float     @default(0)
-  netPayable        Float     @default(0)
-  isPaid            Boolean   @default(false)
-  paidAt            DateTime?
-  pdfUrl            String?
-  excelUrl          String?
+  id              String    @id @default(cuid())
+  statementId     String    @unique
+  merchantId      String
+  merchantName    String
+  period          String
+  openingBalance  Float     @default(0)
+  inboundFees     Float     @default(0)
+  storageFees     Float     @default(0)
+  outboundFees    Float     @default(0)
+  returnFees      Float     @default(0)
+  shrinkageDebits Float     @default(0)
+  codCollected    Float     @default(0)
+  codFees         Float     @default(0)
+  commissions     Float     @default(0)
+  salesValue      Float     @default(0)
+  netPayable      Float     @default(0)
+  isPaid          Boolean   @default(false)
+  paidAt          DateTime?
+  pdfUrl          String?
+  excelUrl        String?
   /// Status: draft → pending_approval → approved → issued → paid
-  status            String    @default("draft")
+  status          String    @default("draft")
   /// Approval workflow (maker-checker)
-  submittedBy       String?
-  submittedAt       DateTime?
-  approvedBy        String?
-  approvedAt        DateTime?
-  rejectedBy        String?
-  rejectedAt        DateTime?
-  rejectionReason   String?
+  submittedBy     String?
+  submittedAt     DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
   /// Line items JSON for full audit (SQLite stores as TEXT)
-  lineItems         String?
-  generatedBy       String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  lineItems       String?
+  generatedBy     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
+  @@unique([merchantId, period])
   @@index([merchantId])
   @@index([period])
   @@index([status])
@@ -315,30 +362,30 @@ model Charge {
 /// Statement dispute — merchant challenges a charge or line item on their statement.
 /// Resolution can issue a credit memo (negative MerchantPayment) linked back here.
 model StatementDispute {
-  id                      String    @id @default(cuid())
-  disputeId               String    @unique
-  merchantId              String
-  merchantName            String
-  statementId             String
+  id                    String    @id @default(cuid())
+  disputeId             String    @unique
+  merchantId            String
+  merchantName          String
+  statementId           String
   /// Which line item is disputed (free text — matches line item reference)
-  lineItemReference       String?
+  lineItemReference     String?
   /// Type: overcharge | missing_credit | wrong_rate | duplicate_charge | other
-  disputeType             String    @default("overcharge")
-  reason                  String
+  disputeType           String    @default("overcharge")
+  reason                String
   /// Amount the merchant is claiming back
-  creditAmountRequested   Float
+  creditAmountRequested Float
   /// Amount finance approved (may differ from requested)
-  creditAmountApproved    Float?
+  creditAmountApproved  Float?
   /// Status: open → under_review → credited → rejected
-  status                  String    @default("open")
-  resolvedBy              String?
-  resolvedAt              DateTime?
-  resolutionNotes         String?
+  status                String    @default("open")
+  resolvedBy            String?
+  resolvedAt            DateTime?
+  resolutionNotes       String?
   /// Link to the credit memo MerchantPayment (negative amount) issued on resolution
-  paymentId               String?
-  createdBy               String
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  paymentId             String?
+  createdBy             String
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
 
   @@index([merchantId])
   @@index([statementId])
@@ -348,26 +395,26 @@ model StatementDispute {
 /// Payment batch — groups multiple MerchantPayments into one payout run.
 /// Workflow 6: finance team selects statements, generates batch, marks as disbursed.
 model PaymentBatch {
-  id              String    @id @default(cuid())
-  batchId         String    @unique
-  totalAmount     Float     @default(0)
-  merchantCount   Int       @default(0)
-  paymentMethod   String    @default("bank_transfer")
-  bankReference   String?
-  status          String    @default("draft")
-  disbursedAt     DateTime?
-  notes           String?
-  recordedBy      String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id            String    @id @default(cuid())
+  batchId       String    @unique
+  totalAmount   Float     @default(0)
+  merchantCount Int       @default(0)
+  paymentMethod String    @default("bank_transfer")
+  bankReference String?
+  status        String    @default("draft")
+  disbursedAt   DateTime?
+  notes         String?
+  recordedBy    String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@index([status])
   @@index([createdAt])
 }
 
 model MerchantPayment {
-  id            String    @id @default(cuid())
-  paymentId     String    @unique
+  id            String   @id @default(cuid())
+  paymentId     String   @unique
   merchantId    String
   merchantName  String
   vendorId      String
@@ -376,21 +423,21 @@ model MerchantPayment {
   reference     String
   comment       String?
   /// Allow for deductions such as warehouse fees
-  deductions    Float     @default(0)
-  netAmount     Float     @default(0) // amount - deductions
+  deductions    Float    @default(0)
+  netAmount     Float    @default(0) // amount - deductions
   recordedBy    String
   /// Link to the statement this payment settles (Workflow 6)
   statementId   String?
   /// Link to a payment batch (Workflow 6)
   batchId       String?
   /// Y/M/D fields for filtering
-  year          Int       @default(0)
-  month         Int       @default(0)
-  day           Int       @default(0)
+  year          Int      @default(0)
+  month         Int      @default(0)
+  day           Int      @default(0)
   /// Payment status (SQLite: free string)
-  status        String    @default("pending")
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  status        String   @default("pending")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([merchantId])
   @@index([year, month])
@@ -398,48 +445,48 @@ model MerchantPayment {
 }
 
 model Product {
-  id               String   @id @default(cuid())
-  productId        String   @unique
-  productLabel     String
+  id                 String   @id @default(cuid())
+  productId          String   @unique
+  productLabel       String
   /// Editable product description for catalogs and invoices
-  description      String?  @default("")
+  description        String?  @default("")
   /// Brand name (e.g., "Supreme", "Dettol")
-  brand            String?
+  brand              String?
   /// Variant descriptor (e.g., "BLUE-50PCs", "500ml")
-  variant          String?
-  category         String
-  merchantId       String
-  merchantName     String
-  unit             String
+  variant            String?
+  category           String
+  merchantId         String
+  merchantName       String
+  unit               String
   /// Product weight (e.g., "50g", "175g", "500ml")
-  weight           String?
-  minStock         Int      @default(10)
-  unitCost         Float
-  unitSellingPrice Float
-  commissionPercent Float
-  currentStock     Int      @default(0)
+  weight             String?
+  minStock           Int      @default(10)
+  unitCost           Float
+  unitSellingPrice   Float
+  commissionPercent  Float
+  currentStock       Int      @default(0)
   /// IAS 2 costing method for this product. Permitted: "fifo" | "avco" | "standard" | "specific_id".
   /// LIFO is BLOCKED at the application layer (not permitted under IAS 2).
   /// Defaults to "fifo". Override per product when needed (e.g. serialized high-value SKUs use "specific_id").
-  costingMethod    String   @default("fifo")
+  costingMethod      String   @default("fifo")
   /// Standard cost used for variance analysis (per ACCA MDC). Defaults to unitCost if not set.
   /// Variance = (Standard Cost - Actual Cost) × Qty. Adverse (A) if positive (actual > standard).
-  standardCost     Float?
+  standardCost       Float?
   /// Estimated cost to sell one unit — used in NRV calculation per IAS 2.
   /// NRV = unitSellingPrice - costToSell. Defaults to 0 (no selling cost) if not set.
-  costToSell       Float    @default(0)
+  costToSell         Float    @default(0)
   /// Annual holding cost per unit (UGX). Used by EOQ formula: √(2DS/H).
   /// If 0, derived from InventoryValuationSetting.holdingCostPct × unitCost.
   holdingCostPerUnit Float?
   /// Order cost per replenishment (UGX). Used by EOQ. Defaults to 50000 UGX if not set.
-  orderingCost     Float    @default(50000)
+  orderingCost       Float    @default(50000)
   /// Lead time in days from supplier to warehouse. Used by Reorder Point (ROP).
-  leadTimeDays     Int      @default(7)
+  leadTimeDays       Int      @default(7)
   /// Safety stock in units. Buffer against demand/lead-time variability.
-  safetyStock      Int      @default(0)
-  isActive         Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  safetyStock        Int      @default(0)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   @@index([merchantId])
   @@index([category])
@@ -448,17 +495,17 @@ model Product {
 }
 
 model Customer {
-  id              String    @id @default(cuid())
-  customerId      String    @unique
+  id              String   @id @default(cuid())
+  customerId      String   @unique
   name            String
-  contact         String    @unique
+  contact         String   @unique
   email           String?
   address         String?
   createdBy       String?
-  totalOrders     Int       @default(0)
-  totalOrderValue Float     @default(0)
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  totalOrders     Int      @default(0)
+  totalOrderValue Float    @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model InboundRecord {
@@ -497,50 +544,50 @@ model InboundRecord {
 }
 
 model OutboundRecord {
-  id                String    @id @default(cuid())
-  outboundId        String    @unique
+  id                  String    @id @default(cuid())
+  outboundId          String    @unique
   /// Explicit order number (e.g., ORD-20260414-001, DS-014, RT-001)
-  orderNumber       String?
+  orderNumber         String?
   /// Preserves the original DS-XXX order number when an RMA flips it to RT-XXX.
   originalOrderNumber String?
   /// User who created this order (e.g., U003, U004)
-  userId            String?
+  userId              String?
   /// Tracking number for shipment tracking
-  trackingNumber    String?
+  trackingNumber      String?
   /// Vendor/supplier code (e.g., V001)
-  vendorId          String?
+  vendorId            String?
   /// Vendor business name
-  businessName      String?
-  customerName      String
-  customerContact   String
-  customerEmail     String?
-  customerAddress   String?
-  productName       String
-  productId         String
-  brand             String?
-  variant           String?
-  qty               Int
+  businessName        String?
+  customerName        String
+  customerContact     String
+  customerEmail       String?
+  customerAddress     String?
+  productName         String
+  productId           String
+  brand               String?
+  variant             String?
+  qty                 Int
   /// Per-unit selling price
-  unitSellingPrice  Float?
+  unitSellingPrice    Float?
   /// Total sale amount for this order (qty x unitSellingPrice)
-  saleAmount        Float?
+  saleAmount          Float?
   /// Who assigned this order/driver
-  assignedBy        String?
-  assignedDriver    String?
-  vehicleNumber     String?
+  assignedBy          String?
+  assignedDriver      String?
+  vehicleNumber       String?
   /// Group ID for runsheet — outbound records sharing the same runsheetId belong to one rider trip
-  runsheetId        String?
+  runsheetId          String?
   /// Stop sequence within the runsheet (1, 2, 3...)
-  stopSequence      Int?
+  stopSequence        Int?
   /// Actual quantity delivered (may differ from qty if partial delivery)
-  actualDeliveredQty Int?
+  actualDeliveredQty  Int?
   /// Cash on Delivery amount collected at this stop
-  codCollected      Float?
+  codCollected        Float?
   /// Reason if delivery failed, rejected, or partially returned
-  deliveryNotes     String?
-  status            String    @default("pending")
-  dispatchedAt      DateTime?
-  deliveredAt       DateTime?
+  deliveryNotes       String?
+  status              String    @default("pending")
+  dispatchedAt        DateTime?
+  deliveredAt         DateTime?
   /// Cancellation fields
   cancellationReason  String?
   cancelledAt         DateTime?
@@ -552,8 +599,8 @@ model OutboundRecord {
   nextAttemptDate     DateTime?
   lastAttemptReason   String?
   lastAttemptDate     DateTime?
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   // Performance indexes — these columns are queried in WHERE / ORDER BY in
   // ~25 routes (dashboard, hub-today, runsheet, cod-reconciliation, drivers,
@@ -571,33 +618,33 @@ model OutboundRecord {
 }
 
 model ReconciliationRecord {
-  id              String    @id @default(cuid())
-  type            String
-  referenceId     String?
-  expectedQty     Float
-  actualQty       Float
-  variance        Float
-  varianceReason  String?
-  reconciledBy    String
-  date            DateTime  @default(now())
-  createdAt       DateTime  @default(now())
+  id             String   @id @default(cuid())
+  type           String
+  referenceId    String?
+  expectedQty    Float
+  actualQty      Float
+  variance       Float
+  varianceReason String?
+  reconciledBy   String
+  date           DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   @@index([createdAt])
 }
 
 model RTVRecord {
-  id              String    @id @default(cuid())
-  rtvId           String    @unique
-  merchantId      String
-  merchantName    String
-  productId       String
-  productName     String
-  qty             Int
-  reason          String
-  status          String    @default("pending")
-  processedBy     String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id           String   @id @default(cuid())
+  rtvId        String   @unique
+  merchantId   String
+  merchantName String
+  productId    String
+  productName  String
+  qty          Int
+  reason       String
+  status       String   @default("pending")
+  processedBy  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([merchantId])
   @@index([productId])
@@ -605,30 +652,30 @@ model RTVRecord {
 }
 
 model ShrinkageRecord {
-  id              String    @id @default(cuid())
-  shrinkageId     String    @unique
+  id                   String    @id @default(cuid())
+  shrinkageId          String    @unique
   /// Link to RTV if shrinkage is related to return
-  rtvId           String?
+  rtvId                String?
   /// Merchant who owns the lost stock (for debit)
-  merchantId      String?
-  merchantName    String?
-  productId       String
-  productName     String
-  qty             Int
+  merchantId           String?
+  merchantName         String?
+  productId            String
+  productName          String
+  qty                  Int
   /// Per-unit cost (UGX) — used to compute debit amount
-  unitCost        Float?
+  unitCost             Float?
   /// Total value of shrinkage (UGX) = qty × unitCost
-  totalValue      Float?
-  reason          String
-  reportedBy      String
-  status          String    @default("pending")
+  totalValue           Float?
+  reason               String
+  reportedBy           String
+  status               String    @default("pending")
   /// Workflow 4: if true, the totalValue is debited to the merchant on resolution
-  debitMerchant   Boolean   @default(false)
+  debitMerchant        Boolean   @default(false)
   /// Statement ID this shrinkage was debited on (set when settled)
   settledOnStatementId String?
-  resolvedBy      String?
-  resolvedAt      DateTime?
-  createdAt       DateTime  @default(now())
+  resolvedBy           String?
+  resolvedAt           DateTime?
+  createdAt            DateTime  @default(now())
 
   @@index([merchantId])
   @@index([rtvId])
@@ -638,46 +685,46 @@ model ShrinkageRecord {
 }
 
 model Driver {
-  id                String    @id @default(cuid())
-  driverId          String    @unique
-  name              String
-  phone             String    @unique
-  nationalId        String?
-  licenseNumber     String?
-  vehicleType       String?
-  vehicleNumber     String?
-  createdBy         String?
-  profileImage      String?
-  dateHired         DateTime?
-  salaryAmount      Float?
-  salaryPayDay      Int       @default(28)
-  status            String    @default("active")
-  damages           Float     @default(0)
-  loss              Float     @default(0)
-  expectedBankings  Float     @default(0)
-  banked            Float     @default(0)
+  id               String        @id @default(cuid())
+  driverId         String        @unique
+  name             String
+  phone            String        @unique
+  nationalId       String?
+  licenseNumber    String?
+  vehicleType      String?
+  vehicleNumber    String?
+  createdBy        String?
+  profileImage     String?
+  dateHired        DateTime?
+  salaryAmount     Float?
+  salaryPayDay     Int           @default(28)
+  status           String        @default("active")
+  damages          Float         @default(0)
+  loss             Float         @default(0)
+  expectedBankings Float         @default(0)
+  banked           Float         @default(0)
   /// Shift tracking: when the driver checked in (null = off shift)
-  shiftStart        DateTime?
+  shiftStart       DateTime?
   /// Shift tracking: when the driver checked out (null = still on shift)
-  shiftEnd          DateTime?
-  trips             DriverTrip[]
-  shifts            DriverShift[]
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  shiftEnd         DateTime?
+  trips            DriverTrip[]
+  shifts           DriverShift[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 
 /// Shift history — one row per completed shift. Created when a driver
 /// checks out. Enables hours-worked calculations for payroll.
 model DriverShift {
-  id              String    @id @default(cuid())
-  driverId        String
-  driver          Driver    @relation(fields: [driverId], references: [driverId])
-  driverName      String
-  shiftStart      DateTime
-  shiftEnd        DateTime?
-  durationHours   Float?
-  notes           String?
-  createdAt       DateTime  @default(now())
+  id            String    @id @default(cuid())
+  driverId      String
+  driver        Driver    @relation(fields: [driverId], references: [driverId])
+  driverName    String
+  shiftStart    DateTime
+  shiftEnd      DateTime?
+  durationHours Float?
+  notes         String?
+  createdAt     DateTime  @default(now())
 
   @@index([driverId])
   @@index([shiftStart])
@@ -685,90 +732,90 @@ model DriverShift {
 
 /// Daily trip record for each driver — the 'route sheet'
 model DriverTrip {
-  id              String    @id @default(cuid())
-  tripId          String    @unique
+  id              String   @id @default(cuid())
+  tripId          String   @unique
   driverId        String
-  driver          Driver    @relation(fields: [driverId], references: [driverId])
+  driver          Driver   @relation(fields: [driverId], references: [driverId])
   driverName      String
   /// Trip date (not createdAt — the actual day of the trip)
   tripDate        DateTime
   /// Total stops/deliveries assigned
-  totalStops      Int       @default(0)
+  totalStops      Int      @default(0)
   /// Successfully delivered
-  delivered        Int       @default(0)
+  delivered       Int      @default(0)
   /// Failed deliveries
-  failed          Int       @default(0)
+  failed          Int      @default(0)
   /// Total COD collected
-  codCollected    Float     @default(0)
+  codCollected    Float    @default(0)
   /// Total sale value
-  saleAmount      Float     @default(0)
+  saleAmount      Float    @default(0)
   /// Kilometres driven
   distanceKm      Float?
   /// GPS tracking enabled?
-  geoTracked      Boolean   @default(false)
+  geoTracked      Boolean  @default(false)
   /// Last known GPS coordinates (JSON string)
   lastGeoLocation String?
   /// Runsheet reference
   runsheetId      String?
   /// Notes / issues
   notes           String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   @@index([driverId, tripDate])
 }
 
 /// Each physical unit tracked individually — the 'library book'
 model InventoryItem {
-  id                String    @id @default(cuid())
+  id                 String      @id @default(cuid())
   /// Unique item barcode/ID shown on labels
-  itemId            String    @unique
-  productId         String
-  productName       String
+  itemId             String      @unique
+  productId          String
+  productName        String
   /// Brand name
-  brand             String?
+  brand              String?
   /// Variant descriptor
-  variant           String?
+  variant            String?
   /// Per-unit cost
-  unitPrice         Float?
-  merchantId        String
-  merchantName      String
+  unitPrice          Float?
+  merchantId         String
+  merchantName       String
   /// Which inbound batch this item came from
-  inboundId         String?
+  inboundId          String?
   /// Which outbound order this item is allocated to (null = in warehouse)
-  outboundId        String?
+  outboundId         String?
   /// Current lifecycle status
-  status            String    @default("IN_WAREHOUSE")
+  status             String      @default("IN_WAREHOUSE")
   /// Item condition: good, damaged, expired
-  condition         String    @default("good")
+  condition          String      @default("good")
   /// Tracking level: 'unit' for individual items, 'box' for sealed boxes
-  trackingLevel     String    @default("unit")
+  trackingLevel      String      @default("unit")
   /// For boxes: how many units inside
-  boxQty            Int?
+  boxQty             Int?
   /// For individual items: which box they came from
-  parentItemId      String?
+  parentItemId       String?
   /// Warehouse zone / shelf location
-  storageLocation   String?
+  storageLocation    String?
   /// Expiry date if applicable
-  expiryDate        DateTime?
+  expiryDate         DateTime?
   /// Which rider is currently handling this item
-  assignedRider     String?
+  assignedRider      String?
   /// Which runsheet this item is on
-  runsheetId        String?
+  runsheetId         String?
   /// Delivery attempt count for this item
-  attemptCount      Int       @default(0)
-  nextAttemptDate   DateTime?
+  attemptCount       Int         @default(0)
+  nextAttemptDate    DateTime?
   /// Final outcome when lifecycle ends
-  finalOutcome      String?
+  finalOutcome       String?
   /// Cancellation tracking
   cancellationReason String?
-  cancelledAt       DateTime?
-  cancelledBy       String?
+  cancelledAt        DateTime?
+  cancelledBy        String?
   /// Audit trail — every event in this item's lifecycle
-  events            ItemEvent[]
+  events             ItemEvent[]
   /// Timestamps
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
 
   @@index([productId])
   @@index([merchantId])
@@ -780,38 +827,38 @@ model InventoryItem {
 
 /// Every event in an item's lifecycle — the 'checkout card inside the front cover'
 model ItemEvent {
-  id                String    @id @default(cuid())
-  eventId           String    @unique
+  id             String        @id @default(cuid())
+  eventId        String        @unique
   /// Which item this event belongs to
-  item              InventoryItem @relation(fields: [itemId], references: [itemId])
-  itemId            String
+  item           InventoryItem @relation(fields: [itemId], references: [itemId])
+  itemId         String
   /// Event type: RECEIVED, STORED, PICKED, PACKED, DISPATCHED,
   ///   DELIVERY_ATTEMPTED, DELIVERY_SUCCEEDED, DELIVERY_FAILED,
   ///   RESCHEDULED, PARTIALLY_RETURNED, RETURNED_TO_RIDER,
   ///   RETURNED_TO_WAREHOUSE, CANCELLED, DAMAGED, DISPOSED, RTV
-  eventType         String
+  eventType      String
   /// Workflow 3: disposition decided for returned units
   /// RESTOCK | RTV | DISPOSE | LIQUIDATE — null for non-return events
-  disposition       String?
+  disposition    String?
   /// Human-readable description
-  description       String?
+  description    String?
   /// Who performed this action
-  performedBy       String?
+  performedBy    String?
   /// Which runsheet (if applicable)
-  runsheetId        String?
+  runsheetId     String?
   /// Which outbound order (if applicable)
-  outboundId        String?
+  outboundId     String?
   /// Which inbound batch (if applicable)
-  inboundId         String?
+  inboundId      String?
   /// Reason for failure / return / cancellation
-  reason            String?
+  reason         String?
   /// Previous status before this event
-  previousStatus    String?
+  previousStatus String?
   /// New status after this event
-  newStatus         String?
+  newStatus      String?
   /// Additional metadata as JSON string
-  metadata          String?
-  createdAt         DateTime  @default(now())
+  metadata       String?
+  createdAt      DateTime      @default(now())
 
   @@index([itemId])
 }
@@ -820,40 +867,40 @@ model ItemEvent {
 /// Workflow 3: handles customers returning items. Agent approves/rejects,
 /// order number flips from DS to RT, per-item disposition applied on approval.
 model AfterSalesRecord {
-  id              String    @id @default(cuid())
-  afterSalesId    String    @unique
+  id                     String    @id @default(cuid())
+  afterSalesId           String    @unique
   /// Reference to original outbound order
-  originalOrderId String?
+  originalOrderId        String?
   /// New order number for return process (RT- prefix)
-  returnOrderNumber String?
+  returnOrderNumber      String?
   /// Customer who initiated return
-  customerId      String
-  customerName    String
+  customerId             String
+  customerName           String
   /// Return reason
-  reason          String
+  reason                 String
   /// Return status: initiated | in_review | approved | rejected | processed
-  returnStatus    String    @default("initiated")
+  returnStatus           String    @default("initiated")
   /// Agent handling the return
-  agentId         String?
-  agentName       String?
+  agentId                String?
+  agentName              String?
   /// Approval details
-  approvedBy      String?
-  approvedAt      DateTime?
+  approvedBy             String?
+  approvedAt             DateTime?
   /// Refund amount (UGX)
-  refundAmount    Float?
+  refundAmount           Float?
   /// Replacement product (if applicable)
-  replacementProductId String?
+  replacementProductId   String?
   replacementProductName String?
   /// Tracking number for return shipment
-  returnTrackingNumber String?
+  returnTrackingNumber   String?
   /// Workflow 3: list of itemIds being returned (JSON array, stored as TEXT in SQLite)
-  itemIds         String?
+  itemIds                String?
   /// Workflow 3: per-item disposition decision (JSON: [{itemId, disposition}])
-  dispositions    String?
+  dispositions           String?
   /// Resolution notes
-  resolutionNotes String?
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  resolutionNotes        String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
 
   @@index([originalOrderId])
   @@index([returnStatus])
@@ -863,27 +910,27 @@ model AfterSalesRecord {
 /// Order Processing Module — entry point for the order → outbound cascade.
 /// Workflow 2: creating an OrderProcessing row spawns an OutboundRecord automatically.
 model OrderProcessing {
-  id                String    @id @default(cuid())
-  orderId           String    @unique
-  orderNumber       String    @unique  // e.g., DS001
-  orderDate         DateTime  @default(now())
-  customerId        String
-  customerName      String
-  customerInfo      String    // Full customer contact details
-  totalAmount       Float
-  paymentMethod     String    // Cash, M-Pesa, Bank Transfer, etc.
+  id               String    @id @default(cuid())
+  orderId          String    @unique
+  orderNumber      String    @unique // e.g., DS001
+  orderDate        DateTime  @default(now())
+  customerId       String
+  customerName     String
+  customerInfo     String // Full customer contact details
+  totalAmount      Float
+  paymentMethod    String // Cash, M-Pesa, Bank Transfer, etc.
   /// Status of order processing: new_order | processing | shipped | delivered | returned
-  status            String    @default("new_order")
+  status           String    @default("new_order")
   /// Tracking number for the order (auto-generated from orderNumber + deliveryType)
-  trackingNumber    String?
+  trackingNumber   String?
   /// Invoice details
-  invoiceGenerated  Boolean   @default(false)
-  invoiceNumber     String?
-  invoiceDate       DateTime?
+  invoiceGenerated Boolean   @default(false)
+  invoiceNumber    String?
+  invoiceDate      DateTime?
   /// Created by user
-  createdBy         String
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  createdBy        String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
   @@index([customerId])
   @@index([status])
@@ -891,14 +938,14 @@ model OrderProcessing {
 }
 
 model AuditLog {
-  id              String    @id @default(cuid())
-  userId          String?
-  userName        String?
-  action          String
-  module          String
-  entityId        String?
-  details         String?
-  createdAt       DateTime  @default(now())
+  id        String   @id @default(cuid())
+  userId    String?
+  userName  String?
+  action    String
+  module    String
+  entityId  String?
+  details   String?
+  createdAt DateTime @default(now())
 
   @@index([createdAt])
   @@index([module])
@@ -908,17 +955,17 @@ model AuditLog {
 
 /// Notification queue — SMS/email messages to be sent to customers and merchants.
 model Notification {
-  id              String    @id @default(cuid())
-  type            String
-  recipient       String
-  recipientName   String?
-  subject         String
-  message         String
-  metadata        String?
-  status          String    @default("pending")
-  sentAt          DateTime?
-  errorMessage    String?
-  createdAt       DateTime  @default(now())
+  id            String    @id @default(cuid())
+  type          String
+  recipient     String
+  recipientName String?
+  subject       String
+  message       String
+  metadata      String?
+  status        String    @default("pending")
+  sentAt        DateTime?
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
 
   @@index([status])
   @@index([type])
@@ -926,15 +973,15 @@ model Notification {
 
 /// Product price history — tracks every price change for audit trail.
 model ProductPriceHistory {
-  id              String    @id @default(cuid())
-  productId       String
-  productName     String
-  oldPrice        Float
-  newPrice        Float
-  oldCost         Float?
-  newCost         Float?
-  changedBy       String
-  changedAt       DateTime  @default(now())
+  id          String   @id @default(cuid())
+  productId   String
+  productName String
+  oldPrice    Float
+  newPrice    Float
+  oldCost     Float?
+  newCost     Float?
+  changedBy   String
+  changedAt   DateTime @default(now())
 
   @@index([productId])
   @@index([changedAt])
@@ -942,35 +989,36 @@ model ProductPriceHistory {
 
 /// Order line items — supports multi-product orders.
 model OrderLineItem {
-  id              String    @id @default(cuid())
-  orderId         String
-  orderNumber     String
-  productId       String
-  productName     String
-  brand           String?
-  variant         String?
-  qty             Int
+  id               String   @id @default(cuid())
+  orderId          String
+  orderNumber      String
+  productId        String
+  productName      String
+  brand            String?
+  variant          String?
+  qty              Int
   unitSellingPrice Float
-  lineTotal       Float
-  createdAt       DateTime  @default(now())
+  lineTotal        Float
+  createdAt        DateTime @default(now())
 
   @@index([orderId])
   @@index([orderNumber])
   @@index([productId])
 }
+
 // ── RISK MODULE ───────────────────────────────────────────────────────────────
 // Fraud detection & order risk scoring. Standalone subsystem — other modules
 // (Outbound, Order Processing, After-Sales) subscribe to it via /api/risk/*.
 
 /// Manual blocklist — phones and addresses that should never pass intake.
 model FraudBlocklist {
-  id        String   @id @default(cuid())
-  phone     String?  @unique
-  address   String?
-  reason    String
-  addedBy   String
-  addedAt   DateTime @default(now())
-  isActive  Boolean  @default(true)
+  id       String   @id @default(cuid())
+  phone    String?  @unique
+  address  String?
+  reason   String
+  addedBy  String
+  addedAt  DateTime @default(now())
+  isActive Boolean  @default(true)
 
   @@index([address])
   @@index([isActive])
@@ -978,16 +1026,16 @@ model FraudBlocklist {
 
 /// Persisted score for every order that enters the system.
 model RiskScore {
-  id               String   @id @default(cuid())
-  outboundId       String
-  customerContact  String
-  customerAddress  String?
-  score            Int
-  decision         String
-  reasons          String
-  engineVersion    String   @default("1.0.0")
-  paymentPath      String
-  scoredAt         DateTime @default(now())
+  id              String   @id @default(cuid())
+  outboundId      String
+  customerContact String
+  customerAddress String?
+  score           Int
+  decision        String
+  reasons         String
+  engineVersion   String   @default("1.0.0")
+  paymentPath     String
+  scoredAt        DateTime @default(now())
 
   @@index([outboundId])
   @@index([customerContact])
@@ -997,12 +1045,12 @@ model RiskScore {
 
 /// Manager override on a held order. Append-only.
 model RiskOverride {
-  id           String   @id @default(cuid())
-  outboundId   String
-  action       String
-  managerName  String
-  reason       String?
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  outboundId  String
+  action      String
+  managerName String
+  reason      String?
+  createdAt   DateTime @default(now())
 
   @@index([outboundId])
   @@index([createdAt])
@@ -1010,17 +1058,17 @@ model RiskOverride {
 
 /// Cached risk profile per customer (keyed by phone).
 model CustomerRiskProfile {
-  customerContact       String   @id
-  customerType          String   @default("retail")
-  totalOrders           Int      @default(0)
-  codRefusals90d        Int      @default(0)
-  codDelivered90d       Int      @default(0)
-  distinctAddressesUsed Int      @default(0)
+  customerContact       String    @id
+  customerType          String    @default("retail")
+  totalOrders           Int       @default(0)
+  codRefusals90d        Int       @default(0)
+  codDelivered90d       Int       @default(0)
+  distinctAddressesUsed Int       @default(0)
   firstOrderDate        DateTime?
   lastOrderDate         DateTime?
-  avgAOV                Float    @default(0)
-  isBlocklisted         Boolean  @default(false)
-  updatedAt             DateTime @updatedAt
+  avgAOV                Float     @default(0)
+  isBlocklisted         Boolean   @default(false)
+  updatedAt             DateTime  @updatedAt
 }
 
 /// Key-value store for all risk engine parameters.
@@ -1044,7 +1092,7 @@ model RiskSetting {
 model SystemSetting {
   id        String   @id @default(cuid())
   key       String   @unique
-  value     String   // JSON-serialized array of strings
+  value     String // JSON-serialized array of strings
   label     String
   updatedBy String?
   updatedAt DateTime @updatedAt
@@ -1055,76 +1103,76 @@ model SystemSetting {
 /// Applied automatically when onboarding a new merchant.
 /// Stored as a single row (key = 'default').
 model DefaultRateCard {
-  id                        String  @id @default(cuid())
+  id                       String   @id @default(cuid())
   // Receiving
-  receivingFlatFee          Float   @default(0)
-  receivingFlatHours        Float   @default(2)
-  receivingHourlyAfter      Float   @default(0)
-  inboundReceivingPerUnit   Float   @default(0)
+  receivingFlatFee         Float    @default(0)
+  receivingFlatHours       Float    @default(2)
+  receivingHourlyAfter     Float    @default(0)
+  inboundReceivingPerUnit  Float    @default(0)
   // Storage
-  storagePerBinMonth        Float   @default(0)
-  storagePerShelfMonth      Float   @default(0)
-  storagePerPalletMonth     Float   @default(0)
-  storagePerUnitPerDay      Float   @default(0)
+  storagePerBinMonth       Float    @default(0)
+  storagePerShelfMonth     Float    @default(0)
+  storagePerPalletMonth    Float    @default(0)
+  storagePerUnitPerDay     Float    @default(0)
   // Pick & Pack
-  pickFirstItemsIncluded    Int     @default(4)
-  pickPerAdditionalItem     Float   @default(0)
-  packPerOrder              Float   @default(0)
-  pickPerUnit               Float   @default(0)
+  pickFirstItemsIncluded   Int      @default(4)
+  pickPerAdditionalItem    Float    @default(0)
+  packPerOrder             Float    @default(0)
+  pickPerUnit              Float    @default(0)
   // Fulfillment
-  fulfillmentFeePerOrder    Float   @default(0)
-  fulfillmentMinimumFee     Float   @default(0)
+  fulfillmentFeePerOrder   Float    @default(0)
+  fulfillmentMinimumFee    Float    @default(0)
   // Returns
-  returnProcessingPerUnit   Float   @default(0)
-  returnsPerOrder           Float   @default(0)
+  returnProcessingPerUnit  Float    @default(0)
+  returnsPerOrder          Float    @default(0)
   // Commission
-  commissionPercent         Float   @default(0)
+  commissionPercent        Float    @default(0)
   // COD
-  codRemittanceFeePerOrder  Float   @default(0)
-  codShortfallPenalty       Float   @default(0)
+  codRemittanceFeePerOrder Float    @default(0)
+  codShortfallPenalty      Float    @default(0)
   // Meta
-  updatedBy String?
-  updatedAt DateTime @updatedAt
-  createdAt DateTime @default(now())
+  updatedBy                String?
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
 }
 
 /// Rate card templates — named pricing tiers the 3PL can create and apply.
 /// E.g., "Standard", "Premium", "Consignment", "Bulk Discount".
 model RateCardTemplate {
-  id                        String  @id @default(cuid())
-  name                      String
-  description               String?
+  id                       String   @id @default(cuid())
+  name                     String
+  description              String?
   // Receiving
-  receivingFlatFee          Float   @default(0)
-  receivingFlatHours        Float   @default(2)
-  receivingHourlyAfter      Float   @default(0)
-  inboundReceivingPerUnit   Float   @default(0)
+  receivingFlatFee         Float    @default(0)
+  receivingFlatHours       Float    @default(2)
+  receivingHourlyAfter     Float    @default(0)
+  inboundReceivingPerUnit  Float    @default(0)
   // Storage
-  storagePerBinMonth        Float   @default(0)
-  storagePerShelfMonth      Float   @default(0)
-  storagePerPalletMonth     Float   @default(0)
-  storagePerUnitPerDay      Float   @default(0)
+  storagePerBinMonth       Float    @default(0)
+  storagePerShelfMonth     Float    @default(0)
+  storagePerPalletMonth    Float    @default(0)
+  storagePerUnitPerDay     Float    @default(0)
   // Pick & Pack
-  pickFirstItemsIncluded    Int     @default(4)
-  pickPerAdditionalItem     Float   @default(0)
-  packPerOrder              Float   @default(0)
-  pickPerUnit               Float   @default(0)
+  pickFirstItemsIncluded   Int      @default(4)
+  pickPerAdditionalItem    Float    @default(0)
+  packPerOrder             Float    @default(0)
+  pickPerUnit              Float    @default(0)
   // Fulfillment
-  fulfillmentFeePerOrder    Float   @default(0)
-  fulfillmentMinimumFee     Float   @default(0)
+  fulfillmentFeePerOrder   Float    @default(0)
+  fulfillmentMinimumFee    Float    @default(0)
   // Returns
-  returnProcessingPerUnit   Float   @default(0)
-  returnsPerOrder           Float   @default(0)
+  returnProcessingPerUnit  Float    @default(0)
+  returnsPerOrder          Float    @default(0)
   // Commission
-  commissionPercent         Float   @default(0)
+  commissionPercent        Float    @default(0)
   // COD
-  codRemittanceFeePerOrder  Float   @default(0)
-  codShortfallPenalty       Float   @default(0)
+  codRemittanceFeePerOrder Float    @default(0)
+  codShortfallPenalty      Float    @default(0)
   // Meta
-  isActive                  Boolean @default(true)
-  createdBy                 String?
-  createdAt                 DateTime @default(now())
-  updatedAt                 DateTime @updatedAt
+  isActive                 Boolean  @default(true)
+  createdBy                String?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 }
 
 // ── INVENTORY VALUATION (CPA Uganda MDC / ACCA Management Decision & Control) ──
@@ -1133,33 +1181,33 @@ model RateCardTemplate {
 // materiality threshold for variance investigation, and NRV write-down rules.
 
 model InventoryValuationSetting {
-  id              String   @id @default(cuid())
+  id                     String   @id @default(cuid())
   // Always 'default' — single-row table
-  key             String   @unique @default("default")
+  key                    String   @unique @default("default")
   /// Global default costing method: "fifo" | "avco" | "standard" | "specific_id".
   /// Per-product override lives on Product.costingMethod.
   /// LIFO is BLOCKED here (IAS 2 §25).
-  defaultCostingMethod String @default("fifo")
+  defaultCostingMethod   String   @default("fifo")
   /// Capital (opportunity) cost rate — % of average inventory value. Typically 10–20%.
-  capitalCostRate Float    @default(0.12)
+  capitalCostRate        Float    @default(0.12)
   /// Storage cost rate — % of average inventory value (space, handling, security).
   /// Alternatively, derived from storagePerUnitPerDay × avg days held.
-  storageCostRate Float    @default(0.06)
+  storageCostRate        Float    @default(0.06)
   /// Risk cost rate — % of average inventory value (obsolescence, deterioration, shrinkage).
-  riskCostRate    Float    @default(0.03)
+  riskCostRate           Float    @default(0.03)
   /// Service cost rate — % of average inventory value (insurance, taxes, IT systems).
-  serviceCostRate Float    @default(0.02)
+  serviceCostRate        Float    @default(0.02)
   /// Materiality threshold for variance investigation (per ACCA MDC management-by-exception).
   /// Variances above this % of standard cost are flagged for investigation.
-  varianceMaterialityPct Float @default(0.05)
+  varianceMaterialityPct Float    @default(0.05)
   /// Default cost-to-sell % of selling price (used when product.costToSell is 0).
   /// Per IAS 2: NRV = estimated selling price − cost to complete − cost to sell.
-  defaultCostToSellPct Float @default(0.05)
+  defaultCostToSellPct   Float    @default(0.05)
   /// Days in financial year (365 normally; 360 for some accounting conventions).
-  daysInYear      Int      @default(365)
-  updatedBy       String?
-  updatedAt       DateTime @updatedAt
-  createdAt       DateTime @default(now())
+  daysInYear             Int      @default(365)
+  updatedBy              String?
+  updatedAt              DateTime @updatedAt
+  createdAt              DateTime @default(now())
 }
 
 /// NRV write-down register — per IAS 2 §9 (Lower of Cost or NRV).
@@ -1168,35 +1216,35 @@ model InventoryValuationSetting {
 ///   • a reversal (kind = "reversal") — capped at the original write-down (IAS 2 §33)
 /// Reversals are REQUIRED under IFRS when the NRV recovers (US-GAAP forbids this — CPA Uganda = IFRS).
 model NrvWriteDown {
-  id              String   @id @default(cuid())
-  productId       String
-  productName     String
-  merchantId      String?
-  merchantName    String?
+  id            String   @id @default(cuid())
+  productId     String
+  productName   String
+  merchantId    String?
+  merchantName  String?
   /// "write_down" or "reversal"
-  kind            String   @default("write_down")
+  kind          String   @default("write_down")
   /// Quantity of units the write-down applies to
-  qty             Int
+  qty           Int
   /// Original cost per unit at time of write-down
-  unitCost        Float
+  unitCost      Float
   /// Net realisable value per unit = sellingPrice − costToSell − costToComplete
-  nrvPerUnit      Float
+  nrvPerUnit    Float
   /// Write-down amount per unit = max(0, unitCost − nrvPerUnit)
   /// For reversals: amount being reversed (capped at cumulative write-down balance)
-  amountPerUnit   Float
+  amountPerUnit Float
   /// Total amount = qty × amountPerUnit
-  totalAmount     Float
+  totalAmount   Float
   /// Reason / justification (free text)
-  reason          String
+  reason        String
   /// Status: "active" | "reversed"
   /// — active: still depressing carrying value
   /// — reversed: fully reversed by subsequent reversal entry
-  status          String   @default("active")
+  status        String   @default("active")
   /// If this row is a reversal, link to the original write-down row
-  reversesId      String?
-  recordedBy      String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  reversesId    String?
+  recordedBy    String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@index([productId])
   @@index([status])

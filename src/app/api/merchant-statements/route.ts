@@ -232,7 +232,19 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    const updated = await db.merchantStatement.update({ where: { id }, data: updateData })
+    const updated = await db.$transaction(async (tx) => {
+      const next = await tx.merchantStatement.update({ where: { id }, data: updateData })
+      if (action === 'issue') {
+        await tx.merchant.update({
+          where: { merchantId: stmt.merchantId },
+          data: {
+            expectedPayment: { increment: stmt.netPayable },
+            pendingPayment: { increment: stmt.netPayable },
+          },
+        })
+      }
+      return next
+    })
     await logAudit({
       action: action.toUpperCase(),
       module: 'statements',
@@ -266,7 +278,7 @@ export async function DELETE(req: NextRequest) {
     }
 
     // Reverse merchant pendingPayment + expectedPayment
-    try {
+    if (stmt.status === 'issued') {
       await db.merchant.update({
         where: { merchantId: stmt.merchantId },
         data: {
@@ -274,8 +286,6 @@ export async function DELETE(req: NextRequest) {
           pendingPayment: { decrement: stmt.netPayable },
         },
       })
-    } catch (merchantErr) {
-      console.error('Merchant reversal failed (non-blocking):', merchantErr)
     }
 
     // Un-invoice any charges linked to this statement
@@ -283,6 +293,11 @@ export async function DELETE(req: NextRequest) {
       where: { statementId: stmt.statementId, status: 'invoiced' },
       data: { status: 'approved', statementId: null },
     }).catch(() => {})
+
+    await db.shrinkageRecord.updateMany({
+      where: { settledOnStatementId: stmt.statementId },
+      data: { settledOnStatementId: null },
+    })
 
     await db.merchantStatement.delete({ where: { id } })
 

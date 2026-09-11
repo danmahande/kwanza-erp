@@ -1,17 +1,15 @@
 'use client'
 
-import { useEffect, useState, useCallback, useMemo } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  ArrowLeft, User, Phone, Car, Hash, CreditCard, Shield, ShieldAlert, TrendingUp,
-  Banknote, MapPin, Calendar, Bell, Clock, Package, Truck, Route, Navigation,
-  DollarSign, AlertTriangle, CheckCircle2, Info, Loader2, X, Camera,
+  ArrowLeft, Phone, Car, CreditCard, Shield, ShieldAlert, TrendingUp,
+  Banknote, MapPin, Calendar, Bell, Truck, Navigation,
+  DollarSign, AlertTriangle, CheckCircle2, Info, Loader2, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 

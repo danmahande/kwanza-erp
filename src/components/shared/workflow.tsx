@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   getAllowedTransitions, getStage, getNextMainStep, getMainStages, getStageIndex,
-  type WorkflowStage,
 } from '@/lib/workflow'
-import { Check, ChevronRight, AlertTriangle, X, RotateCcw, ArrowRight } from 'lucide-react'
+import { Check, ChevronRight, AlertTriangle, X, ArrowRight } from 'lucide-react'
 import { motion } from 'framer-motion'
 
 // ── WorkflowActions ──

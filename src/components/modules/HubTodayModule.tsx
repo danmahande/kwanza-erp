@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -12,7 +11,6 @@ import {
   Search, ChevronRight, ChevronDown, Lock, RefreshCw,
   AlertTriangle, CheckCircle2, HelpCircle, Package,
   Boxes, Truck, ClipboardList, RotateCcw, ArrowRight, X,
-  TrendingUp, TrendingDown,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'

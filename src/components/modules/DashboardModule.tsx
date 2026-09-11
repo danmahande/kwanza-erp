@@ -9,7 +9,6 @@ import {
   AreaChart, Area,
 } from 'recharts'
 import {
-  AlertTriangle, CheckCircle2, TrendingUp, TrendingDown,
   ChevronDown, Download, HelpCircle, Flame,
 } from 'lucide-react'
 import { formatCurrency, formatCurrencyCompact } from '@/lib/currency'

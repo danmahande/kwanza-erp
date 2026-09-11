@@ -12,10 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import {
   ClipboardList, Plus, Truck, CheckCircle2, Clock, XCircle,
-  MapPin, Package, DollarSign, ChevronRight, ArrowRight,
+  MapPin, Package, DollarSign, ChevronRight,
   AlertTriangle, FileText, Search, Eye, X,
-  ScanBarcode, Ban, CalendarClock, Filter,
-  HelpCircle, ArrowLeft as BackIcon,
+  ScanBarcode, Ban, CalendarClock, Filter, ArrowLeft as BackIcon,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr } from '@/components/shared/ops-ui'

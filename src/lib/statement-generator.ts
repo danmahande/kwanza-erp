@@ -21,7 +21,7 @@ import { db } from '@/lib/db'
 
 export interface StatementLineItem {
   date: string
-  type: 'inbound' | 'storage' | 'outbound' | 'return' | 'shrinkage' | 'cod' | 'commission' | 'opening'
+  type: 'inbound' | 'storage' | 'outbound' | 'return' | 'shrinkage' | 'cod' | 'commission' | 'charge' | 'opening'
   reference: string
   description: string
   debit: number  // amount we charge the merchant
@@ -64,9 +64,10 @@ export async function generateMerchantStatement(params: {
     throw new Error(`Statement ${existingStatement.statementId} already exists for merchant ${merchantId} period ${period}. Delete it first or choose a different period.`)
   }
 
-  // Fetch previous statement for opening balance
+  // Opening balance must come from the immediately preceding period, not a
+  // future statement or an arbitrary older statement.
   const previousStatement = await db.merchantStatement.findFirst({
-    where: { merchantId, period: { not: period } },
+    where: { merchantId, period: { lt: period } },
     orderBy: { period: 'desc' },
   })
   const openingBalance = previousStatement?.netPayable ?? 0
@@ -91,11 +92,9 @@ export async function generateMerchantStatement(params: {
     },
   })
   let inboundFees = 0
-  let inboundValueTotal = 0
   for (const ib of inbounds) {
     const receivingFee = (rateCard?.inboundReceivingPerUnit ?? 0) * ib.qtyIn
     inboundFees += receivingFee
-    inboundValueTotal += ib.inboundValue ?? 0
     lineItems.push({
       date: ib.createdAt.toISOString().slice(0, 10),
       type: 'inbound',
@@ -106,39 +105,17 @@ export async function generateMerchantStatement(params: {
     })
   }
 
-  // 3. Storage fees accrued in period (from StorageLiability rows for this merchant)
-  const storageLiabilities = await db.storageLiability.findMany({
-    where: { merchantId, status: { in: ['active', 'partially_settled', 'settled'] } },
-  })
-  // For the period, we use the accruedAmount as of endDate minus accruedAmount as of startDate
-  // Simplification: use the full accruedAmount minus settledAmount (these are cumulative).
-  // For a real per-period split we'd need to snapshot. For now: take the outstanding balance
-  // at time of statement generation as the storage fee for this period.
+  // 3. Storage fees are posted by the daily accrual job as approved charges.
+  // Do not settle liability rows while generating a statement: generation must
+  // be repeatable and must not mutate operational inventory balances.
   let storageFees = 0
-  for (const sl of storageLiabilities) {
-    const outstanding = sl.accruedAmount - sl.settledAmount
-    if (outstanding > 0) {
-      storageFees += outstanding
-      lineItems.push({
-        date: endDate.toISOString().slice(0, 10),
-        type: 'storage',
-        reference: sl.inboundId,
-        description: `Storage: ${sl.unitsRemaining} units × ${sl.ratePerUnitPerDay} UGX/day (${sl.productName})`,
-        debit: outstanding,
-        credit: 0,
-      })
-      // Mark this liability as settled
-      await db.storageLiability.update({
-        where: { id: sl.id },
-        data: { settledAmount: sl.accruedAmount, status: 'settled' },
-      })
-    }
-  }
 
-  // 4. Outbounds in period — sales value (credit) + pick/pack fees (debit)
+  // 4. Delivered outbounds in period — undelivered/cancelled orders are not
+  // merchant sales until delivery is confirmed.
   const outbounds = await db.outboundRecord.findMany({
     where: {
-      businessName: merchant.businessName,
+      vendorId: merchantId,
+      status: 'delivered',
       createdAt: { gte: startDate, lte: endDate },
     },
   })
@@ -160,18 +137,44 @@ export async function generateMerchantStatement(params: {
     })
   }
 
-  // 5. Returns in period — return processing fees
+  // 5. Returns in period — link each RMA to its original outbound order so a
+  // return is attributed to the correct merchant.
   const returns = await db.afterSalesRecord.findMany({
     where: {
-      customerName: { in: [] }, // TODO: link via originalOrderId when we have merchantId on AfterSalesRecord
       createdAt: { gte: startDate, lte: endDate },
     },
   })
-  // Simplification: we can't easily filter AfterSalesRecord by merchant without a schema change.
-  // For now, return fees are 0 unless we add merchantId to AfterSalesRecord.
-  // This is a known TODO.
-  const returnFees = 0
-  void returns // avoid unused-var error
+  const returnOrderRefs = returns.map((item) => item.originalOrderId).filter((id): id is string => Boolean(id))
+  const returnOrders = returnOrderRefs.length === 0
+    ? []
+    : await db.outboundRecord.findMany({
+        where: {
+          vendorId: merchantId,
+          OR: returnOrderRefs.flatMap((reference) => [
+            { outboundId: reference },
+            { orderNumber: reference },
+            { originalOrderNumber: reference },
+          ]),
+        },
+        select: { outboundId: true, orderNumber: true, originalOrderNumber: true },
+      })
+  const merchantReturnRefs = new Set(returnOrders.flatMap((order) => [order.outboundId, order.orderNumber, order.originalOrderNumber].filter(Boolean)))
+  let returnFees = 0
+  for (const item of returns) {
+    if (!item.originalOrderId || !merchantReturnRefs.has(item.originalOrderId)) continue
+    const processingFee = rateCard?.returnProcessingPerUnit ?? 0
+    const fee = processingFee + (rateCard?.returnsPerOrder ?? 0)
+    const refund = item.refundAmount ?? 0
+    returnFees += fee + refund
+    lineItems.push({
+      date: item.createdAt.toISOString().slice(0, 10),
+      type: 'return',
+      reference: item.afterSalesId,
+      description: `Return ${item.returnOrderNumber ?? item.afterSalesId}: refund and processing`,
+      debit: fee + refund,
+      credit: 0,
+    })
+  }
 
   // 6. Shrinkage debits in period
   const shrinkages = await db.shrinkageRecord.findMany({
@@ -179,6 +182,7 @@ export async function generateMerchantStatement(params: {
       merchantId,
       status: 'resolved',
       debitMerchant: true,
+      settledOnStatementId: null,
       resolvedAt: { gte: startDate, lte: endDate },
     },
   })
@@ -196,18 +200,19 @@ export async function generateMerchantStatement(params: {
     })
   }
 
-  // 7. COD collected on merchant's behalf in period
-  // Sum of codCollected on delivered outbound records for this merchant
+  // 7. COD collected is disclosed as a memo. It is already included in the
+  // delivered order's sale value and must not be credited a second time.
   const codAgg = await db.outboundRecord.aggregate({
     where: {
-      businessName: merchant.businessName,
+      vendorId: merchantId,
       status: 'delivered',
       deliveredAt: { gte: startDate, lte: endDate },
     },
     _sum: { codCollected: true },
   })
   const codCollected = codAgg._sum.codCollected ?? 0
-  const codFees = (rateCard?.codRemittanceFeePerOrder ?? 0) * outbounds.filter(o => o.status === 'delivered').length
+  const deliveredCodOrders = outbounds.filter(o => (o.codCollected ?? 0) > 0)
+  const codFees = (rateCard?.codRemittanceFeePerOrder ?? 0) * deliveredCodOrders.length
   if (codCollected > 0) {
     lineItems.push({
       date: endDate.toISOString().slice(0, 10),
@@ -215,7 +220,7 @@ export async function generateMerchantStatement(params: {
       reference: period,
       description: `COD collected on ${outbounds.filter(o => o.status === 'delivered').length} delivered orders`,
       debit: 0,
-      credit: codCollected,
+      credit: 0,
     })
     if (codFees > 0) {
       lineItems.push({
@@ -243,16 +248,31 @@ export async function generateMerchantStatement(params: {
     })
   }
 
-  // 9. Net payable
-  // credit = sales + COD + opening
-  // debit  = fees + storage + shrinkage + commissions + codFees
-  const totalCredit = salesValue + codCollected + openingBalance
+  // 9. Include approved manual/storage charges for this period. Charges are
+  // not recomputed here, so finance approval remains the control point.
+  const approvedCharges = await db.charge.findMany({
+    where: { merchantId, period, status: 'approved', sourceType: { in: ['manual', 'storage_liability'] } },
+  })
+  for (const charge of approvedCharges) {
+    if (charge.chargeType === 'storage') storageFees += charge.amount
+    lineItems.push({
+      date: charge.createdAt.toISOString().slice(0, 10),
+      type: charge.chargeType === 'storage' ? 'storage' : 'charge',
+      reference: charge.chargeId,
+      description: charge.description,
+      debit: charge.amount,
+      credit: 0,
+    })
+  }
+
+  // 10. Net payable. COD is informational because delivered sales already
+  // carry the customer amount.
+  const totalCredit = salesValue + openingBalance
   const totalDebit = inboundFees + storageFees + outboundFees + returnFees + shrinkageDebits + commissions + codFees
   const netPayable = totalCredit - totalDebit
 
   // Create the statement record
-  const stmtCount = await db.merchantStatement.count()
-  const statementId = `STMT-${period.replace('-', '')}-${String(stmtCount + 1).padStart(3, '0')}`
+  const statementId = `STMT-${period.replace('-', '')}-${merchantId}-${Date.now().toString(36).toUpperCase()}`
 
   const statement = await db.merchantStatement.create({
     data: {
@@ -272,38 +292,22 @@ export async function generateMerchantStatement(params: {
       salesValue,
       netPayable,
       isPaid: false,
-      status: 'issued',
+      status: 'draft',
       lineItems: JSON.stringify(lineItems),
       generatedBy,
     },
   })
 
-  // Update the merchant's pendingPayment to reflect this statement
-  await db.merchant.update({
-    where: { merchantId },
-    data: {
-      expectedPayment: { increment: netPayable },
-      pendingPayment: { increment: netPayable },
-    },
+  await db.shrinkageRecord.updateMany({
+    where: { id: { in: shrinkages.map((shrinkage) => shrinkage.id) }, settledOnStatementId: null },
+    data: { settledOnStatementId: statement.statementId },
   })
 
-  // Mark all approved charges for this merchant + period as 'invoiced'
-  // and link them to this statement — connects the charge ledger to statements
-  try {
-    await db.charge.updateMany({
-      where: {
-        merchantId,
-        period,
-        status: 'approved',
-      },
-      data: {
-        status: 'invoiced',
-        statementId: statement.statementId,
-      },
-    })
-  } catch (chargeErr) {
-    console.error('Charge ledger invoicing failed (non-blocking):', chargeErr)
-  }
+  // Link only the charges actually included in this statement.
+  await db.charge.updateMany({
+    where: { id: { in: approvedCharges.map((charge) => charge.id) }, status: 'approved' },
+    data: { status: 'invoiced', statementId: statement.statementId },
+  })
 
   return {
     statementId: statement.statementId,

@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2, Settings as SettingsIcon, Copy, Trash2, FileText } from 'lucide-react'
+import { Tag, Ruler, CreditCard, Warehouse, Plus, X, HelpCircle, RefreshCw, CheckCircle2, Settings as SettingsIcon, Trash2, Globe2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { OpsHeader } from '@/components/shared/ops-ui'
 import PageTransition from '@/components/shared/PageTransition'
@@ -22,6 +22,19 @@ interface SettingItem {
   value: string[]
   updatedBy: string | null
   updatedAt: string | null
+}
+
+type RegionalProfile = {
+  countryCode: string
+  countryName: string
+  currencyCode: string
+  currencyName: string
+  taxRegime: string
+  standardTaxRate: number
+  fiscalYearStartMonth: number
+  accountingFramework: string
+  inventoryCostingMethod: string
+  sources: Array<{ authority: string; url: string }>
 }
 
 const FEE_SECTIONS = [
@@ -185,6 +198,11 @@ export default function SettingsModule() {
   const [templateModalOpen, setTemplateModalOpen] = useState(false)
   const [editingTemplate, setEditingTemplate] = useState<Record<string, unknown> | null>(null)
   const [templateForm, setTemplateForm] = useState<{ name: string; description: string; fees: Record<string, number> }>({ name: '', description: '', fees: emptyFeeForm })
+  const [regionalCatalog, setRegionalCatalog] = useState<RegionalProfile[]>([])
+  const [regionalProfile, setRegionalProfile] = useState<RegionalProfile | null>(null)
+  const [regionalName, setRegionalName] = useState('Kwanza Demo')
+  const [regionalTaxRate, setRegionalTaxRate] = useState(0)
+  const [regionalSaving, setRegionalSaving] = useState(false)
 
   const fetchData = useCallback(async () => {
     try {
@@ -200,6 +218,45 @@ export default function SettingsModule() {
   }, [])
 
   useEffect(() => { fetchData() }, [fetchData])
+
+  useEffect(() => {
+    fetch('/api/tenant-configuration').then(r => r.json()).then(d => {
+      setRegionalCatalog(d.catalog || [])
+      if (d.tenant) {
+        setRegionalName(d.tenant.name)
+        setRegionalTaxRate(Number(d.tenant.standardTaxRate))
+        setRegionalProfile((d.catalog || []).find((p: RegionalProfile) => p.countryCode === d.tenant.countryCode) || null)
+      } else if (d.catalog?.[0]) {
+        setRegionalProfile(d.catalog[0])
+        setRegionalTaxRate(Number(d.catalog[0].standardTaxRate))
+      }
+    }).catch(() => toast.error('Failed to load regional accounting defaults'))
+  }, [])
+
+  const handleRegionalCountryChange = (countryCode: string) => {
+    const next = regionalCatalog.find(profile => profile.countryCode === countryCode) || null
+    setRegionalProfile(next)
+    if (next) setRegionalTaxRate(next.standardTaxRate)
+  }
+
+  const handleSaveRegionalProfile = async () => {
+    if (!regionalProfile || !regionalName.trim()) return
+    setRegionalSaving(true)
+    try {
+      const response = await fetch('/api/tenant-configuration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: regionalName.trim(), countryCode: regionalProfile.countryCode, standardTaxRate: regionalTaxRate }),
+      })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.error || 'Failed to save regional profile')
+      toast.success('Regional accounting profile saved for review')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to save regional profile')
+    } finally {
+      setRegionalSaving(false)
+    }
+  }
 
   // Fetch default rate card
   useEffect(() => {
@@ -348,6 +405,37 @@ export default function SettingsModule() {
             <Button size="sm" className="rounded-md text-xs h-7 bg-[#FF6B35] hover:bg-[#E55A25] text-white" onClick={handleSave} disabled={saving}>
               {saving ? <><RefreshCw size={12} className="mr-1 animate-spin" /> Saving...</> : <><CheckCircle2 size={12} className="mr-1" /> Save Changes</>}
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Regional tenant defaults */}
+      {regionalProfile && (
+        <div className="bg-white rounded-lg border border-gray-200 p-4 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0"><Globe2 size={16} className="text-blue-600" /></div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-gray-800">Tenant accounting profile</h2>
+                <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">Review required</Badge>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-1">Regional defaults are onboarding aids. Confirm tax and accounting treatment with the tenant&apos;s accountant before activation.</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div><Label className="text-[10px] text-gray-500">Tenant name</Label><Input value={regionalName} onChange={e => setRegionalName(e.target.value)} className="h-8 text-xs mt-1" /></div>
+            <div><Label className="text-[10px] text-gray-500">Country / region</Label><select value={regionalProfile.countryCode} onChange={e => handleRegionalCountryChange(e.target.value)} className="w-full h-8 mt-1 rounded-md border border-gray-200 px-2 text-xs bg-white">{regionalCatalog.map(profile => <option key={profile.countryCode} value={profile.countryCode}>{profile.countryName}</option>)}</select></div>
+            <div><Label className="text-[10px] text-gray-500">Standard tax rate (%)</Label><Input type="number" min="0" max="100" value={regionalTaxRate} onChange={e => setRegionalTaxRate(Number(e.target.value))} className="h-8 text-xs mt-1" /></div>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+            <div className="bg-gray-50 rounded-md p-2"><span className="block text-[9px] text-gray-400 uppercase">Currency</span><strong>{regionalProfile.currencyCode}</strong> <span className="text-gray-500">{regionalProfile.currencyName}</span></div>
+            <div className="bg-gray-50 rounded-md p-2"><span className="block text-[9px] text-gray-400 uppercase">Framework</span><strong>{regionalProfile.accountingFramework}</strong></div>
+            <div className="bg-gray-50 rounded-md p-2"><span className="block text-[9px] text-gray-400 uppercase">Inventory</span><strong>{regionalProfile.inventoryCostingMethod.toUpperCase()}</strong></div>
+            <div className="bg-gray-50 rounded-md p-2"><span className="block text-[9px] text-gray-400 uppercase">Fiscal year</span><strong>{regionalProfile.fiscalYearStartMonth === 1 ? 'January' : 'July'}</strong></div>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <p className="text-[10px] text-gray-400">Sources: {regionalProfile.sources.map(source => source.authority).join('; ')}</p>
+            <Button size="sm" onClick={handleSaveRegionalProfile} disabled={regionalSaving} className="h-8 text-xs bg-[#FF6B35] hover:bg-[#E55A25] text-white">{regionalSaving ? 'Saving...' : 'Save regional profile'}</Button>
           </div>
         </div>
       )}

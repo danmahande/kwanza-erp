@@ -12,7 +12,7 @@
  * All DB access happens at the API layer; this engine takes plain JS objects.
  */
 
-import type { Product, InboundRecord, OutboundRecord, ShrinkageRecord, NrvWriteDown } from '@prisma/client'
+import type { Product, InboundRecord, NrvWriteDown } from '@prisma/client'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. TYPES
@@ -203,6 +203,33 @@ export function fifoUnitCost(layers: CostLayer[]): number {
   const totalQty = layers.reduce((s, l) => s + l.qtyRemaining, 0)
   if (totalQty === 0) return 0
   return fifoValue(layers) / totalQty
+}
+
+/** Cost delivered issues against FIFO layers in delivery-date order. */
+export function fifoIssueCost(args: {
+  inbounds: Pick<InboundRecord, 'qtyIn' | 'unitPrice' | 'createdAt'>[]
+  issues: { qty: number; occurredAt: Date }[]
+}): number {
+  const layers = [...args.inbounds]
+    .filter((record) => record.unitPrice != null)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+    .map((record) => ({ qty: record.qtyIn, unitCost: record.unitPrice ?? 0 }))
+  const issues = [...args.issues].sort((a, b) => a.occurredAt.getTime() - b.occurredAt.getTime())
+  let totalCost = 0
+  let layerIndex = 0
+
+  for (const issue of issues) {
+    let remaining = Math.max(0, issue.qty)
+    while (remaining > 0 && layerIndex < layers.length) {
+      const layer = layers[layerIndex]
+      const relieved = Math.min(remaining, layer.qty)
+      totalCost += relieved * layer.unitCost
+      layer.qty -= relieved
+      remaining -= relieved
+      if (layer.qty === 0) layerIndex++
+    }
+  }
+  return totalCost
 }
 
 /**
@@ -565,10 +592,10 @@ export function computeProductValuation(args: {
     nrvPerUnit,
   })
 
-  // Existing NRV register balance (active write-downs − reversals already netted by status)
+  // Existing NRV balance is the net of active write-downs and reversals.
   const existingWriteDownBalance = nrvRegister
-    .filter(r => r.status === 'active' && r.kind === 'write_down')
-    .reduce((s, r) => s + r.totalAmount, 0)
+    .filter(r => r.status === 'active')
+    .reduce((s, r) => s + (r.kind === 'write_down' ? r.totalAmount : -r.totalAmount), 0)
 
   // Variance — trailing-period MPV from inbounds in the variance window
   // Use trailing 90 days as the variance analysis window (typical management review cycle)

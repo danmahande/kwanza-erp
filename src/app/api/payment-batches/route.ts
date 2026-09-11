@@ -70,9 +70,10 @@ export async function POST(req: NextRequest) {
     }
 
     // Filter to only unpaid ones
-    const unpaidStatements = statements.filter(s => !s.isPaid)
+    // A payout is only allowed after maker-checker approval and issuance.
+    const unpaidStatements = statements.filter(s => !s.isPaid && s.status === 'issued' && s.netPayable > 0)
     if (unpaidStatements.length === 0) {
-      return NextResponse.json({ error: 'All selected statements are already paid' }, { status: 400 })
+      return NextResponse.json({ error: 'Only unpaid issued statements with a positive balance can be paid' }, { status: 400 })
     }
 
     const totalAmount = unpaidStatements.reduce((s, st) => s + st.netPayable, 0)
@@ -130,20 +131,8 @@ export async function POST(req: NextRequest) {
           },
         })
 
-        // Mark the statement as paid
-        await tx.merchantStatement.update({
-          where: { id: stmt.id },
-          data: { isPaid: true, paidAt: paymentDate, status: 'paid' },
-        })
-
-        // Update merchant cumulative figures
-        await tx.merchant.update({
-          where: { merchantId: stmt.merchantId },
-          data: {
-            actualPayment: { increment: stmt.netPayable },
-            pendingPayment: { decrement: stmt.netPayable },
-          },
-        })
+        // The statement remains issued until the bank confirms disbursement.
+        // This prevents a submitted batch from looking like cash was paid.
       }
 
       return { batch, paymentsCreated: unpaidStatements.length, totalAmount }
@@ -183,6 +172,10 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'Batch not found' }, { status: 404 })
     }
 
+    if (data.status === 'disbursed' && existing.status === 'disbursed') {
+      return NextResponse.json({ error: 'Batch is already disbursed' }, { status: 409 })
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // TRANSACTION — update batch + mark payments completed on disburse
     // ═══════════════════════════════════════════════════════════════
@@ -196,6 +189,26 @@ export async function PUT(req: NextRequest) {
           where: { batchId: existing.batchId },
           data: { status: 'completed' },
         })
+
+        const payments = await tx.merchantPayment.findMany({
+          where: { batchId: existing.batchId, status: { in: ['submitted', 'completed'] } },
+          select: { merchantId: true, amount: true, statementId: true },
+        })
+        for (const payment of payments) {
+          if (payment.statementId) {
+            await tx.merchantStatement.updateMany({
+              where: { statementId: payment.statementId, isPaid: false },
+              data: { isPaid: true, paidAt: data.disbursedAt, status: 'paid' },
+            })
+          }
+          await tx.merchant.update({
+            where: { merchantId: payment.merchantId },
+            data: {
+              actualPayment: { increment: payment.amount },
+              pendingPayment: { decrement: payment.amount },
+            },
+          })
+        }
       }
 
       const updated = await tx.paymentBatch.update({
@@ -259,23 +272,8 @@ export async function DELETE(req: NextRequest) {
     await db.$transaction(async (tx) => {
       // 1. Reverse merchant cumulative figures for each payment
       for (const p of payments) {
-        if (p.merchantId && p.amount > 0) {
-          await tx.merchant.update({
-            where: { merchantId: p.merchantId },
-            data: {
-              actualPayment: { decrement: p.amount },
-              pendingPayment: { increment: p.amount },
-            },
-          })
-        }
-
-        // 2. Re-open statements that were marked paid by this batch
-        if (p.statementId) {
-          await tx.merchantStatement.updateMany({
-            where: { statementId: p.statementId },
-            data: { isPaid: false, paidAt: null, status: 'issued' },
-          })
-        }
+        // Undisbursed batches have not changed merchant balances or statement
+        // payment state, so deletion only removes their pending payment rows.
       }
 
       // 3. Delete the payments
