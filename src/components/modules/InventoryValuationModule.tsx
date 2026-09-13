@@ -1,10 +1,26 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { Loader2, Search, ArrowUpRight, ArrowDownRight, AlertTriangle, CheckCircle2, X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import {
+  Search, RefreshCw, Download, Plus, Settings as SettingsIcon,
+  TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, X, ChevronDown,
+  HelpCircle, Calculator,
+} from 'lucide-react'
 import { toast } from 'sonner'
+import {
+  OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr,
+} from '@/components/shared/ops-ui'
 
-// ── Types (mirror of API response shape) ──
+// ── Types (mirror of API response) ──
 interface Settings {
   defaultCostingMethod: string
   capitalCostRate: number
@@ -135,57 +151,48 @@ interface ValuationResponse {
 
 type MethodKey = 'fifo' | 'avco' | 'standard' | 'specific_id'
 
-const METHODS: Array<{
-  key: MethodKey
-  label: string
-  full: string
-  ias: string
-  hint: string
-}> = [
-  { key: 'fifo',        label: 'FIFO',        full: 'First-In, First-Out', ias: 'IAS 2 §25', hint: 'Oldest cost issued first. Closing inventory reflects most recent costs. Balance sheet approximates current cost.' },
-  { key: 'avco',        label: 'AVCO',        full: 'Weighted Average', ias: 'IAS 2 §27', hint: 'Moving weighted average after each receipt. Smooths price volatility. Simple to compute.' },
-  { key: 'standard',    label: 'STANDARD',   full: 'Standard Cost', ias: 'IAS 2 §21', hint: 'Predetermined cost benchmark. Variance analysis highlights inefficiency.' },
-  { key: 'specific_id', label: 'SPECIFIC ID', full: 'Specific Identification', ias: 'IAS 2 §23', hint: 'Cost traced to specific physical item. Required for non-interchangeable goods.' },
+// ── Methods: yeezy-style toggle (text labels, active bold/orange, inactive gray) ──
+const METHODS: Array<{ key: MethodKey; label: string; full: string; ias: string; hint: string }> = [
+  { key: 'fifo',        label: 'FIFO',         full: 'First-In, First-Out',          ias: 'IAS 2 §25', hint: 'Oldest cost issued first. Closing inventory reflects most recent costs.' },
+  { key: 'avco',        label: 'AVCO',        full: 'Weighted Average Cost',         ias: 'IAS 2 §27', hint: 'Moving weighted average after each receipt. Smooths price volatility.' },
+  { key: 'standard',    label: 'STANDARD',    full: 'Standard Cost',                  ias: 'IAS 2 §21', hint: 'Predetermined cost benchmark. Variance analysis highlights inefficiency.' },
+  { key: 'specific_id', label: 'SPECIFIC ID', full: 'Specific Identification',        ias: 'IAS 2 §23', hint: 'Cost traced to specific physical item. For non-interchangeable goods.' },
 ]
 
-// ── Benchmarks (per ACCA MDC + IAS 2 research) ──
+// ── Benchmarks (ACCA MDC + IAS 2) ──
 const BENCHMARKS = {
-  turnover: { min: 4, max: 6, label: 'turns/year', source: 'ACCA MDC' },
-  dio:      { min: 60, max: 90, label: 'days', source: 'ACCA MDC' },
-  holding:  { min: 0.15, max: 0.30, label: 'of inventory value', source: 'ACCA MDC' },
-  nrvWriteDown: { max: 0.05, label: 'of inventory value', source: 'IAS 2 §9' },
-  variance:    { max: 0.05, label: 'of standard cost', source: 'ACCA MDC materiality' },
+  turnover: { min: 4, max: 6, label: '4–6 turns/year', source: 'ACCA MDC' },
+  dio:      { min: 60, max: 90, label: '60–90 days', source: 'ACCA MDC' },
+  holding:  { min: 0.15, max: 0.30, label: '15–30% of inventory value', source: 'ACCA MDC' },
+  nrv:      { max: 0.05, label: '< 5% of inventory value', source: 'IAS 2 §9' },
+  variance: { max: 0.05, label: '< 5% of standard cost', source: 'ACCA MDC materiality' },
 }
 
 // ── Formatters ──
-const fmtUGX = (n: number, opts?: { compact?: boolean; symbol?: boolean }): string => {
-  if (n == null || isNaN(n)) return opts?.symbol === false ? '0' : 'UGX 0'
-  const sym = opts?.symbol === false ? '' : 'UGX '
-  if (opts?.compact) {
+const fmtUGX = (n: number, compact = false): string => {
+  if (n == null || isNaN(n)) return 'UGX 0'
+  if (compact) {
     const abs = Math.abs(n)
-    if (abs >= 1_000_000_000) return `${sym}${(n / 1_000_000_000).toFixed(2)}B`
-    if (abs >= 1_000_000)     return `${sym}${(n / 1_000_000).toFixed(2)}M`
-    if (abs >= 1_000)         return `${sym}${(n / 1_000).toFixed(1)}K`
+    if (abs >= 1_000_000_000) return `UGX ${(n / 1_000_000_000).toFixed(2)}B`
+    if (abs >= 1_000_000)     return `UGX ${(n / 1_000_000).toFixed(2)}M`
+    if (abs >= 1_000)         return `UGX ${(n / 1_000).toFixed(1)}K`
   }
-  return `${sym}${n.toLocaleString('en-UG', { maximumFractionDigits: 0 })}`
+  return `UGX ${n.toLocaleString('en-UG', { maximumFractionDigits: 0 })}`
 }
-
 const fmtNum = (n: number): string => {
   if (n == null || isNaN(n)) return '0'
   return n.toLocaleString('en-UG', { maximumFractionDigits: 0 })
 }
-
 const fmtPct = (n: number, digits = 1): string => {
   if (n == null || isNaN(n)) return '0%'
   return `${(n * 100).toFixed(digits)}%`
 }
-
 const fmtDate = (d: string): string => {
   try { return new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) }
   catch { return d }
 }
 
-// ── Status check helpers ──
+// ── Status helpers ──
 type Status = 'healthy' | 'monitor' | 'critical'
 function turnoverStatus(t: number): Status {
   if (t === 0) return 'monitor'
@@ -206,11 +213,11 @@ function holdingStatus(pct: number): Status {
   if (pct < 0.10) return 'monitor'
   return 'healthy'
 }
-function nrvWriteDownStatus(writeDown: number, totalCost: number): Status {
+function nrvStatus(writeDown: number, totalCost: number): Status {
   if (totalCost === 0) return 'healthy'
   const pct = writeDown / totalCost
   if (pct > 0.10) return 'critical'
-  if (pct > BENCHMARKS.nrvWriteDown.max) return 'monitor'
+  if (pct > BENCHMARKS.nrv.max) return 'monitor'
   return 'healthy'
 }
 function varianceStatus(variance: number, cogs: number): Status {
@@ -221,14 +228,27 @@ function varianceStatus(variance: number, cogs: number): Status {
   return 'healthy'
 }
 
-// ── Master component ──
+function statusColor(s: Status): string {
+  return s === 'healthy' ? 'text-green-700'
+    : s === 'monitor' ? 'text-amber-700'
+    : 'text-red-700'
+}
+function statusDot(s: Status): string {
+  return s === 'healthy' ? 'bg-green-500'
+    : s === 'monitor' ? 'bg-amber-500'
+    : 'bg-red-500'
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ════════════════════════════════════════════════════════════════════════════
 export default function InventoryValuationModule() {
   const [data, setData] = useState<ValuationResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
-  const [selectedMethod, setSelectedMethod] = useState<MethodKey | null>(null)
+  const [selectedMethod, setSelectedMethod] = useState<MethodKey>('fifo')
 
-  // ── Filters ──
+  // Filters
   const [search, setSearch] = useState('')
   const [merchant, setMerchant] = useState<string>('')
   const [dateFrom, setDateFrom] = useState<string>('')
@@ -236,7 +256,12 @@ export default function InventoryValuationModule() {
   const [priceMin, setPriceMin] = useState<string>('')
   const [priceMax, setPriceMax] = useState<string>('')
 
-  // ── Load ──
+  // Modals
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [nrvOpen, setNrvOpen] = useState(false)
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
+
   const load = useCallback(async () => {
     setLoading(true)
     setLoadError(null)
@@ -248,7 +273,6 @@ export default function InventoryValuationModule() {
       }
       const json = await res.json()
       setData(json)
-      // Auto-select the default method from settings
       if (json.settings?.defaultCostingMethod) {
         setSelectedMethod(json.settings.defaultCostingMethod as MethodKey)
       }
@@ -264,32 +288,28 @@ export default function InventoryValuationModule() {
 
   useEffect(() => { load() }, [load])
 
-  // ── Filtered products ──
+  // Filtered products
   const filteredProducts = useMemo(() => {
     if (!data) return []
     const fromTs = dateFrom ? new Date(dateFrom).getTime() : null
-    const toTs = dateTo ? new Date(dateTo).getTime() + 24*60*60*1000 : null // inclusive end of day
+    const toTs = dateTo ? new Date(dateTo).getTime() + 24 * 60 * 60 * 1000 : null
     const minN = priceMin ? parseFloat(priceMin) : null
     const maxN = priceMax ? parseFloat(priceMax) : null
 
     return data.products.filter(p => {
-      // Product search
       if (search) {
         const q = search.toLowerCase()
         if (!p.productLabel.toLowerCase().includes(q) &&
             !p.merchantName.toLowerCase().includes(q) &&
             !p.productId.toLowerCase().includes(q)) return false
       }
-      // Merchant filter
       if (merchant && p.merchantName !== merchant) return false
-      // Date filter — apply to oldest FIFO layer receivedAt
       if (fromTs || toTs) {
         const layerTs = p.layers[0]?.receivedAt ? new Date(p.layers[0].receivedAt).getTime() : null
         if (layerTs == null) return false
         if (fromTs && layerTs < fromTs) return false
         if (toTs && layerTs > toTs) return false
       }
-      // Price filter — applied to selectedValue per unit (carryingValuePerUnit)
       const unitVal = p.carryingValuePerUnit
       if (minN != null && unitVal < minN) return false
       if (maxN != null && unitVal > maxN) return false
@@ -297,51 +317,38 @@ export default function InventoryValuationModule() {
     })
   }, [data, search, merchant, dateFrom, dateTo, priceMin, priceMax])
 
-  // ── Computed totals for selected method (applied to filtered set) ──
+  // Totals per method (over filtered set)
   const methodTotals = useMemo(() => {
-    if (!data || !selectedMethod) return null
+    if (!data) return null
     const ps = filteredProducts
     let fifoTotal = 0, avcoTotal = 0, stdTotal = 0
     let writeDownTotal = 0, nrvWriteDownCount = 0
     let varianceFlaggedCount = 0, stockoutCriticalCount = 0
-    let cogsTrailing = 0
     let totalStock = 0, totalRetail = 0
-
     for (const p of ps) {
       fifoTotal += p.fifoValue
       avcoTotal += p.avcoValue
       stdTotal  += p.standardValue
-      if (p.writeDownRequired) {
-        writeDownTotal += p.writeDownTotal
-        nrvWriteDownCount++
-      }
+      if (p.writeDownRequired) { writeDownTotal += p.writeDownTotal; nrvWriteDownCount++ }
       if (p.varianceFlagged) varianceFlaggedCount++
       if (p.stockoutRisk === 'critical') stockoutCriticalCount++
-      cogsTrailing += p.annualDemand * p.standardCost
       totalStock += p.currentStock
       totalRetail += p.currentStock * p.unitSellingPrice
     }
-
     const selectedTotal = selectedMethod === 'fifo' ? fifoTotal
       : selectedMethod === 'avco' ? avcoTotal
       : selectedMethod === 'standard' ? stdTotal
-      : fifoTotal // specific_id falls back to FIFO
-
-    // Healthy range for total inventory value = 80%-120% of the average across all 3 methods
+      : fifoTotal
     const avg = (fifoTotal + avcoTotal + stdTotal) / 3
-    const range = { min: avg * 0.80, max: avg * 1.20 }
-
     return {
       fifoTotal, avcoTotal, stdTotal, selectedTotal,
-      writeDownTotal, nrvWriteDownCount,
-      varianceFlaggedCount, stockoutCriticalCount,
-      cogsTrailing, totalStock, totalRetail,
-      range,
+      writeDownTotal, nrvWriteDownCount, varianceFlaggedCount, stockoutCriticalCount,
+      totalStock, totalRetail,
+      range: { min: avg * 0.80, max: avg * 1.20 },
       productCount: ps.length,
     }
   }, [data, selectedMethod, filteredProducts])
 
-  // ── Portfolio KPIs (always whole-portfolio, not filtered) ──
   const portfolio = useMemo(() => {
     if (!data) return null
     const k = data.kpis
@@ -353,31 +360,99 @@ export default function InventoryValuationModule() {
       turnoverStatus: turnoverStatus(k.portfolioTurnover),
       dioStatus: dioStatus(k.portfolioDio),
       holdingStatus: holdingStatus(k.holdingCostPct),
-      nrvStatus: nrvWriteDownStatus(k.totalNrvWriteDown, k.totalInventoryAtCost),
+      nrvStatus: nrvStatus(k.totalNrvWriteDown, k.totalInventoryAtCost),
       varianceStatus: varianceStatus(k.totalMaterialPriceVariance, k.cogsTrailing),
     }
   }, [data])
 
-  // ── Merchants list for filter ──
   const merchants = useMemo(() => {
     if (!data) return []
     return Array.from(new Set(data.products.map(p => p.merchantName))).sort()
   }, [data])
 
-  // ── Clear all filters ──
   const clearFilters = () => {
     setSearch(''); setMerchant(''); setDateFrom(''); setDateTo(''); setPriceMin(''); setPriceMax('')
   }
-  const hasActiveFilters = search || merchant || dateFrom || dateTo || priceMin || priceMax
+  const hasActiveFilters = !!(search || merchant || dateFrom || dateTo || priceMin || priceMax)
 
-  // ── Loading ──
+  // ── Save settings ──
+  const handleSaveSettings = async (s: Partial<Settings>) => {
+    try {
+      const res = await fetch('/api/inventory-valuation/settings', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(s),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
+      toast.success('Valuation settings updated')
+      await load()
+    } catch (e: any) { toast.error(e.message || 'Failed to save settings') }
+  }
+
+  const handleMethodChange = async (productId: string, method: string) => {
+    try {
+      const res = await fetch('/api/inventory-valuation/method', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ productId, costingMethod: method }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
+      toast.success(`Costing method changed to ${method.toUpperCase()}`)
+      await load()
+    } catch (e: any) { toast.error(e.message || 'Failed to change method') }
+  }
+
+  const handleNrvSubmit = async (d: { productId: string; qty: number; unitCost: number; nrvPerUnit: number; reason: string }) => {
+    try {
+      const res = await fetch('/api/inventory-valuation/nrv', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'write_down', ...d }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
+      toast.success('NRV write-down recorded (IAS 2 §9)')
+      await load()
+    } catch (e: any) { toast.error(e.message || 'Failed to record write-down') }
+  }
+
+  const handleNrvReverse = async (row: NrvRow) => {
+    const newNrv = prompt(`Enter new NRV per unit (must be > ${row.nrvPerUnit.toLocaleString()} UGX to reverse):`)
+    if (!newNrv) return
+    const reason = prompt('Reason for reversal (audit trail):')
+    if (!reason) return
+    try {
+      const res = await fetch('/api/inventory-valuation/nrv', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'reversal', reversesId: row.id, qty: row.qty, nrvPerUnitNew: parseFloat(newNrv), reason }),
+      })
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
+      toast.success('NRV reversal recorded (IAS 2 §33)')
+      await load()
+    } catch (e: any) { toast.error(e.message || 'Failed to record reversal') }
+  }
+
+  const exportCsv = () => {
+    if (!data || !methodTotals) return
+    const headers = ['Product', 'Merchant', 'On Hand', 'FIFO Value', 'AVCO Value', 'Std Value', 'Selected Value', 'Carrying Value', 'NRV/unit', 'Write-down', 'ABC', 'Turnover', 'DIO', 'EOQ', 'ROP']
+    const rows = filteredProducts.map(p => [
+      p.productLabel, p.merchantName, p.currentStock,
+      p.fifoValue.toFixed(0), p.avcoValue.toFixed(0), p.standardValue.toFixed(0),
+      (selectedMethod === 'fifo' ? p.fifoValue : selectedMethod === 'avco' ? p.avcoValue : selectedMethod === 'standard' ? p.standardValue : p.fifoValue).toFixed(0),
+      p.carryingValue.toFixed(0), p.nrvPerUnit.toFixed(0),
+      p.writeDownRequired ? p.writeDownTotal.toFixed(0) : '0',
+      p.abcClass, p.inventoryTurnover.toFixed(2), p.daysInventoryOutstanding.toFixed(0),
+      p.eoq.toFixed(0), p.reorderPoint,
+    ])
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v ?? ''}"`).join(','))].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = `inventory-valuation-${selectedMethod}-${new Date().toISOString().split('T')[0]}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
+  // ── Loading state ──
   if (loading && !data) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center">
-        <div className="flex items-center gap-3 text-neutral-400">
-          <Loader2 size={16} className="animate-spin" />
-          <span className="text-xs uppercase tracking-[0.3em]">Computing</span>
-        </div>
+      <div className="flex items-center justify-center py-12 text-gray-400">
+        <RefreshCw size={16} className="animate-spin mr-2" />
+        <span className="text-xs uppercase tracking-wider">Computing valuation…</span>
       </div>
     )
   }
@@ -385,25 +460,26 @@ export default function InventoryValuationModule() {
   // ── Error panel ──
   if (loadError && !data) {
     return (
-      <div className="min-h-[80vh] flex items-center justify-center px-6">
-        <div className="max-w-xl space-y-6 text-center">
-          <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Error</p>
-          <h2 className="text-3xl font-light tracking-tight text-neutral-900">Valuation unavailable</h2>
-          <p className="text-sm text-neutral-500 leading-relaxed font-mono break-words">{loadError}</p>
-          <div className="pt-6 border-t border-neutral-200">
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">Recovery</p>
-            <ol className="text-xs text-neutral-700 space-y-2 list-decimal list-inside text-left font-mono">
-              <li>npx prisma generate</li>
-              <li>npx prisma db push</li>
-              <li>npm run dev</li>
-            </ol>
+      <div className="space-y-4">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-red-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold text-red-900 mb-1">Failed to load Inventory Valuation</h3>
+              <p className="text-xs text-red-700 font-mono break-words mb-3">{loadError}</p>
+              <div className="mt-3 pt-3 border-t border-red-200">
+                <p className="text-xs font-semibold text-red-900 mb-2">Most likely cause — run these in order:</p>
+                <ol className="text-xs text-red-800 space-y-1 list-decimal list-inside font-mono">
+                  <li>npx prisma generate</li>
+                  <li>npx prisma db push</li>
+                  <li>npm run dev</li>
+                </ol>
+              </div>
+              <button onClick={() => { setLoadError(null); load() }} className="mt-3 text-xs font-medium text-red-700 hover:bg-red-100 px-3 py-1.5 rounded-md border border-red-200">
+                Try again
+              </button>
+            </div>
           </div>
-          <button
-            onClick={() => { setLoadError(null); load() }}
-            className="mt-6 text-xs uppercase tracking-[0.3em] text-neutral-900 underline underline-offset-8 hover:text-neutral-500"
-          >
-            Try again
-          </button>
         </div>
       </div>
     )
@@ -411,29 +487,30 @@ export default function InventoryValuationModule() {
 
   if (!data || !portfolio || !methodTotals) return null
 
-  const { settings, kpis } = data
-  const method = METHODS.find(m => m.key === selectedMethod) || METHODS[0]
+  const { kpis } = data
+  const activeMethod = METHODS.find(m => m.key === selectedMethod) || METHODS[0]
   const total = methodTotals.selectedTotal
+  const withinRange = total >= methodTotals.range.min && total <= methodTotals.range.max
 
-  // ── Warnings list ──
+  // Warnings list
   const warnings: Array<{ label: string; value: string; status: Status }> = []
   if (methodTotals.nrvWriteDownCount > 0) {
     warnings.push({
-      label: `${methodTotals.nrvWriteDownCount} product${methodTotals.nrvWriteDownCount > 1 ? 's' : ''} require NRV write-down`,
-      value: fmtUGX(methodTotals.writeDownTotal, { compact: true }),
+      label: `${methodTotals.nrvWriteDownCount} product${methodTotals.nrvWriteDownCount > 1 ? 's' : ''} require NRV write-down (IAS 2 §9)`,
+      value: fmtUGX(methodTotals.writeDownTotal, true),
       status: portfolio.nrvStatus,
     })
   }
   if (methodTotals.varianceFlaggedCount > 0) {
     warnings.push({
-      label: `${methodTotals.varianceFlaggedCount} variance${methodTotals.varianceFlaggedCount > 1 ? 's' : ''} flagged for investigation`,
-      value: `>${(settings.varianceMaterialityPct * 100).toFixed(1)}% of std cost`,
+      label: `${methodTotals.varianceFlaggedCount} variance${methodTotals.varianceFlaggedCount > 1 ? 's' : ''} flagged for investigation (>${(data.settings.varianceMaterialityPct * 100).toFixed(1)}%)`,
+      value: 'Material',
       status: portfolio.varianceStatus,
     })
   }
   if (methodTotals.stockoutCriticalCount > 0) {
     warnings.push({
-      label: `${methodTotals.stockoutCriticalCount} stockout risk critical`,
+      label: `${methodTotals.stockoutCriticalCount} product${methodTotals.stockoutCriticalCount > 1 ? 's' : ''} at critical stockout risk`,
       value: '≤ 7 days cover',
       status: 'critical',
     })
@@ -453,658 +530,829 @@ export default function InventoryValuationModule() {
     })
   }
 
+  // KPI cells
+  const kpiCells = [
+    { label: 'INV AT COST', value: fmtUGX(kpis.totalInventoryAtCost, true) },
+    { label: 'CARRYING VALUE', value: fmtUGX(kpis.totalCarryingValue, true), highlight: kpis.totalNrvWriteDown > 0, highlightColor: 'orange' as const },
+    { label: 'NRV WRITE-DOWN', value: fmtUGX(kpis.totalNrvWriteDown, true), highlight: kpis.totalNrvWriteDown > 0, highlightColor: 'red' as const },
+    { label: 'TURNOVER', value: `${kpis.portfolioTurnover.toFixed(2)}×` },
+    { label: 'DIO', value: kpis.portfolioDio > 0 ? `${kpis.portfolioDio.toFixed(0)}d` : '—' },
+    { label: 'HOLDING %', value: fmtPct(kpis.holdingCostPct), highlight: kpis.holdingCostPct > 0.30, highlightColor: 'red' as const },
+    { label: 'COGS (365d)', value: fmtUGX(kpis.cogsTrailing, true) },
+  ]
+
   return (
-    <div className="min-h-screen bg-[#FAFAF7] text-neutral-900">
-      {/* ════════════════════════════════════════════════════════════
-          HEADER — massive title, no decoration
-         ════════════════════════════════════════════════════════════ */}
-      <section className="px-6 md:px-12 pt-16 md:pt-24 pb-8 md:pb-12 border-b border-neutral-200">
-        <div className="max-w-7xl">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400 mb-6 md:mb-8">
-            IAS 2 · ACCA MDC · CPA Uganda
-          </p>
-          <h1 className="text-5xl md:text-7xl lg:text-8xl font-light tracking-tight leading-[0.95]">
-            Inventory<br />
-            <span className="text-neutral-400">Valuation</span>
-          </h1>
-          <p className="mt-6 md:mt-8 max-w-2xl text-sm md:text-base text-neutral-600 leading-relaxed">
-            Cost layers built from inbound records. Lower-of-cost-or-NRV per IAS 2 §9.
-            Variances, turnover, and holding costs per ACCA Management Decision &amp; Control.
-          </p>
-          <div className="mt-8 md:mt-12 flex flex-wrap gap-8 md:gap-16 text-[10px] uppercase tracking-[0.3em] text-neutral-500">
-            <div>
-              <div className="text-neutral-300 mb-1">Products</div>
-              <div className="text-neutral-900 text-sm normal-case tracking-normal font-mono">{methodTotals.productCount}</div>
-            </div>
-            <div>
-              <div className="text-neutral-300 mb-1">Stock units</div>
-              <div className="text-neutral-900 text-sm normal-case tracking-normal font-mono">{fmtNum(methodTotals.totalStock)}</div>
-            </div>
-            <div>
-              <div className="text-neutral-300 mb-1">At retail</div>
-              <div className="text-neutral-900 text-sm normal-case tracking-normal font-mono">{fmtUGX(methodTotals.totalRetail, { compact: true })}</div>
-            </div>
-            <div>
-              <div className="text-neutral-300 mb-1">COGS (365d)</div>
-              <div className="text-neutral-900 text-sm normal-case tracking-normal font-mono">{fmtUGX(methodTotals.cogsTrailing, { compact: true })}</div>
-            </div>
-          </div>
+    <div className="space-y-3">
+      {/* ── Header + KPI ribbon (same as every other module) ── */}
+      <OpsHeader
+        title="Inventory Valuation"
+        description="IAS 2 costing · Lower-of-cost-or-NRV · ACCA MDC variance, turnover & holding cost"
+        kpiCells={kpiCells}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Search products..."
+      >
+        <Button size="sm" variant="outline" onClick={load} className="h-7 text-xs rounded-md">
+          <RefreshCw size={12} className="mr-1" /> Refresh
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} className="h-7 text-xs rounded-md">
+          <SettingsIcon size={12} className="mr-1" /> Settings
+        </Button>
+        <Button size="sm" variant="outline" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+          <HelpCircle size={12} className="mr-1" /> Help
+        </Button>
+        <Button size="sm" variant="outline" onClick={exportCsv} className="h-7 text-xs rounded-md">
+          <Download size={12} className="mr-1" /> Export
+        </Button>
+        <Button size="sm" onClick={() => setNrvOpen(true)} className="h-7 text-xs rounded-md bg-red-600 hover:bg-red-700 text-white">
+          <Plus size={12} className="mr-1" /> NRV Write-Down
+        </Button>
+      </OpsHeader>
+
+      {/* ── Method toggle (yeezy.com MALE | FEMALE pattern) ── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Costing Method · IAS 2</span>
+          <span className="text-[10px] text-gray-400">LIFO prohibited under IAS 2 §25</span>
         </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════════
-          METHOD SELECTOR — 4 huge tiles, no borders
-         ════════════════════════════════════════════════════════════ */}
-      <section className="px-6 md:px-12 py-12 md:py-20 border-b border-neutral-200">
-        <div className="max-w-7xl">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400 mb-8 md:mb-12">
-            01 — Costing Method
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-px bg-neutral-200">
-            {METHODS.map(m => {
-              const isSelected = selectedMethod === m.key
-              const methodTotal = m.key === 'fifo' ? methodTotals.fifoTotal
-                : m.key === 'avco' ? methodTotals.avcoTotal
-                : m.key === 'standard' ? methodTotals.stdTotal
-                : methodTotals.fifoTotal
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => setSelectedMethod(m.key)}
-                  className={`
-                    group bg-[#FAFAF7] p-6 md:p-8 text-left transition-all duration-300
-                    ${isSelected ? 'bg-neutral-900 text-[#FAFAF7]' : 'hover:bg-neutral-50'}
-                  `}
-                >
-                  <div className="flex items-start justify-between mb-6 md:mb-8">
-                    <span className={`text-[10px] uppercase tracking-[0.3em] ${isSelected ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                      {m.ias}
-                    </span>
-                    {isSelected && (
-                      <CheckCircle2 size={14} className="text-[#FAFAF7]" />
-                    )}
-                  </div>
-                  <h3 className={`text-2xl md:text-3xl font-light tracking-tight mb-2 ${isSelected ? 'text-[#FAFAF7]' : 'text-neutral-900'}`}>
-                    {m.label}
-                  </h3>
-                  <p className={`text-xs mb-6 md:mb-8 ${isSelected ? 'text-neutral-400' : 'text-neutral-500'}`}>
-                    {m.full}
-                  </p>
-                  <div className={`text-[10px] uppercase tracking-[0.3em] mb-1 ${isSelected ? 'text-neutral-500' : 'text-neutral-400'}`}>
-                    Portfolio total
-                  </div>
-                  <div className={`text-lg md:text-xl font-mono ${isSelected ? 'text-[#FAFAF7]' : 'text-neutral-900'}`}>
-                    {fmtUGX(methodTotal, { compact: true })}
-                  </div>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* LIFO block notice */}
-          <p className="mt-6 md:mt-8 text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-            LIFO prohibited under IAS 2 §25 · not available
-          </p>
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════════
-          SELECTED METHOD — huge total + benchmark range + warnings
-         ════════════════════════════════════════════════════════════ */}
-      {selectedMethod && method && (
-        <section className="px-6 md:px-12 py-16 md:py-24 border-b border-neutral-200">
-          <div className="max-w-7xl">
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-16">
-              {/* LEFT — Massive total */}
-              <div className="lg:col-span-7">
-                <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400 mb-6">
-                  02 — {method.label} Valuation
-                </p>
-                <h2 className="text-[10vw] md:text-[7vw] lg:text-[5.5vw] font-light tracking-tight leading-none text-neutral-900 font-mono">
-                  {fmtUGX(total, { compact: true, symbol: false })}
-                </h2>
-                <p className="mt-4 md:mt-6 text-sm text-neutral-500 max-w-md leading-relaxed">
-                  {method.hint}
-                </p>
-
-                {/* Benchmark range */}
-                <div className="mt-10 md:mt-12 pt-6 border-t border-neutral-200">
-                  <div className="flex items-baseline justify-between mb-3">
-                    <span className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-                      Healthy range
-                    </span>
-                    <span className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-                      {BENCHMARKS.turnover.source}
-                    </span>
-                  </div>
-                  <div className="flex items-baseline gap-3 mb-4">
-                    <span className="text-xl md:text-2xl font-mono text-neutral-900">
-                      {fmtUGX(methodTotals.range.min, { compact: true })}
-                    </span>
-                    <span className="text-neutral-300 text-sm">—</span>
-                    <span className="text-xl md:text-2xl font-mono text-neutral-900">
-                      {fmtUGX(methodTotals.range.max, { compact: true })}
-                    </span>
-                  </div>
-                  {/* Range bar */}
-                  <div className="relative h-px bg-neutral-200">
-                    <div
-                      className="absolute h-px bg-neutral-900"
-                      style={{
-                        left: `${Math.max(0, Math.min(100, (methodTotals.range.min / methodTotals.range.max) * 100))}%`,
-                        right: `${Math.max(0, Math.min(100, (1 - methodTotals.range.max / methodTotals.range.max) * 100))}%`,
-                      }}
-                    />
-                    {/* Marker for current value */}
-                    {(() => {
-                      const pct = Math.max(0, Math.min(100, (total / methodTotals.range.max) * 100))
-                      const within = total >= methodTotals.range.min && total <= methodTotals.range.max
-                      return (
-                        <div
-                          className={`absolute w-2 h-2 -top-[3px] -ml-1 ${within ? 'bg-neutral-900' : 'bg-red-600'}`}
-                          style={{ left: `${pct}%` }}
-                        />
-                      )
-                    })()}
-                  </div>
-                  <p className="mt-3 text-[11px] text-neutral-500 leading-relaxed">
-                    Range = 80–120% of the cross-method average (FIFO, AVCO, Standard).
-                    Indicates whether the chosen method produces a value consistent with peers.
-                  </p>
-                </div>
-              </div>
-
-              {/* RIGHT — Portfolio KPIs */}
-              <div className="lg:col-span-5 lg:border-l lg:border-neutral-200 lg:pl-12">
-                <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400 mb-8">
-                  Portfolio metrics
-                </p>
-
-                <MetricRow
-                  label="Inventory turnover"
-                  value={`${portfolio.turnover.toFixed(2)}×`}
-                  benchmark={`${BENCHMARKS.turnover.min}–${BENCHMARKS.turnover.max} ${BENCHMARKS.turnover.label}`}
-                  status={portfolio.turnoverStatus}
-                />
-                <MetricRow
-                  label="Days inventory outstanding"
-                  value={portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)} days` : '—'}
-                  benchmark={`${BENCHMARKS.dio.min}–${BENCHMARKS.dio.max} ${BENCHMARKS.dio.label}`}
-                  status={portfolio.dioStatus}
-                />
-                <MetricRow
-                  label="Holding cost (annual)"
-                  value={fmtUGX(portfolio.holdingTotal, { compact: true })}
-                  benchmark={`${(BENCHMARKS.holding.min * 100).toFixed(0)}–${(BENCHMARKS.holding.max * 100).toFixed(0)} ${BENCHMARKS.holding.label}`}
-                  status={portfolio.holdingStatus}
-                  sub={`${fmtPct(portfolio.holdingPct)} of inventory value`}
-                />
-                <MetricRow
-                  label="NRV write-down"
-                  value={fmtUGX(kpis.totalNrvWriteDown, { compact: true })}
-                  benchmark={`< ${(BENCHMARKS.nrvWriteDown.max * 100).toFixed(0)} ${BENCHMARKS.nrvWriteDown.label}`}
-                  status={portfolio.nrvStatus}
-                />
-                <MetricRow
-                  label="Material price variance"
-                  value={fmtUGX(kpis.totalMaterialPriceVariance, { compact: true })}
-                  benchmark={`< ${(BENCHMARKS.variance.max * 100).toFixed(0)} ${BENCHMARKS.variance.label}`}
-                  status={portfolio.varianceStatus}
-                  sub={kpis.totalMaterialPriceVariance >= 0 ? 'Favourable' : 'Adverse'}
-                  last
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════
-          WARNINGS — inline list, no cards
-         ════════════════════════════════════════════════════════════ */}
-      {warnings.length > 0 && (
-        <section className="px-6 md:px-12 py-12 md:py-16 border-b border-neutral-200 bg-neutral-900 text-[#FAFAF7]">
-          <div className="max-w-7xl">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-500 mb-8">
-              03 — Warnings
-            </p>
-            <div className="divide-y divide-neutral-700">
-              {warnings.map((w, i) => (
-                <div key={i} className="py-5 md:py-6 flex items-center justify-between gap-6">
-                  <div className="flex items-center gap-4 md:gap-6 min-w-0">
-                    <StatusDot status={w.status} />
-                    <span className="text-sm md:text-base text-[#FAFAF7] truncate">{w.label}</span>
-                  </div>
-                  <span className="text-sm md:text-base font-mono text-neutral-400 shrink-0">
-                    {w.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-            <p className="mt-8 text-[11px] text-neutral-500 leading-relaxed max-w-2xl">
-              Warnings are computed against the filtered product set above. Clear filters to see portfolio-wide warnings.
-            </p>
-          </div>
-        </section>
-      )}
-
-      {/* ════════════════════════════════════════════════════════════
-          FILTERS — inline, minimal
-         ════════════════════════════════════════════════════════════ */}
-      <section className="px-6 md:px-12 py-10 md:py-14 border-b border-neutral-200 sticky top-0 bg-[#FAFAF7] z-20">
-        <div className="max-w-7xl">
-          <div className="flex items-baseline justify-between mb-6 md:mb-8">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400">
-              04 — Filters
-            </p>
-            {hasActiveFilters && (
+        {/* Toggle — text labels, active=orange bold, inactive=gray (like MALE | FEMALE) */}
+        <div className="flex items-center gap-6 border-b border-gray-100 pb-3">
+          {METHODS.map(m => {
+            const isActive = selectedMethod === m.key
+            const methodTotal = m.key === 'fifo' ? methodTotals.fifoTotal
+              : m.key === 'avco' ? methodTotals.avcoTotal
+              : m.key === 'standard' ? methodTotals.stdTotal
+              : methodTotals.fifoTotal
+            return (
               <button
-                onClick={clearFilters}
-                className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 hover:text-neutral-900 flex items-center gap-1.5"
+                key={m.key}
+                onClick={() => setSelectedMethod(m.key)}
+                className={`group flex flex-col items-start transition-all ${isActive ? '' : 'hover:opacity-70'}`}
               >
-                <X size={11} /> Clear
+                <span className={`text-sm font-bold tracking-wide transition-colors ${
+                  isActive ? 'text-[#FF6B35]' : 'text-gray-400'
+                }`}>
+                  {m.label}
+                </span>
+                <span className={`text-[10px] font-mono mt-0.5 transition-colors ${
+                  isActive ? 'text-gray-700' : 'text-gray-300'
+                }`}>
+                  {fmtUGX(methodTotal, true)}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Selected method detail row */}
+        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Selected total + benchmark range */}
+          <div className="md:col-span-2">
+            <div className="flex items-baseline gap-3">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
+                {activeMethod.full} · {activeMethod.ias}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-3 mt-1">
+              <span className="text-2xl font-bold text-gray-900 font-mono tabular-nums">
+                {fmtUGX(total, true)}
+              </span>
+              {!withinRange && total > 0 && (
+                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                  <AlertTriangle size={10} /> Outside benchmark
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">{activeMethod.hint}</p>
+
+            {/* Benchmark range bar */}
+            <div className="mt-3">
+              <div className="flex items-baseline justify-between text-[10px] text-gray-400 mb-1">
+                <span>Healthy range: {fmtUGX(methodTotals.range.min, true)} – {fmtUGX(methodTotals.range.max, true)}</span>
+                <span>80–120% of cross-method avg</span>
+              </div>
+              <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="absolute h-full bg-green-100" style={{
+                  left: `${Math.max(0, Math.min(100, (methodTotals.range.min / methodTotals.range.max) * 100))}%`,
+                  width: `${Math.max(0, Math.min(100, ((methodTotals.range.max - methodTotals.range.min) / methodTotals.range.max) * 100))}%`,
+                }} />
+                {(() => {
+                  const pct = Math.max(0, Math.min(100, (total / methodTotals.range.max) * 100))
+                  return (
+                    <div
+                      className={`absolute h-3 w-0.5 -top-0.5 ${withinRange ? 'bg-green-600' : 'bg-red-600'}`}
+                      style={{ left: `${pct}%` }}
+                    />
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* Portfolio metrics — compact */}
+          <div className="border-l border-gray-100 pl-4 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-gray-500">Turnover</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.turnoverStatus)}`} />
+                <span className={`font-mono font-semibold ${statusColor(portfolio.turnoverStatus)}`}>
+                  {portfolio.turnover.toFixed(2)}×
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-gray-500">DIO</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.dioStatus)}`} />
+                <span className={`font-mono font-semibold ${statusColor(portfolio.dioStatus)}`}>
+                  {portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-gray-500">Holding cost</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.holdingStatus)}`} />
+                <span className={`font-mono font-semibold ${statusColor(portfolio.holdingStatus)}`}>
+                  {fmtPct(portfolio.holdingPct)}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-gray-500">MPV (90d)</span>
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.varianceStatus)}`} />
+                <span className={`font-mono font-semibold ${statusColor(portfolio.varianceStatus)}`}>
+                  {kpis.totalMaterialPriceVariance >= 0 ? '+' : ''}{fmtUGX(kpis.totalMaterialPriceVariance, true)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Warnings banner (compact, matches system pattern) ── */}
+      {warnings.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={12} className="text-amber-700" />
+            <span className="text-[10px] uppercase tracking-wider text-amber-900 font-semibold">
+              Warnings · {warnings.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {warnings.map((w, i) => (
+              <div key={i} className="flex items-center justify-between bg-white/60 rounded px-2.5 py-1.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(w.status)}`} />
+                  <span className="text-[11px] text-gray-700 truncate">{w.label}</span>
+                </div>
+                <span className="text-[11px] font-mono font-semibold text-gray-900 shrink-0 ml-2">{w.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Filters ── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="lg:col-span-2">
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500">Product</Label>
+            <Input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Name, ID, or merchant"
+              className="h-8 mt-1 text-xs rounded-md"
+            />
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500">Merchant</Label>
+            <select
+              value={merchant}
+              onChange={e => setMerchant(e.target.value)}
+              className="w-full h-8 mt-1 px-2 rounded-md border border-gray-200 text-xs bg-white"
+            >
+              <option value="">All</option>
+              {merchants.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500">Received from</Label>
+            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="h-8 mt-1 text-xs rounded-md" />
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500">Received to</Label>
+            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="h-8 mt-1 text-xs rounded-md" />
+          </div>
+          <div>
+            <Label className="text-[10px] uppercase tracking-wider text-gray-500">Value/unit ≤</Label>
+            <Input type="number" value={priceMax} onChange={e => setPriceMax(e.target.value)} placeholder="UGX" className="h-8 mt-1 text-xs rounded-md font-mono" />
+          </div>
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[10px] text-gray-400">
+          <span>
+            {hasActiveFilters ? `${filteredProducts.length} of ${data.products.length} products` : `${data.products.length} products`}
+            {hasActiveFilters && (
+              <button onClick={clearFilters} className="ml-3 text-[#FF6B35] hover:underline flex items-center gap-1">
+                <X size={10} /> Clear filters
               </button>
             )}
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-            {/* Product search */}
-            <div className="col-span-2 md:col-span-2 lg:col-span-2">
-              <label className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 block mb-2">Product</label>
-              <div className="relative">
-                <Search size={12} className="absolute left-0 top-1/2 -translate-y-1/2 text-neutral-400" />
-                <input
-                  type="text"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  placeholder="Name, ID, or merchant"
-                  className="w-full pl-5 pr-2 py-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 text-sm placeholder:text-neutral-300 focus:outline-none transition-colors"
-                />
-              </div>
-            </div>
-
-            {/* Merchant */}
-            <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 block mb-2">Merchant</label>
-              <select
-                value={merchant}
-                onChange={e => setMerchant(e.target.value)}
-                className="w-full py-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 text-sm focus:outline-none transition-colors cursor-pointer"
-              >
-                <option value="">All</option>
-                {merchants.map(m => <option key={m} value={m}>{m}</option>)}
-              </select>
-            </div>
-
-            {/* Date from */}
-            <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 block mb-2">Received from</label>
-              <input
-                type="date"
-                value={dateFrom}
-                onChange={e => setDateFrom(e.target.value)}
-                className="w-full py-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 text-sm focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* Date to */}
-            <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 block mb-2">Received to</label>
-              <input
-                type="date"
-                value={dateTo}
-                onChange={e => setDateTo(e.target.value)}
-                className="w-full py-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 text-sm focus:outline-none transition-colors"
-              />
-            </div>
-
-            {/* Price max */}
-            <div>
-              <label className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 block mb-2">Value/unit ≤</label>
-              <input
-                type="number"
-                value={priceMax}
-                onChange={e => setPriceMax(e.target.value)}
-                placeholder="UGX"
-                className="w-full py-2 bg-transparent border-b border-neutral-300 focus:border-neutral-900 text-sm placeholder:text-neutral-300 focus:outline-none transition-colors font-mono"
-              />
-            </div>
-          </div>
-
-          {/* Active filter count + results count */}
-          <div className="mt-4 md:mt-6 flex items-center justify-between text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-            <span>
-              {hasActiveFilters ? `${filteredProducts.length} of ${data.products.length} products` : `${data.products.length} products`}
-            </span>
-            {selectedMethod && (
-              <span>
-                Showing {method.label} valuation
-              </span>
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════════
-          PRODUCT LIST — dense, monospace, minimal
-         ════════════════════════════════════════════════════════════ */}
-      <section className="px-6 md:px-12 py-12 md:py-16">
-        <div className="max-w-7xl">
-          <div className="flex items-baseline justify-between mb-8 md:mb-10">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400">
-              05 — Products
-            </p>
-            <button
-              onClick={load}
-              className="text-[10px] uppercase tracking-[0.3em] text-neutral-500 hover:text-neutral-900"
-            >
-              Refresh
-            </button>
-          </div>
-
-          {filteredProducts.length === 0 ? (
-            <div className="py-16 md:py-24 text-center">
-              <p className="text-sm text-neutral-400">No products match the current filters.</p>
-              {hasActiveFilters && (
-                <button
-                  onClick={clearFilters}
-                  className="mt-4 text-xs uppercase tracking-[0.3em] text-neutral-900 underline underline-offset-8 hover:text-neutral-500"
-                >
-                  Clear filters
-                </button>
-              )}
-            </div>
-          ) : (
-            <>
-              {/* Header row */}
-              <div className="hidden md:grid grid-cols-12 gap-4 py-3 border-b border-neutral-900 text-[10px] uppercase tracking-[0.3em] text-neutral-500">
-                <div className="col-span-4">Product</div>
-                <div className="col-span-2">Merchant</div>
-                <div className="col-span-1 text-right">On hand</div>
-                <div className="col-span-2 text-right">FIFO value</div>
-                <div className="col-span-2 text-right">Carrying value</div>
-                <div className="col-span-1 text-right">NRV</div>
-              </div>
-
-              {/* Rows */}
-              <div className="divide-y divide-neutral-100">
-                {filteredProducts.slice(0, 200).map((p, i) => (
-                  <ProductRow
-                    key={p.productId}
-                    p={p}
-                    selectedMethod={selectedMethod}
-                    index={i}
-                  />
-                ))}
-              </div>
-
-              {filteredProducts.length > 200 && (
-                <div className="py-8 text-center">
-                  <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-                    Showing 200 of {filteredProducts.length} — narrow filters to see more
-                  </p>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* ════════════════════════════════════════════════════════════
-          FOOTER — methodology references
-         ════════════════════════════════════════════════════════════ */}
-      <footer className="px-6 md:px-12 py-16 md:py-24 border-t border-neutral-200">
-        <div className="max-w-7xl">
-          <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-400 mb-8">
-            Methodology
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 md:gap-12">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-neutral-900 mb-3">IAS 2 — Inventories</p>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Costing methods §25–27. Lower-of-cost-or-NRV §9. Write-downs §33.
-                Reversals required under IFRS when NRV recovers.
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-neutral-900 mb-3">ACCA MDC</p>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Material price variance. Material usage variance. Inventory turnover.
-                Holding cost (4 components). EOQ Wilson formula. ABC Pareto classification.
-              </p>
-            </div>
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-neutral-900 mb-3">CPA Uganda</p>
-              <p className="text-xs text-neutral-500 leading-relaxed">
-                Paper MDC — Management Decision &amp; Control.
-                Aligned with IFRS Foundation, URA, and East African accounting practice.
-              </p>
-            </div>
-          </div>
-          <p className="mt-12 text-[10px] uppercase tracking-[0.3em] text-neutral-300">
-            LIFO is prohibited under IAS 2 §25 — not available in this system
-          </p>
-        </div>
-      </footer>
-    </div>
-  )
-}
-
-// ── Metric row (right column under selected method total) ──
-function MetricRow({ label, value, benchmark, status, sub, last }: {
-  label: string
-  value: string
-  benchmark: string
-  status: Status
-  sub?: string
-  last?: boolean
-}) {
-  return (
-    <div className={`py-4 md:py-5 ${last ? '' : 'border-b border-neutral-100'}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <StatusDot status={status} />
-          <span className="text-xs text-neutral-600">{label}</span>
-        </div>
-        <span className="text-sm md:text-base font-mono text-neutral-900 shrink-0">{value}</span>
-      </div>
-      <div className="flex items-center justify-between mt-2 pl-7">
-        <span className="text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-          {benchmark}
-        </span>
-        {sub && (
-          <span className={`text-[10px] uppercase tracking-[0.3em] ${
-            sub === 'Favourable' ? 'text-neutral-900' : sub === 'Adverse' ? 'text-red-700' : 'text-neutral-400'
-          }`}>
-            {sub}
           </span>
-        )}
+          <span className="uppercase tracking-wider">Showing {activeMethod.label} valuation</span>
+        </div>
       </div>
+
+      {/* ── Product table ── */}
+      <DenseTable>
+        <thead>
+          <tr>
+            <DenseTh>Product</DenseTh>
+            <DenseTh>Merchant</DenseTh>
+            <DenseTh className="text-right">On Hand</DenseTh>
+            <DenseTh className="text-right">FIFO</DenseTh>
+            <DenseTh className="text-right">AVCO</DenseTh>
+            <DenseTh className="text-right">STD</DenseTh>
+            <DenseTh className="text-right">Selected</DenseTh>
+            <DenseTh className="text-right">Carrying</DenseTh>
+            <DenseTh className="text-right">NRV/unit</DenseTh>
+            <DenseTh>NRV Test</DenseTh>
+            <DenseTh>ABC</DenseTh>
+            <DenseTh className="text-right">Turnover</DenseTh>
+            <DenseTh className="text-right">DIO</DenseTh>
+            <DenseTh className="text-right">EOQ</DenseTh>
+            <DenseTh className="text-right">ROP</DenseTh>
+          </tr>
+        </thead>
+        <tbody>
+          {filteredProducts.length === 0 && (
+            <tr><td colSpan={15} className="text-center py-8 text-gray-400 text-xs">No products match the current filters.</td></tr>
+          )}
+          {filteredProducts.slice(0, 200).map((p, i) => (
+            <ValuationRow
+              key={p.productId}
+              p={p}
+              index={i}
+              selectedMethod={selectedMethod}
+              expanded={expandedProduct === p.productId}
+              onToggle={() => setExpandedProduct(expandedProduct === p.productId ? null : p.productId)}
+              onMethodChange={(m) => handleMethodChange(p.productId, m)}
+            />
+          ))}
+        </tbody>
+        {filteredProducts.length > 200 && (
+          <tfoot>
+            <tr><td colSpan={15} className="text-center py-2 text-[10px] text-gray-400">
+              Showing first 200 of {filteredProducts.length} products — narrow your search to see more
+            </td></tr>
+          </tfoot>
+        )}
+      </DenseTable>
+
+      {/* ── Settings modal ── */}
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={data.settings}
+        onSave={handleSaveSettings}
+      />
+
+      {/* ── NRV Write-Down modal ── */}
+      <NrvWriteDownModal
+        open={nrvOpen}
+        onClose={() => setNrvOpen(false)}
+        products={data.products}
+        onSubmit={handleNrvSubmit}
+      />
+
+      {/* ── Help dialog ── */}
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
     </div>
   )
 }
 
-// ── Status dot — minimal, monochrome with one accent ──
-function StatusDot({ status }: { status: Status }) {
-  const color = status === 'healthy' ? 'bg-neutral-900'
-    : status === 'monitor' ? 'bg-amber-500'
-    : 'bg-red-600'
-  return <span className={`inline-block w-1.5 h-1.5 rounded-full ${color} shrink-0`} />
-}
-
-// ── Product row ──
-function ProductRow({ p, selectedMethod, index }: {
+// ════════════════════════════════════════════════════════════════════════════
+// VALUATION ROW — expandable, uses DenseTable primitives
+// ════════════════════════════════════════════════════════════════════════════
+function ValuationRow({ p, index, selectedMethod, expanded, onToggle, onMethodChange }: {
   p: ProductValuation
-  selectedMethod: MethodKey | null
   index: number
+  selectedMethod: MethodKey
+  expanded: boolean
+  onToggle: () => void
+  onMethodChange: (m: string) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const tint = p.writeDownRequired
+    ? 'bg-red-50/40'
+    : p.varianceFlagged
+    ? 'bg-amber-50/40'
+    : p.stockoutRisk === 'critical'
+    ? 'bg-orange-50/40'
+    : ''
 
-  const selectedValue = selectedMethod === 'fifo' ? p.fifoValue
-    : selectedMethod === 'avco' ? p.avcoValue
-    : selectedMethod === 'standard' ? p.standardValue
-    : p.fifoValue
+  const isSelectedCol = (m: MethodKey) => selectedMethod === m
 
   return (
     <>
-      <div
-        onClick={() => setExpanded(!expanded)}
-        className={`grid grid-cols-12 gap-4 py-4 md:py-5 cursor-pointer hover:bg-neutral-50 transition-colors ${expanded ? 'bg-neutral-50' : ''}`}
-      >
-        {/* Product */}
-        <div className="col-span-12 md:col-span-4">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-neutral-300 font-mono w-6">{(index + 1).toString().padStart(2, '0')}</span>
+      <AnimatedDenseTr index={index} tint={tint} onClick={onToggle}>
+        <DenseTd>
+          <div className="flex items-center gap-2">
             <div className="min-w-0">
-              <div className="text-sm text-neutral-900 truncate">{p.productLabel}</div>
-              <div className="text-[10px] text-neutral-400 font-mono mt-0.5">
-                {p.productId}
-                {p.brand ? ` · ${p.brand}` : ''}
-                {p.variant ? ` · ${p.variant}` : ''}
-              </div>
+              <div className="font-semibold text-gray-900 truncate max-w-[200px]">{p.productLabel}</div>
+              <div className="text-[10px] text-gray-400">{p.productId}{p.brand ? ` · ${p.brand}` : ''}{p.variant ? ` · ${p.variant}` : ''}</div>
             </div>
           </div>
-        </div>
-        {/* Merchant */}
-        <div className="col-span-6 md:col-span-2 text-xs text-neutral-600 truncate self-center">
-          {p.merchantName}
-        </div>
-        {/* On hand */}
-        <div className="col-span-2 md:col-span-1 text-right text-sm font-mono text-neutral-900 self-center">
-          {fmtNum(p.currentStock)}
-        </div>
-        {/* FIFO value */}
-        <div className="col-span-2 md:col-span-2 text-right text-sm font-mono text-neutral-900 self-center">
-          {fmtUGX(p.fifoValue, { compact: true })}
-        </div>
-        {/* Carrying value */}
-        <div className="col-span-2 md:col-span-2 text-right text-sm font-mono text-neutral-900 self-center">
-          {fmtUGX(p.carryingValue, { compact: true })}
-          {p.writeDownRequired && (
-            <ArrowDownRight size={11} className="inline-block ml-1 text-red-600" />
-          )}
-        </div>
-        {/* NRV status */}
-        <div className="col-span-12 md:col-span-1 text-right self-center flex justify-end">
+        </DenseTd>
+        <DenseTd className="text-gray-600 truncate max-w-[120px]">{p.merchantName}</DenseTd>
+        <DenseTd mono right>{fmtNum(p.currentStock)}</DenseTd>
+        <DenseTd mono right className={isSelectedCol('fifo') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
+          {fmtUGX(p.fifoValue, true)}
+        </DenseTd>
+        <DenseTd mono right className={isSelectedCol('avco') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
+          {fmtUGX(p.avcoValue, true)}
+        </DenseTd>
+        <DenseTd mono right className={isSelectedCol('standard') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
+          {fmtUGX(p.standardValue, true)}
+        </DenseTd>
+        <DenseTd mono right className="font-bold text-gray-900">{fmtUGX(p.carryingValue, true)}</DenseTd>
+        <DenseTd mono right className={p.writeDownRequired ? 'text-red-700 font-semibold' : 'text-gray-600'}>
+          {fmtUGX(p.nrvPerUnit, true)}
+        </DenseTd>
+        <DenseTd>
           {p.writeDownRequired ? (
-            <span className="text-[10px] uppercase tracking-[0.2em] text-red-700">NRV</span>
-          ) : p.varianceFlagged ? (
-            <span className="text-[10px] uppercase tracking-[0.2em] text-amber-700">VAR</span>
-          ) : p.stockoutRisk === 'critical' ? (
-            <span className="text-[10px] uppercase tracking-[0.2em] text-red-700">RISK</span>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700">
+              <TrendingDown size={11} /> −{fmtUGX(p.writeDownTotal, true)}
+            </span>
           ) : (
-            <span className="text-[10px] uppercase tracking-[0.2em] text-neutral-300">OK</span>
+            <span className="inline-flex items-center gap-1 text-[10px] text-green-600">
+              <CheckCircle2 size={11} /> OK
+            </span>
           )}
-        </div>
-      </div>
+        </DenseTd>
+        <DenseTd>
+          <span className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-[10px] font-bold rounded border ${
+            p.abcClass === 'A' ? 'bg-red-100 text-red-700 border-red-200'
+            : p.abcClass === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
+            : 'bg-gray-100 text-gray-600 border-gray-200'
+          }`}>
+            {p.abcClass}
+          </span>
+        </DenseTd>
+        <DenseTd mono right>{p.inventoryTurnover > 0 ? p.inventoryTurnover.toFixed(2) : '—'}</DenseTd>
+        <DenseTd mono right className={p.daysInventoryOutstanding > 90 ? 'text-amber-700' : p.daysInventoryOutstanding > 180 ? 'text-red-700' : ''}>
+          {p.daysInventoryOutstanding > 0 ? p.daysInventoryOutstanding.toFixed(0) : '—'}
+        </DenseTd>
+        <DenseTd mono right className="text-blue-700">{p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'}</DenseTd>
+        <DenseTd mono right className="text-purple-700">{p.reorderPoint > 0 ? p.reorderPoint : '—'}</DenseTd>
+      </AnimatedDenseTr>
 
-      {/* Expanded detail */}
       {expanded && (
-        <div className="pb-8 md:pb-10 pl-9 grid grid-cols-2 md:grid-cols-4 gap-6 md:gap-8 text-xs">
-          {/* All 4 method values */}
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">All methods</p>
-            <div className="space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">FIFO</span>
-                <span className={selectedMethod === 'fifo' ? 'text-neutral-900' : 'text-neutral-400'}>{fmtUGX(p.fifoValue, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">AVCO</span>
-                <span className={selectedMethod === 'avco' ? 'text-neutral-900' : 'text-neutral-400'}>{fmtUGX(p.avcoValue, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Standard</span>
-                <span className={selectedMethod === 'standard' ? 'text-neutral-900' : 'text-neutral-400'}>{fmtUGX(p.standardValue, { compact: true })}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Per-unit costs */}
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">Per unit</p>
-            <div className="space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">FIFO cost</span>
-                <span className="text-neutral-900">{fmtUGX(p.fifoUnitCost, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">AVCO cost</span>
-                <span className="text-neutral-900">{fmtUGX(p.avcoUnitCost, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Std cost</span>
-                <span className="text-neutral-900">{fmtUGX(p.standardCost, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Sell price</span>
-                <span className="text-neutral-900">{fmtUGX(p.unitSellingPrice, { compact: true })}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* NRV + Write-down */}
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">NRV (IAS 2 §9)</p>
-            <div className="space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">NRV/unit</span>
-                <span className={p.writeDownRequired ? 'text-red-700' : 'text-neutral-900'}>{fmtUGX(p.nrvPerUnit, { compact: true })}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Carrying</span>
-                <span className="text-neutral-900">{fmtUGX(p.carryingValue, { compact: true })}</span>
-              </div>
-              {p.writeDownRequired && (
-                <>
-                  <div className="flex justify-between text-red-700">
-                    <span>Write-down</span>
-                    <span>−{fmtUGX(p.writeDownTotal, { compact: true })}</span>
+        <tr className="bg-gray-50/60 border-b border-gray-100">
+          <td colSpan={15} className="p-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+              {/* Costing */}
+              <div>
+                <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">Costing (IAS 2)</p>
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between items-center gap-2">
+                    <span className="text-gray-500">Method:</span>
+                    <select
+                      value={p.costingMethod}
+                      onClick={e => e.stopPropagation()}
+                      onChange={e => { onMethodChange(e.target.value); e.stopPropagation() }}
+                      className="text-[11px] border border-gray-200 rounded px-1 py-0.5 bg-white"
+                    >
+                      <option value="fifo">FIFO</option>
+                      <option value="avco">AVCO</option>
+                      <option value="standard">Standard</option>
+                      <option value="specific_id">Specific ID</option>
+                    </select>
                   </div>
-                  <div className="flex justify-between text-red-700">
-                    <span>Per unit</span>
-                    <span>−{fmtUGX(p.writeDownPerUnit, { compact: true })}</span>
-                  </div>
-                </>
-              )}
-              {p.existingWriteDownBalance > 0 && (
-                <div className="flex justify-between text-amber-700">
-                  <span>Register</span>
-                  <span>{fmtUGX(p.existingWriteDownBalance, { compact: true })}</span>
+                  <div className="flex justify-between"><span className="text-gray-500">Standard cost:</span><span className="font-mono">{fmtUGX(p.standardCost)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">FIFO unit cost:</span><span className="font-mono">{fmtUGX(p.fifoUnitCost)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">AVCO unit cost:</span><span className="font-mono">{fmtUGX(p.avcoUnitCost)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Cost to sell (est.):</span><span className="font-mono">{fmtUGX(p.costToSell)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Selling price:</span><span className="font-mono">{fmtUGX(p.unitSellingPrice)}</span></div>
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Performance + EOQ */}
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-400 mb-3">Performance</p>
-            <div className="space-y-2 font-mono">
-              <div className="flex justify-between">
-                <span className="text-neutral-500">Turnover</span>
-                <span className="text-neutral-900">{p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—'}</span>
+              {/* FIFO layers */}
+              <div>
+                <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">FIFO Cost Layers</p>
+                <div className="space-y-0.5 text-[11px]">
+                  {p.layers.length === 0 && <div className="text-gray-400 italic">No active layers (all consumed)</div>}
+                  {p.layers.slice(0, 6).map((l, i) => (
+                    <div key={i} className="flex justify-between">
+                      <span className="text-gray-500 font-mono">{fmtDate(typeof l.receivedAt === 'string' ? l.receivedAt : String(l.receivedAt))}</span>
+                      <span className="font-mono">{l.qtyRemaining}/{l.qtyReceived} @ {fmtUGX(l.unitCost, true)}</span>
+                    </div>
+                  ))}
+                  {p.layers.length > 6 && <div className="text-[10px] text-gray-400">+ {p.layers.length - 6} more layers</div>}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">DIO</span>
-                <span className={`text-neutral-900 ${p.daysInventoryOutstanding > 120 ? 'text-red-700' : p.daysInventoryOutstanding > 90 ? 'text-amber-700' : ''}`}>
-                  {p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—'}
-                </span>
+
+              {/* NRV test */}
+              <div>
+                <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">NRV Test (IAS 2 §9)</p>
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between"><span className="text-gray-500">NRV/unit:</span><span className="font-mono">{fmtUGX(p.nrvPerUnit)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">NRV total:</span><span className="font-mono">{fmtUGX(p.nrvValue, true)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Selected cost:</span><span className="font-mono">{fmtUGX(p.selectedValue, true)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Carrying value:</span><span className="font-mono font-bold">{fmtUGX(p.carryingValue, true)}</span></div>
+                  {p.writeDownRequired && (
+                    <>
+                      <div className="flex justify-between text-red-700"><span>Write-down/unit:</span><span className="font-mono">{fmtUGX(p.writeDownPerUnit)}</span></div>
+                      <div className="flex justify-between text-red-700 font-bold"><span>Write-down total:</span><span className="font-mono">{fmtUGX(p.writeDownTotal, true)}</span></div>
+                    </>
+                  )}
+                  {p.existingWriteDownBalance > 0 && (
+                    <div className="flex justify-between text-amber-700"><span>Existing register:</span><span className="font-mono">{fmtUGX(p.existingWriteDownBalance, true)}</span></div>
+                  )}
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">EOQ</span>
-                <span className="text-neutral-900">{p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'}</span>
+
+              {/* Performance + EOQ */}
+              <div>
+                <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">Performance &amp; EOQ</p>
+                <div className="space-y-0.5 text-[11px]">
+                  <div className="flex justify-between"><span className="text-gray-500">Annual demand:</span><span className="font-mono">{fmtNum(p.annualDemand)} units</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Turnover (×):</span><span className="font-mono">{p.inventoryTurnover.toFixed(2)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">DIO (days):</span><span className="font-mono">{p.daysInventoryOutstanding.toFixed(0)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">EOQ (units):</span><span className="font-mono font-bold text-blue-700">{p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Reorder point:</span><span className="font-mono font-bold text-purple-700">{p.reorderPoint}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Safety stock:</span><span className="font-mono">{p.safetyStock}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Lead time:</span><span className="font-mono">{p.leadTimeDays}d</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Order cost:</span><span className="font-mono">{fmtUGX(p.orderingCost, true)}</span></div>
+                  <div className="flex justify-between"><span className="text-gray-500">Hold cost/unit/yr:</span><span className="font-mono">{fmtUGX(p.holdingCostPerUnit)}</span></div>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">ROP</span>
-                <span className="text-neutral-900">{p.reorderPoint > 0 ? p.reorderPoint : '—'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-neutral-500">ABC</span>
-                <span className="text-neutral-900">{p.abcClass}</span>
+
+              {/* Variance */}
+              <div className="col-span-2 md:col-span-4 mt-2 pt-3 border-t border-gray-200">
+                <p className="font-bold text-gray-700 mb-1.5 uppercase tracking-wider text-[10px]">Variance Analysis (ACCA MDC — 90d window)</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
+                  <div>
+                    <span className="text-gray-500 block">Material Price Variance</span>
+                    <span className={`font-mono font-bold ${p.materialPriceVariance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {p.materialPriceVariance >= 0 ? '▲' : '▼'} {fmtUGX(Math.abs(p.materialPriceVariance), true)} ({p.materialPriceVariance >= 0 ? 'Favourable' : 'Adverse'})
+                    </span>
+                    {p.varianceFlagged && <span className="ml-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Investigate</span>}
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Material Usage Variance</span>
+                    <span className={`font-mono font-bold ${p.materialUsageVariance >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {p.materialUsageVariance >= 0 ? '▲' : '▼'} {fmtUGX(Math.abs(p.materialUsageVariance), true)} ({p.materialUsageVariance >= 0 ? 'Favourable' : 'Adverse'})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">Stockout risk</span>
+                    <span className={`font-bold ${
+                      p.stockoutRisk === 'critical' ? 'text-red-700' :
+                      p.stockoutRisk === 'monitor' ? 'text-amber-700' : 'text-green-700'
+                    }`}>
+                      {p.stockoutRisk === 'critical' ? 'CRITICAL (≤7d)' :
+                       p.stockoutRisk === 'monitor' ? 'MONITOR (≤30d)' : 'SAFE (>30d)'}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500 block">ABC class (Pareto)</span>
+                    <span className="font-bold">{p.abcClass} — {
+                      p.abcClass === 'A' ? 'top 80% of value — tight control' :
+                      p.abcClass === 'B' ? 'next 15% — moderate control' :
+                      'bottom 5% — lenient control'
+                    }</span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
+          </td>
+        </tr>
       )}
     </>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SETTINGS MODAL
+// ════════════════════════════════════════════════════════════════════════════
+function SettingsModal({ open, onClose, settings, onSave }: {
+  open: boolean
+  onClose: () => void
+  settings: Settings | null
+  onSave: (s: Partial<Settings>) => Promise<void>
+}) {
+  const [form, setForm] = useState<Settings | null>(settings)
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => { setForm(settings) }, [settings, open])
+  if (!form) return null
+
+  const update = (k: keyof Settings, v: string) => {
+    if (k === 'defaultCostingMethod') {
+      setForm({ ...form, defaultCostingMethod: v })
+    } else if (k === 'daysInYear') {
+      setForm({ ...form, daysInYear: parseInt(v) || 365 })
+    } else {
+      const num = parseFloat(v) / 100
+      setForm({ ...form, [k]: isNaN(num) ? 0 : num })
+    }
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      await onSave({
+        defaultCostingMethod: form.defaultCostingMethod,
+        capitalCostRate: form.capitalCostRate,
+        storageCostRate: form.storageCostRate,
+        riskCostRate: form.riskCostRate,
+        serviceCostRate: form.serviceCostRate,
+        varianceMaterialityPct: form.varianceMaterialityPct,
+        defaultCostToSellPct: form.defaultCostToSellPct,
+        daysInYear: form.daysInYear,
+      })
+      onClose()
+    } finally { setSaving(false) }
+  }
+
+  const pct = (v: number) => (v * 100).toString()
+
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <SettingsIcon size={18} /> Valuation Settings — ACCA MDC Parameters
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Global parameters for inventory valuation, variance analysis, and holding-cost computation.
+            Per IAS 2 (Inventories) and ACCA Management Decision &amp; Control. LIFO is prohibited under IAS 2 §25.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div>
+            <Label className="text-xs font-semibold text-gray-700">Default Costing Method (IAS 2)</Label>
+            <select
+              value={form.defaultCostingMethod}
+              onChange={e => update('defaultCostingMethod', e.target.value)}
+              className="w-full h-9 mt-2 px-3 rounded-xl border border-gray-200 text-sm bg-white"
+            >
+              <option value="fifo">FIFO — First-In, First-Out</option>
+              <option value="avco">AVCO — Weighted Average Cost</option>
+              <option value="standard">Standard Cost</option>
+              <option value="specific_id">Specific Identification (serialized high-value SKUs)</option>
+            </select>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Holding Cost Rates (% of inventory value, annualised)</p>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { k: 'capitalCostRate' as const, l: 'Capital (opportunity) cost %' },
+                { k: 'storageCostRate' as const, l: 'Storage cost %' },
+                { k: 'riskCostRate' as const, l: 'Risk cost % (obsolescence, shrinkage)' },
+                { k: 'serviceCostRate' as const, l: 'Service cost % (insurance, taxes, IT)' },
+              ].map(field => (
+                <div key={field.k}>
+                  <Label className="text-xs">{field.l}</Label>
+                  <Input type="number" step="0.1" value={pct(form[field.k])} onChange={e => update(field.k, e.target.value)} className="h-9 mt-1" />
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mt-2">
+              Total holding cost = {((form.capitalCostRate + form.storageCostRate + form.riskCostRate + form.serviceCostRate) * 100).toFixed(1)}% of average inventory value.
+              Industry benchmark: 15–30%. Above 30% suggests overstocking.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Variance &amp; NRV</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">Variance materiality %</Label>
+                <Input type="number" step="0.1" value={pct(form.varianceMaterialityPct)} onChange={e => update('varianceMaterialityPct', e.target.value)} className="h-9 mt-1" />
+                <p className="text-[10px] text-gray-400 mt-1">Variances above this % of standard cost are flagged for investigation.</p>
+              </div>
+              <div>
+                <Label className="text-xs">Default cost-to-sell %</Label>
+                <Input type="number" step="0.1" value={pct(form.defaultCostToSellPct)} onChange={e => update('defaultCostToSellPct', e.target.value)} className="h-9 mt-1" />
+                <p className="text-[10px] text-gray-400 mt-1">Used in NRV when product has no explicit costToSell.</p>
+              </div>
+              <div>
+                <Label className="text-xs">Days in financial year</Label>
+                <Input type="number" value={form.daysInYear} onChange={e => update('daysInYear', e.target.value)} className="h-9 mt-1" />
+                <p className="text-[10px] text-gray-400 mt-1">365 (normal) or 360 (some accounting conventions).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); handleSave() }}
+            disabled={saving}
+            className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]"
+          >
+            {saving ? <RefreshCw size={14} className="animate-spin" /> : null}
+            Save settings
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// NRV WRITE-DOWN MODAL
+// ════════════════════════════════════════════════════════════════════════════
+function NrvWriteDownModal({ open, onClose, products, onSubmit }: {
+  open: boolean
+  onClose: () => void
+  products: ProductValuation[]
+  onSubmit: (data: { productId: string; qty: number; unitCost: number; nrvPerUnit: number; reason: string }) => Promise<void>
+}) {
+  const [productId, setProductId] = useState('')
+  const [qty, setQty] = useState('')
+  const [nrvPerUnit, setNrvPerUnit] = useState('')
+  const [reason, setReason] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const selected = products.find(p => p.productId === productId)
+  const unitCost = selected?.standardCost ?? selected?.fifoUnitCost ?? 0
+  const writeDownPerUnit = Math.max(0, unitCost - (parseFloat(nrvPerUnit) || 0))
+  const total = writeDownPerUnit * (parseInt(qty) || 0)
+
+  useEffect(() => {
+    if (open) { setProductId(''); setQty(''); setNrvPerUnit(''); setReason('') }
+  }, [open])
+
+  const canSubmit = productId && parseInt(qty) > 0 && parseFloat(nrvPerUnit) >= 0 && parseFloat(nrvPerUnit) < unitCost && reason.trim().length > 0
+
+  const handleSubmit = async () => {
+    if (!canSubmit) return
+    setSaving(true)
+    try {
+      await onSubmit({
+        productId,
+        qty: parseInt(qty),
+        unitCost,
+        nrvPerUnit: parseFloat(nrvPerUnit),
+        reason: reason.trim(),
+      })
+      onClose()
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent className="rounded-2xl max-w-xl">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <TrendingDown size={18} /> Record NRV Write-Down — IAS 2 §9
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Write inventory down from cost to Net Realisable Value when NRV &lt; cost.
+            Per IAS 2 §33, reversals are REQUIRED in a subsequent period if NRV recovers.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-3 py-2">
+          <div>
+            <Label className="text-xs font-semibold">Product</Label>
+            <select
+              value={productId}
+              onChange={e => setProductId(e.target.value)}
+              className="w-full h-9 mt-1 px-3 rounded-xl border border-gray-200 text-sm bg-white"
+            >
+              <option value="">Select product...</option>
+              {products.map(p => (
+                <option key={p.productId} value={p.productId}>
+                  {p.productLabel} — {p.merchantName} (On hand: {fmtNum(p.currentStock)})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {selected && (
+            <div className="p-3 rounded-lg bg-gray-50 border border-gray-100 text-xs space-y-1">
+              <div className="flex justify-between"><span className="text-gray-500">Standard / FIFO unit cost:</span><span className="font-mono font-semibold">{fmtUGX(unitCost)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Current selling price:</span><span className="font-mono">{fmtUGX(selected.unitSellingPrice)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">Current NRV (auto):</span><span className="font-mono">{fmtUGX(selected.nrvPerUnit)}</span></div>
+              <div className="flex justify-between"><span className="text-gray-500">On-hand units:</span><span className="font-mono">{fmtNum(selected.currentStock)}</span></div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs font-semibold">Units to write down</Label>
+              <Input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="e.g. 50" className="h-9 mt-1" />
+            </div>
+            <div>
+              <Label className="text-xs font-semibold">New NRV per unit (UGX)</Label>
+              <Input type="number" value={nrvPerUnit} onChange={e => setNrvPerUnit(e.target.value)} placeholder="e.g. 8000" className="h-9 mt-1" />
+              {selected && parseFloat(nrvPerUnit) >= unitCost && (
+                <p className="text-[10px] text-red-600 mt-1">NRV must be less than cost ({fmtUGX(unitCost)}) to require a write-down.</p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <Label className="text-xs font-semibold">Reason (required — audit trail)</Label>
+            <Input value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g. Damaged packaging, market price drop, obsolescence" className="h-9 mt-1" />
+          </div>
+
+          {canSubmit && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-100 text-xs">
+              <div className="flex justify-between"><span className="text-red-700">Write-down per unit:</span><span className="font-mono font-semibold text-red-700">{fmtUGX(writeDownPerUnit)}</span></div>
+              <div className="flex justify-between mt-1"><span className="text-red-700">Total write-down:</span><span className="font-mono font-bold text-red-700">{fmtUGX(total)}</span></div>
+            </div>
+          )}
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={(e) => { e.preventDefault(); handleSubmit() }}
+            disabled={!canSubmit || saving}
+            className="rounded-xl bg-red-600 hover:bg-red-700"
+          >
+            {saving ? <RefreshCw size={14} className="animate-spin" /> : null}
+            Record write-down
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// HELP DIALOG
+// ════════════════════════════════════════════════════════════════════════════
+function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <AlertDialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <AlertDialogContent className="rounded-2xl max-w-2xl max-h-[90vh] overflow-y-auto">
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <HelpCircle size={18} /> How Inventory Valuation Works
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            Inventory valued per IAS 2 (Inventories) and ACCA Management Decision &amp; Control.
+            Click a costing method at the top to see the portfolio total recompute for that method.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="p-3 rounded-lg bg-[#1B2A4A] text-white">
+            <p className="text-xs leading-relaxed">
+              <strong className="text-sm">What this module does:</strong> For every active product, the system
+              builds FIFO cost layers from inbound records, computes Weighted Average Cost, runs the
+              Lower-of-Cost-or-NRV test per IAS 2 §9, and computes Material Price Variance + Material Usage
+              Variance per ACCA MDC. The portfolio view shows inventory turnover, days-inventory-outstanding (DIO),
+              and a 4-component holding-cost breakdown. EOQ and Reorder Point are calculated per product using the
+              Wilson formula. ABC classification (Pareto) is applied automatically based on annual value-throughput.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Costing Methods (IAS 2)</p>
+            <div className="space-y-2 text-xs">
+              {METHODS.map(m => (
+                <div key={m.key} className="p-2 rounded bg-gray-50 border border-gray-100">
+                  <p className="text-gray-900"><strong>{m.label}</strong> <span className="text-gray-500">· {m.full} · {m.ias}</span></p>
+                  <p className="text-gray-600 mt-0.5">{m.hint}</p>
+                </div>
+              ))}
+              <p className="text-[10px] text-gray-400">LIFO is prohibited under IAS 2 §25 — not available.</p>
+            </div>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Benchmarks</p>
+            <div className="space-y-1 text-xs text-gray-600">
+              <div className="flex justify-between"><span>Inventory turnover</span><span className="font-mono">{BENCHMARKS.turnover.label} ({BENCHMARKS.turnover.source})</span></div>
+              <div className="flex justify-between"><span>Days inventory outstanding</span><span className="font-mono">{BENCHMARKS.dio.label} ({BENCHMARKS.dio.source})</span></div>
+              <div className="flex justify-between"><span>Holding cost</span><span className="font-mono">{BENCHMARKS.holding.label} ({BENCHMARKS.holding.source})</span></div>
+              <div className="flex justify-between"><span>NRV write-down</span><span className="font-mono">{BENCHMARKS.nrv.label} ({BENCHMARKS.nrv.source})</span></div>
+              <div className="flex justify-between"><span>Variance materiality</span><span className="font-mono">{BENCHMARKS.variance.label} ({BENCHMARKS.variance.source})</span></div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-lg bg-gradient-to-br from-[#1B2A4A] to-[#2A3A5A] text-white">
+            <p className="text-xs leading-relaxed">
+              <strong className="text-sm">Why this is different from ShipBob:</strong> ShipBob explicitly doesn't do
+              valuation because the merchant owns the stock. For East African COD merchants without QuickBooks,
+              this is the only place they'll see FIFO/AVCO/Standard/NRV/variance computed against IAS 2 + ACCA MDC.
+            </p>
+          </div>
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogAction className="rounded-xl bg-[#FF6B35] hover:bg-[#E55A25]">Got it</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
