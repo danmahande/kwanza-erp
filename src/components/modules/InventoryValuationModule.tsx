@@ -317,6 +317,56 @@ export default function InventoryValuationModule() {
     })
   }, [data, search, merchant, dateFrom, dateTo, priceMin, priceMax])
 
+  // ── Helper: get the selected method's value + unit cost for a product ──
+  const methodValue = useCallback((p: ProductValuation, method: MethodKey): number => {
+    return method === 'fifo' ? p.fifoValue
+      : method === 'avco' ? p.avcoValue
+      : method === 'standard' ? p.standardValue
+      : p.fifoValue // specific_id falls back to FIFO
+  }, [])
+
+  const methodUnitCost = useCallback((p: ProductValuation, method: MethodKey): number => {
+    return method === 'fifo' ? p.fifoUnitCost
+      : method === 'avco' ? p.avcoUnitCost
+      : method === 'standard' ? p.standardCost
+      : p.fifoUnitCost
+  }, [])
+
+  // ── Grouped + sorted products by category (not alphabetical) ──
+  // Categories are sorted by total selected-method value (descending) so the
+  // highest-value product groups appear first. Within each category, products
+  // are sorted by selected-method value (descending) for easy comparison.
+  const groupedProducts = useMemo(() => {
+    if (!data) return []
+    const groups = new Map<string, ProductValuation[]>()
+    for (const p of filteredProducts) {
+      const cat = p.category || 'Uncategorized'
+      const arr = groups.get(cat) || []
+      arr.push(p)
+      groups.set(cat, arr)
+    }
+    // Build group objects with subtotals
+    const groupArray = Array.from(groups.entries()).map(([category, products]) => {
+      const sortedProducts = [...products].sort((a, b) => methodValue(b, selectedMethod) - methodValue(a, selectedMethod))
+      const subtotal = sortedProducts.reduce((s, p) => s + methodValue(p, selectedMethod), 0)
+      const carryingSubtotal = sortedProducts.reduce((s, p) => s + p.carryingValue, 0)
+      const writeDownSubtotal = sortedProducts.reduce((s, p) => s + (p.writeDownRequired ? p.writeDownTotal : 0), 0)
+      const stockUnits = sortedProducts.reduce((s, p) => s + p.currentStock, 0)
+      return {
+        category,
+        products: sortedProducts,
+        subtotal,
+        carryingSubtotal,
+        writeDownSubtotal,
+        stockUnits,
+        count: sortedProducts.length,
+      }
+    })
+    // Sort groups by subtotal descending (highest-value category first)
+    groupArray.sort((a, b) => b.subtotal - a.subtotal)
+    return groupArray
+  }, [filteredProducts, selectedMethod, methodValue])
+
   // Totals per method (over filtered set)
   const methodTotals = useMemo(() => {
     if (!data) return null
@@ -429,16 +479,23 @@ export default function InventoryValuationModule() {
 
   const exportCsv = () => {
     if (!data || !methodTotals) return
-    const headers = ['Product', 'Merchant', 'On Hand', 'FIFO Value', 'AVCO Value', 'Std Value', 'Selected Value', 'Carrying Value', 'NRV/unit', 'Write-down', 'ABC', 'Turnover', 'DIO', 'EOQ', 'ROP']
-    const rows = filteredProducts.map(p => [
-      p.productLabel, p.merchantName, p.currentStock,
-      p.fifoValue.toFixed(0), p.avcoValue.toFixed(0), p.standardValue.toFixed(0),
-      (selectedMethod === 'fifo' ? p.fifoValue : selectedMethod === 'avco' ? p.avcoValue : selectedMethod === 'standard' ? p.standardValue : p.fifoValue).toFixed(0),
-      p.carryingValue.toFixed(0), p.nrvPerUnit.toFixed(0),
-      p.writeDownRequired ? p.writeDownTotal.toFixed(0) : '0',
-      p.abcClass, p.inventoryTurnover.toFixed(2), p.daysInventoryOutstanding.toFixed(0),
-      p.eoq.toFixed(0), p.reorderPoint,
-    ])
+    const methodLabel = METHODS.find(m => m.key === selectedMethod)?.label || selectedMethod
+    const headers = ['Category', 'Product', 'Merchant', 'On Hand', `${methodLabel} Value`, `${methodLabel} Cost/unit`, 'Carrying Value', 'NRV/unit', 'Write-down', 'ABC', 'Turnover', 'DIO', 'EOQ', 'ROP']
+    const rows: (string | number)[][] = []
+    for (const group of groupedProducts) {
+      for (const p of group.products) {
+        rows.push([
+          group.category,
+          p.productLabel, p.merchantName, p.currentStock,
+          methodValue(p, selectedMethod).toFixed(0),
+          methodUnitCost(p, selectedMethod).toFixed(0),
+          p.carryingValue.toFixed(0), p.nrvPerUnit.toFixed(0),
+          p.writeDownRequired ? p.writeDownTotal.toFixed(0) : '0',
+          p.abcClass, p.inventoryTurnover.toFixed(2), p.daysInventoryOutstanding.toFixed(0),
+          p.eoq.toFixed(0), p.reorderPoint,
+        ])
+      }
+    }
     const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v ?? ''}"`).join(','))].join('\n')
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
@@ -763,17 +820,15 @@ export default function InventoryValuationModule() {
         </div>
       </div>
 
-      {/* ── Product table ── */}
+      {/* ── Product table — grouped by category, showing only selected method ── */}
       <DenseTable>
         <thead>
           <tr>
             <DenseTh>Product</DenseTh>
             <DenseTh>Merchant</DenseTh>
             <DenseTh className="text-right">On Hand</DenseTh>
-            <DenseTh className="text-right">FIFO</DenseTh>
-            <DenseTh className="text-right">AVCO</DenseTh>
-            <DenseTh className="text-right">STD</DenseTh>
-            <DenseTh className="text-right">Selected</DenseTh>
+            <DenseTh className="text-right">{activeMethod.label} Value</DenseTh>
+            <DenseTh className="text-right">{activeMethod.label} Cost/unit</DenseTh>
             <DenseTh className="text-right">Carrying</DenseTh>
             <DenseTh className="text-right">NRV/unit</DenseTh>
             <DenseTh>NRV Test</DenseTh>
@@ -786,25 +841,39 @@ export default function InventoryValuationModule() {
         </thead>
         <tbody>
           {filteredProducts.length === 0 && (
-            <tr><td colSpan={15} className="text-center py-8 text-gray-400 text-xs">No products match the current filters.</td></tr>
+            <tr><td colSpan={13} className="text-center py-8 text-gray-400 text-xs">No products match the current filters.</td></tr>
           )}
-          {filteredProducts.slice(0, 200).map((p, i) => (
-            <ValuationRow
-              key={p.productId}
-              p={p}
-              index={i}
+          {groupedProducts.map(group => (
+            <CategoryGroup
+              key={group.category}
+              group={group}
               selectedMethod={selectedMethod}
-              expanded={expandedProduct === p.productId}
-              onToggle={() => setExpandedProduct(expandedProduct === p.productId ? null : p.productId)}
-              onMethodChange={(m) => handleMethodChange(p.productId, m)}
+              methodValue={methodValue}
+              methodUnitCost={methodUnitCost}
+              portfolioTotal={methodTotals.selectedTotal}
+              expandedProduct={expandedProduct}
+              setExpandedProduct={setExpandedProduct}
+              onMethodChange={handleMethodChange}
             />
           ))}
         </tbody>
-        {filteredProducts.length > 200 && (
+        {filteredProducts.length > 0 && (
           <tfoot>
-            <tr><td colSpan={15} className="text-center py-2 text-[10px] text-gray-400">
-              Showing first 200 of {filteredProducts.length} products — narrow your search to see more
-            </td></tr>
+            <tr className="border-t-2 border-gray-300 bg-gray-50">
+              <DenseTd className="font-bold text-gray-900 uppercase tracking-wider text-[10px]">Portfolio Total</DenseTd>
+              <DenseTd></DenseTd>
+              <DenseTd mono right className="font-bold text-gray-900">{fmtNum(methodTotals.totalStock)}</DenseTd>
+              <DenseTd mono right className="font-bold text-[#FF6B35]">{fmtUGX(methodTotals.selectedTotal, true)}</DenseTd>
+              <DenseTd></DenseTd>
+              <DenseTd mono right className="font-bold text-gray-900">{fmtUGX(kpis.totalCarryingValue, true)}</DenseTd>
+              <DenseTd></DenseTd>
+              <DenseTd>{kpis.totalNrvWriteDown > 0 && <span className="text-[10px] font-bold text-red-700">−{fmtUGX(kpis.totalNrvWriteDown, true)}</span>}</DenseTd>
+              <DenseTd></DenseTd>
+              <DenseTd mono right>{portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—'}</DenseTd>
+              <DenseTd mono right>{portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}</DenseTd>
+              <DenseTd></DenseTd>
+              <DenseTd></DenseTd>
+            </tr>
           </tfoot>
         )}
       </DenseTable>
@@ -832,12 +901,75 @@ export default function InventoryValuationModule() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// VALUATION ROW — expandable, uses DenseTable primitives
+// CATEGORY GROUP — category header row + product rows for that category
 // ════════════════════════════════════════════════════════════════════════════
-function ValuationRow({ p, index, selectedMethod, expanded, onToggle, onMethodChange }: {
+function CategoryGroup({ group, selectedMethod, methodValue, methodUnitCost, portfolioTotal, expandedProduct, setExpandedProduct, onMethodChange }: {
+  group: {
+    category: string
+    products: ProductValuation[]
+    subtotal: number
+    carryingSubtotal: number
+    writeDownSubtotal: number
+    stockUnits: number
+    count: number
+  }
+  selectedMethod: MethodKey
+  methodValue: (p: ProductValuation, m: MethodKey) => number
+  methodUnitCost: (p: ProductValuation, m: MethodKey) => number
+  portfolioTotal: number
+  expandedProduct: string | null
+  setExpandedProduct: (v: string | null) => void
+  onMethodChange: (productId: string, method: string) => void
+}) {
+  const pctOfPortfolio = portfolioTotal > 0 ? (group.subtotal / portfolioTotal) * 100 : 0
+
+  return (
+    <>
+      {/* Category header row */}
+      <tr className="bg-gray-50 border-y border-gray-200" style={{ height: '32px' }}>
+        <DenseTd className="font-bold text-gray-900 uppercase tracking-wider text-[10px]">
+          {group.category}
+        </DenseTd>
+        <DenseTd className="text-[10px] text-gray-400">{group.count} products</DenseTd>
+        <DenseTd mono right className="text-[10px] text-gray-500">{fmtNum(group.stockUnits)} units</DenseTd>
+        <DenseTd mono right className="font-bold text-[#FF6B35] text-xs">{fmtUGX(group.subtotal, true)}</DenseTd>
+        <DenseTd></DenseTd>
+        <DenseTd mono right className="text-[10px] text-gray-600">{fmtUGX(group.carryingSubtotal, true)}</DenseTd>
+        <DenseTd></DenseTd>
+        <DenseTd>{group.writeDownSubtotal > 0 && <span className="text-[10px] font-bold text-red-700">−{fmtUGX(group.writeDownSubtotal, true)}</span>}</DenseTd>
+        <DenseTd className="text-[10px] text-gray-400">{pctOfPortfolio.toFixed(1)}% of portfolio</DenseTd>
+        <DenseTd></DenseTd>
+        <DenseTd></DenseTd>
+        <DenseTd></DenseTd>
+        <DenseTd></DenseTd>
+      </tr>
+      {/* Product rows */}
+      {group.products.slice(0, 100).map((p, i) => (
+        <ValuationRow
+          key={p.productId}
+          p={p}
+          index={i}
+          selectedMethod={selectedMethod}
+          methodValue={methodValue(p, selectedMethod)}
+          methodUnitCost={methodUnitCost(p, selectedMethod)}
+          expanded={expandedProduct === p.productId}
+          onToggle={() => setExpandedProduct(expandedProduct === p.productId ? null : p.productId)}
+          onMethodChange={(m) => onMethodChange(p.productId, m)}
+        />
+      ))}
+    </>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// VALUATION ROW — shows only the selected method's value + unit cost
+// ════════════════════════════════════════════════════════════════════════════
+function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, expanded, onToggle, onMethodChange }: {
   p: ProductValuation
   index: number
   selectedMethod: MethodKey
+  methodValue: number
+  methodUnitCost: number
   expanded: boolean
   onToggle: () => void
   onMethodChange: (m: string) => void
@@ -849,8 +981,6 @@ function ValuationRow({ p, index, selectedMethod, expanded, onToggle, onMethodCh
     : p.stockoutRisk === 'critical'
     ? 'bg-orange-50/40'
     : ''
-
-  const isSelectedCol = (m: MethodKey) => selectedMethod === m
 
   return (
     <>
@@ -865,15 +995,10 @@ function ValuationRow({ p, index, selectedMethod, expanded, onToggle, onMethodCh
         </DenseTd>
         <DenseTd className="text-gray-600 truncate max-w-[120px]">{p.merchantName}</DenseTd>
         <DenseTd mono right>{fmtNum(p.currentStock)}</DenseTd>
-        <DenseTd mono right className={isSelectedCol('fifo') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
-          {fmtUGX(p.fifoValue, true)}
-        </DenseTd>
-        <DenseTd mono right className={isSelectedCol('avco') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
-          {fmtUGX(p.avcoValue, true)}
-        </DenseTd>
-        <DenseTd mono right className={isSelectedCol('standard') ? 'text-[#FF6B35] font-bold' : 'text-gray-500'}>
-          {fmtUGX(p.standardValue, true)}
-        </DenseTd>
+        {/* Selected method value — orange bold */}
+        <DenseTd mono right className="text-[#FF6B35] font-bold">{fmtUGX(methodValue, true)}</DenseTd>
+        {/* Selected method unit cost */}
+        <DenseTd mono right className="text-gray-500">{fmtUGX(methodUnitCost, true)}</DenseTd>
         <DenseTd mono right className="font-bold text-gray-900">{fmtUGX(p.carryingValue, true)}</DenseTd>
         <DenseTd mono right className={p.writeDownRequired ? 'text-red-700 font-semibold' : 'text-gray-600'}>
           {fmtUGX(p.nrvPerUnit, true)}
@@ -908,7 +1033,7 @@ function ValuationRow({ p, index, selectedMethod, expanded, onToggle, onMethodCh
 
       {expanded && (
         <tr className="bg-gray-50/60 border-b border-gray-100">
-          <td colSpan={15} className="p-4">
+          <td colSpan={13} className="p-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
               {/* Costing */}
               <div>
