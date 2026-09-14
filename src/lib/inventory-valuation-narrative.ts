@@ -218,3 +218,48 @@ export function stockoutNarrative(args: {
 export function sectionHeading(number: string, title: string): string {
   return `${number} — ${title}`
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// COMPACT SUMMARIES — one-liner per metric, clickable to expand
+// ════════════════════════════════════════════════════════════════════════════
+
+export function turnoverCompact(turnover: number, status: Status): string {
+  if (turnover === 0) return 'Turnover — no data'
+  const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (turnover < 4 ? 'slow' : 'fast') : 'critically slow'
+  return `Turnover ${turnover.toFixed(2)}× · ${label} · benchmark 4–6×`
+}
+
+export function dioCompact(dio: number, status: Status): string {
+  if (dio === 0) return 'DIO — no data'
+  const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (dio > 90 ? 'above benchmark' : 'below benchmark') : 'critically high'
+  return `DIO ${dio.toFixed(0)}d · ${label} · benchmark 60–90d`
+}
+
+export function holdingCompact(pct: number, status: Status): string {
+  const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (pct > 0.30 ? 'high' : 'low') : 'excessive'
+  return `Holding ${fmtPct(pct)} · ${label} · benchmark 15–30%`
+}
+
+export function mpvCompact(variance: number, status: Status): string {
+  if (variance === 0) return 'MPV — no data (90d)'
+  const kind = variance >= 0 ? 'F' : 'A'
+  const label = status === 'healthy' ? 'within threshold' : status === 'monitor' ? 'flagged' : 'critical'
+  return `MPV ${kind} ${fmtUGX(Math.abs(variance), { compact: true })} · ${label} · threshold 5%`
+}
+
+export function nrvCompact(count: number, total: number, status: Status): string {
+  if (count === 0) return 'NRV — all at cost, no write-downs'
+  const label = status === 'healthy' ? 'within threshold' : status === 'monitor' ? 'above threshold' : 'critical'
+  return `NRV ${count} product${count > 1 ? 's' : ''} · ${fmtUGX(total, { compact: true })} · ${label}`
+}
+
+export function varianceFlaggedCompact(count: number, status: Status): string {
+  if (count === 0) return 'Variances — none flagged'
+  const label = status === 'healthy' ? 'within range' : status === 'monitor' ? 'multiple flagged' : 'critical'
+  return `Variance ${count} flagged · ${label}`
+}
+
+export function stockoutCompact(count: number): string {
+  if (count === 0) return 'Stockout — none at risk'
+  return `Stockout ${count} critical · ≤7d cover`
+}

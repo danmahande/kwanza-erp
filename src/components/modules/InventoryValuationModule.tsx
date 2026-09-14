@@ -21,13 +21,10 @@ import {
 } from '@/components/shared/ops-ui'
 import {
   portfolioValuationNarrative,
-  turnoverNarrative,
-  dioNarrative,
-  holdingCostNarrative,
-  mpvNarrative,
-  nrvNarrative,
-  varianceFlaggedNarrative,
-  stockoutNarrative,
+  turnoverNarrative, dioNarrative, holdingCostNarrative, mpvNarrative,
+  nrvNarrative, varianceFlaggedNarrative, stockoutNarrative,
+  turnoverCompact, dioCompact, holdingCompact, mpvCompact,
+  nrvCompact, varianceFlaggedCompact, stockoutCompact,
 } from '@/lib/inventory-valuation-narrative'
 
 // ── Types (mirror of API response) ──
@@ -559,10 +556,37 @@ export default function InventoryValuationModule() {
   const total = methodTotals.selectedTotal
   const withinRange = total >= methodTotals.range.min && total <= methodTotals.range.max
 
-  // Warnings list
-  const warnings: Array<{ narrative: string; status: Status }> = []
+  // ── Affected products per metric (for clickable issue tables) ──
+  const affectedProducts = useMemo(() => {
+    if (!data) return {
+      turnover: [] as ProductValuation[],
+      dio: [] as ProductValuation[],
+      holding: [] as ProductValuation[],
+      mpv: [] as ProductValuation[],
+      nrv: [] as ProductValuation[],
+      variance: [] as ProductValuation[],
+      stockout: [] as ProductValuation[],
+    }
+    const ps = filteredProducts
+    return {
+      turnover: ps.filter(p => p.inventoryTurnover > 0 && p.inventoryTurnover < 4).sort((a, b) => a.inventoryTurnover - b.inventoryTurnover),
+      dio: ps.filter(p => p.daysInventoryOutstanding > 90).sort((a, b) => b.daysInventoryOutstanding - a.daysInventoryOutstanding),
+      holding: ps.filter(p => p.holdingCostPerUnit > 0).sort((a, b) => b.holdingCostPerUnit - a.holdingCostPerUnit).slice(0, 20),
+      mpv: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
+      nrv: ps.filter(p => p.writeDownRequired).sort((a, b) => b.writeDownTotal - a.writeDownTotal),
+      variance: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
+      stockout: ps.filter(p => p.stockoutRisk === 'critical').sort((a, b) => a.currentStock - b.currentStock),
+    }
+  }, [data, filteredProducts])
+
+  // Warnings list — built after affectedProducts so each warning can include its affected product set
+  const warnings: Array<{
+    compact: string; narrative: string; status: Status
+    affectedProducts: ProductValuation[]; affectedColumns: string[]; affectedTitle: string
+  }> = []
   if (methodTotals.nrvWriteDownCount > 0) {
     warnings.push({
+      compact: nrvCompact(methodTotals.nrvWriteDownCount, methodTotals.writeDownTotal, portfolio.nrvStatus),
       narrative: nrvNarrative({
         count: methodTotals.nrvWriteDownCount,
         total: methodTotals.writeDownTotal,
@@ -570,22 +594,33 @@ export default function InventoryValuationModule() {
         status: portfolio.nrvStatus,
       }),
       status: portfolio.nrvStatus,
+      affectedProducts: affectedProducts.nrv,
+      affectedColumns: ['nrvPerUnit', 'writeDownTotal', 'carryingValue'],
+      affectedTitle: 'Products requiring NRV write-down',
     })
   }
   if (methodTotals.varianceFlaggedCount > 0) {
     warnings.push({
+      compact: varianceFlaggedCompact(methodTotals.varianceFlaggedCount, portfolio.varianceStatus),
       narrative: varianceFlaggedNarrative({
         count: methodTotals.varianceFlaggedCount,
         status: portfolio.varianceStatus,
         materialityPct: data.settings.varianceMaterialityPct,
       }),
       status: portfolio.varianceStatus,
+      affectedProducts: affectedProducts.variance,
+      affectedColumns: ['mpv', 'standardCost', 'actualCost'],
+      affectedTitle: 'Products with material price variance flagged',
     })
   }
   if (methodTotals.stockoutCriticalCount > 0) {
     warnings.push({
+      compact: stockoutCompact(methodTotals.stockoutCriticalCount),
       narrative: stockoutNarrative({ count: methodTotals.stockoutCriticalCount }),
       status: 'critical',
+      affectedProducts: affectedProducts.stockout,
+      affectedColumns: ['currentStock', 'reorderPoint', 'eoq'],
+      affectedTitle: 'Products at critical stockout risk',
     })
   }
 
@@ -704,28 +739,48 @@ export default function InventoryValuationModule() {
             </div>
           </div>
 
-          {/* Section 02 — Performance */}
-          <div className="space-y-2.5 pt-3 border-t border-gray-50">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+          {/* Section 02 — Performance (compact, clickable) */}
+          <div className="space-y-1.5 pt-3 border-t border-gray-50">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">
               02 — Performance
             </p>
-            <NarrativeLine status={portfolio.turnoverStatus}>
-              {turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
-            </NarrativeLine>
-            <NarrativeLine status={portfolio.dioStatus}>
-              {dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
-            </NarrativeLine>
-            <NarrativeLine status={portfolio.holdingStatus}>
-              {holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
-            </NarrativeLine>
-            <NarrativeLine status={portfolio.varianceStatus}>
-              {mpvNarrative({ variance: kpis.totalMaterialPriceVariance, status: portfolio.varianceStatus, materialityPct: data.settings.varianceMaterialityPct })}
-            </NarrativeLine>
+            <IssueExpander
+              status={portfolio.turnoverStatus}
+              compact={turnoverCompact(portfolio.turnover, portfolio.turnoverStatus)}
+              detail={turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
+              affectedProducts={affectedProducts.turnover}
+              affectedColumns={['turnover', 'dio']}
+              affectedTitle="Products with turnover below 4×"
+            />
+            <IssueExpander
+              status={portfolio.dioStatus}
+              compact={dioCompact(portfolio.dio, portfolio.dioStatus)}
+              detail={dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
+              affectedProducts={affectedProducts.dio}
+              affectedColumns={['dio', 'turnover']}
+              affectedTitle="Products with DIO above 90 days"
+            />
+            <IssueExpander
+              status={portfolio.holdingStatus}
+              compact={holdingCompact(portfolio.holdingPct, portfolio.holdingStatus)}
+              detail={holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
+              affectedProducts={affectedProducts.holding}
+              affectedColumns={['holdingCost', 'carryingValue']}
+              affectedTitle="Products by holding cost per unit (top 20)"
+            />
+            <IssueExpander
+              status={portfolio.varianceStatus}
+              compact={mpvCompact(kpis.totalMaterialPriceVariance, portfolio.varianceStatus)}
+              detail={mpvNarrative({ variance: kpis.totalMaterialPriceVariance, status: portfolio.varianceStatus, materialityPct: data.settings.varianceMaterialityPct })}
+              affectedProducts={affectedProducts.mpv}
+              affectedColumns={['mpv', 'standardCost']}
+              affectedTitle="Products with material price variance flagged"
+            />
           </div>
 
-          {/* Section 03 — Warnings (sequential list, not grid) */}
-          <div className="space-y-2.5 pt-3 border-t border-gray-50">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+          {/* Section 03 — Warnings (compact, clickable) */}
+          <div className="space-y-1.5 pt-3 border-t border-gray-50">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">
               03 — Warnings
             </p>
             {warnings.length === 0 ? (
@@ -735,9 +790,15 @@ export default function InventoryValuationModule() {
               </p>
             ) : (
               warnings.map((w, i) => (
-                <NarrativeLine key={i} status={w.status}>
-                  {w.narrative}
-                </NarrativeLine>
+                <IssueExpander
+                  key={i}
+                  status={w.status}
+                  compact={w.compact}
+                  detail={w.narrative}
+                  affectedProducts={w.affectedProducts}
+                  affectedColumns={w.affectedColumns}
+                  affectedTitle={w.affectedTitle}
+                />
               ))
             )}
           </div>
@@ -878,16 +939,135 @@ export default function InventoryValuationModule() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// NARRATIVE LINE — a single sentence with a status dot, used in sequential sections
+// ISSUE EXPANDER — compact one-liner that expands on click to show full
+// narrative + a mini table of affected products. Used in Performance + Warnings.
 // ════════════════════════════════════════════════════════════════════════════
-function NarrativeLine({ status, children }: { status: Status; children: React.ReactNode }) {
+function IssueExpander({ status, compact, detail, affectedProducts, affectedColumns, affectedTitle }: {
+  status: Status
+  compact: string
+  detail: string
+  affectedProducts: ProductValuation[]
+  affectedColumns: string[]
+  affectedTitle: string
+}) {
+  const [expanded, setExpanded] = useState(false)
   const dotColor = status === 'healthy' ? 'bg-green-500'
     : status === 'monitor' ? 'bg-amber-500'
     : 'bg-red-500'
+  const hasAffected = affectedProducts.length > 0
+
   return (
-    <div className="flex items-start gap-2">
-      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} mt-1.5 shrink-0`} />
-      <p className="text-[13px] text-gray-900 leading-relaxed">{children}</p>
+    <div className="border-b border-gray-50 last:border-0 pb-1.5">
+      {/* Compact one-liner — always visible */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-2 text-left py-1 hover:bg-gray-50 -mx-1 px-1 rounded transition-colors"
+      >
+        <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`} />
+        <span className="text-[12px] text-gray-900 font-mono flex-1">{compact}</span>
+        {hasAffected && (
+          <span className="text-[10px] text-gray-400 font-mono shrink-0">
+            {affectedProducts.length} product{affectedProducts.length > 1 ? 's' : ''}
+          </span>
+        )}
+        <ChevronDown
+          size={12}
+          className={`text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+        />
+      </button>
+
+      {/* Expanded detail — full narrative + affected products table */}
+      {expanded && (
+        <div className="mt-1.5 ml-3.5 space-y-2">
+          <p className="text-[12px] text-gray-600 leading-relaxed">{detail}</p>
+          {hasAffected && (
+            <MiniProductTable
+              products={affectedProducts}
+              columns={affectedColumns}
+              title={affectedTitle}
+            />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MINI PRODUCT TABLE — compact table showing only the columns relevant to
+// the specific issue. Used inside IssueExpander to show affected products.
+// ════════════════════════════════════════════════════════════════════════════
+function MiniProductTable({ products, columns, title }: {
+  products: ProductValuation[]
+  columns: string[]
+  title: string
+}) {
+  const getColumnLabel = (col: string): string => {
+    const labels: Record<string, string> = {
+      turnover: 'Turnover',
+      dio: 'DIO',
+      holdingCost: 'Hold/unit',
+      carryingValue: 'Carrying',
+      mpv: 'MPV',
+      standardCost: 'Std cost',
+      actualCost: 'Actual',
+      nrvPerUnit: 'NRV/unit',
+      writeDownTotal: 'Write-down',
+      currentStock: 'Stock',
+      reorderPoint: 'ROP',
+      eoq: 'EOQ',
+    }
+    return labels[col] || col
+  }
+
+  const getColumnValue = (p: ProductValuation, col: string): string => {
+    switch (col) {
+      case 'turnover': return p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—'
+      case 'dio': return p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—'
+      case 'holdingCost': return fmtUGX(p.holdingCostPerUnit, true)
+      case 'carryingValue': return fmtUGX(p.carryingValue, true)
+      case 'mpv': return p.materialPriceVariance >= 0 ? `+${fmtUGX(p.materialPriceVariance, true)}` : fmtUGX(p.materialPriceVariance, true)
+      case 'standardCost': return fmtUGX(p.standardCost, true)
+      case 'actualCost': return fmtUGX(p.fifoUnitCost, true)
+      case 'nrvPerUnit': return fmtUGX(p.nrvPerUnit, true)
+      case 'writeDownTotal': return p.writeDownRequired ? `−${fmtUGX(p.writeDownTotal, true)}` : '—'
+      case 'currentStock': return fmtNum(p.currentStock)
+      case 'reorderPoint': return p.reorderPoint > 0 ? String(p.reorderPoint) : '—'
+      case 'eoq': return p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'
+      default: return '—'
+    }
+  }
+
+  return (
+    <div className="bg-gray-50 border border-gray-100 rounded-md overflow-hidden">
+      <div className="px-2 py-1 bg-gray-100 border-b border-gray-100">
+        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{title}</span>
+      </div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-gray-400 text-[9px] uppercase">
+            <th className="px-2 py-1 text-left font-semibold">Product</th>
+            {columns.map(col => (
+              <th key={col} className="px-2 py-1 text-right font-semibold">{getColumnLabel(col)}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {products.slice(0, 20).map(p => (
+            <tr key={p.productId} className="border-t border-gray-100 hover:bg-white">
+              <td className="px-2 py-1 text-gray-900 truncate max-w-[180px]">{p.productLabel}</td>
+              {columns.map(col => (
+                <td key={col} className="px-2 py-1 text-right font-mono text-gray-700">{getColumnValue(p, col)}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {products.length > 20 && (
+        <div className="px-2 py-1 text-[10px] text-gray-400 text-center">
+          + {products.length - 20} more — narrow filters to see all
+        </div>
+      )}
     </div>
   )
 }
