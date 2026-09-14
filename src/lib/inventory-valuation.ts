@@ -529,8 +529,17 @@ export function abcClassify(products: Array<{ productId: string; annualValue: nu
 // ─────────────────────────────────────────────────────────────────────────────
 // 9b. SEASONALITY DETECTION (product lifecycle tracking)
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Tracks each product on a monthly basis for one year from its creation date.
+// A product entered today is tracked until the same time next year. Only after
+// 12 months of tracking data exists do we classify its seasonality — before
+// that, it's classified as 'tracking' (insufficient data).
+//
+// This prevents false seasonal classifications: a product created 3 months ago
+// that hasn't sold in 2 months isn't "off-season" — we simply don't have enough
+// data to know its seasonal pattern yet.
 
-export type Seasonality = 'in-season' | 'off-season' | 'steady' | 'no-history'
+export type Seasonality = 'in-season' | 'off-season' | 'steady' | 'no-history' | 'tracking'
 
 export interface SeasonalityResult {
   classification: Seasonality
@@ -542,27 +551,75 @@ export interface SeasonalityResult {
   trailingUnits: number
   /** Whether the product has sold in the current month in prior years */
   soldThisMonthHistorically: boolean
+  /** How many months of tracking data we have (from product creation date) */
+  monthsTracked: number
+  /** Whether we have a full year of data (12+ months) */
+  hasFullYearData: boolean
 }
 
 /**
- * Analyze 1 year of delivery data to classify a product's seasonality.
+ * Analyze delivery data to classify a product's seasonality.
+ *
+ * The product is tracked monthly from its creation date. Only after 12 months
+ * of tracking data exists do we make seasonal classifications — before that,
+ * the product is 'tracking' (still collecting data).
  *
  * Logic:
- * - no-history: 0 deliveries in trailing 365 days
+ * - tracking: product has been in the system < 12 months — still collecting data
+ * - no-history: product has 12+ months of data but 0 deliveries ever
  * - steady: deliveries in 10+ months of the year (consistent demand)
- * - in-season: deliveries in current month in prior years, AND current month has deliveries
- * - off-season: deliveries in some months but NOT current month, AND current month
- *               had deliveries in prior years (i.e., this is a seasonal dip, not a dead product)
+ * - in-season: deliveries in current month (based on historical pattern)
+ * - off-season: deliveries in other months but NOT current month
  *
- * This powers the "Slow-moving stock review" section — distinguishing between
- * products that are genuinely dead vs products that are just between seasons.
+ * @param deliveredDates  Dates of delivered outbound records (all-time, not just trailing 365d)
+ * @param productCreatedAt When the product was first entered into the system
+ * @param now              Current date (defaults to today)
  */
 export function computeSeasonality(args: {
-  deliveredDates: Date[]  // dates of delivered outbound records (trailing 365 days)
+  deliveredDates: Date[]
+  productCreatedAt: Date
   now?: Date
 }): SeasonalityResult {
   const now = args.now || new Date()
   const currentMonth = now.getMonth() + 1  // 1-12
+
+  // Calculate how many months of tracking data we have
+  const createdMs = args.productCreatedAt.getTime()
+  const nowMs = now.getTime()
+  const monthsTracked = Math.floor((nowMs - createdMs) / (30.44 * 24 * 60 * 60 * 1000)) // avg month length
+  const hasFullYearData = monthsTracked >= 12
+
+  // If we don't have a full year of data, the product is still being tracked
+  if (!hasFullYearData) {
+    // Still classify no-history if there are truly zero deliveries
+    if (args.deliveredDates.length === 0) {
+      return {
+        classification: 'tracking',
+        activeMonths: [],
+        currentMonth,
+        trailingUnits: 0,
+        soldThisMonthHistorically: false,
+        monthsTracked,
+        hasFullYearData: false,
+      }
+    }
+    // Has some deliveries but not enough history for seasonal classification
+    const monthSet = new Set<number>()
+    for (const d of args.deliveredDates) {
+      monthSet.add(d.getMonth() + 1)
+    }
+    return {
+      classification: 'tracking',
+      activeMonths: Array.from(monthSet).sort((a, b) => a - b),
+      currentMonth,
+      trailingUnits: args.deliveredDates.length,
+      soldThisMonthHistorically: monthSet.has(currentMonth),
+      monthsTracked,
+      hasFullYearData: false,
+    }
+  }
+
+  // We have a full year of data — classify properly
 
   if (args.deliveredDates.length === 0) {
     return {
@@ -571,6 +628,8 @@ export function computeSeasonality(args: {
       currentMonth,
       trailingUnits: 0,
       soldThisMonthHistorically: false,
+      monthsTracked,
+      hasFullYearData: true,
     }
   }
 
@@ -580,8 +639,6 @@ export function computeSeasonality(args: {
     monthSet.add(d.getMonth() + 1)
   }
   const activeMonths = Array.from(monthSet).sort((a, b) => a - b)
-
-  // Count total units (each date = 1 delivery, not exact qty but enough for pattern)
   const trailingUnits = args.deliveredDates.length
 
   // Steady = sells in 10+ months of the year
@@ -592,6 +649,8 @@ export function computeSeasonality(args: {
       currentMonth,
       trailingUnits,
       soldThisMonthHistorically: monthSet.has(currentMonth),
+      monthsTracked,
+      hasFullYearData: true,
     }
   }
 
@@ -606,6 +665,8 @@ export function computeSeasonality(args: {
       currentMonth,
       trailingUnits,
       soldThisMonthHistorically: true,
+      monthsTracked,
+      hasFullYearData: true,
     }
   }
 
@@ -616,6 +677,8 @@ export function computeSeasonality(args: {
     currentMonth,
     trailingUnits,
     soldThisMonthHistorically: false,
+    monthsTracked,
+    hasFullYearData: true,
   }
 }
 
@@ -641,6 +704,7 @@ export function computeProductValuation(args: {
     | 'currentStock' | 'unitCost' | 'unitSellingPrice' | 'commissionPercent'
     | 'costingMethod' | 'standardCost' | 'costToSell'
     | 'holdingCostPerUnit' | 'orderingCost' | 'leadTimeDays' | 'safetyStock'
+    | 'createdAt'
   >
   inbounds: Pick<InboundRecord, 'id' | 'qtyIn' | 'unitPrice' | 'createdAt'>[]
   outboundQty: number
@@ -801,15 +865,15 @@ export function computeProductValuation(args: {
     holdingCostPerUnit,
     abcClass,
     varianceFlagged,
-    // Seasonality — computed from delivered dates (1yr lifecycle tracking)
+    // Seasonality — tracks product monthly from creation date; classifies only after 12 months
     seasonality: deliveredDates
-      ? computeSeasonality({ deliveredDates }).classification
-      : 'no-history',
+      ? computeSeasonality({ deliveredDates, productCreatedAt: p.createdAt }).classification
+      : 'tracking',
     activeMonths: deliveredDates
-      ? computeSeasonality({ deliveredDates }).activeMonths
+      ? computeSeasonality({ deliveredDates, productCreatedAt: p.createdAt }).activeMonths
       : [],
     soldThisMonthHistorically: deliveredDates
-      ? computeSeasonality({ deliveredDates }).soldThisMonthHistorically
+      ? computeSeasonality({ deliveredDates, productCreatedAt: p.createdAt }).soldThisMonthHistorically
       : false,
   }
 }

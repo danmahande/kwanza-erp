@@ -89,7 +89,7 @@ interface ProductValuation {
   holdingCostPerUnit: number
   abcClass: 'A' | 'B' | 'C'
   varianceFlagged: boolean
-  seasonality: 'in-season' | 'off-season' | 'steady' | 'no-history'
+  seasonality: 'in-season' | 'off-season' | 'steady' | 'no-history' | 'tracking'
   activeMonths: number[]
   soldThisMonthHistorically: boolean
 }
@@ -541,6 +541,7 @@ export default function InventoryValuationModule() {
       seasonal: [] as ProductValuation[],
       investigate: [] as ProductValuation[],
       merchantFollowUp: [] as ProductValuation[],
+      tracking: [] as ProductValuation[],
       obsolete: [] as ProductValuation[],
     }
     const ps = filteredProducts
@@ -565,61 +566,10 @@ export default function InventoryValuationModule() {
       seasonal: slowMoving.filter(p => p.seasonality === 'off-season'),
       investigate: slowMoving.filter(p => p.seasonality === 'in-season' || p.seasonality === 'steady'),
       merchantFollowUp: slowMoving.filter(p => p.seasonality === 'no-history' && p.currentStock > 0),
-      obsolete: slowMoving.filter(p => p.daysInventoryOutstanding > 365 && p.seasonality !== 'off-season'),
+      tracking: slowMoving.filter(p => p.seasonality === 'tracking' && p.currentStock > 0),
+      obsolete: slowMoving.filter(p => p.daysInventoryOutstanding > 365 && p.seasonality !== 'off-season' && p.seasonality !== 'tracking'),
     }
   }, [data, filteredProducts])
-
-  // ── Decision Summary (template-based executive memo) ──
-  const decisionSummary = useMemo(() => {
-    if (!data || !methodTotals) return null
-    const seasonal = affectedProducts.seasonal.length
-    const investigate = affectedProducts.investigate.length
-    const merchant = affectedProducts.merchantFollowUp.length
-    const obsolete = affectedProducts.obsolete.length
-    const reorderCount = affectedProducts.reorderQueue.length
-    const reorderValue = affectedProducts.reorderQueue.reduce((s, p) => s + (p.eoq > 0 ? p.eoq * p.standardCost : 0), 0)
-    const nrvCount = affectedProducts.nrv.length
-    const nrvTotal = affectedProducts.nrv.reduce((s, p) => s + p.writeDownTotal, 0)
-    const totalActions = seasonal + investigate + merchant + obsolete + reorderCount + nrvCount
-
-    // Urgency: if any product has ≤3 days of cover, it's urgent
-    const urgentCount = affectedProducts.reorderQueue.filter(p => {
-      const days = p.annualDemand > 0 ? (p.currentStock / (p.annualDemand / 365)) : 999
-      return days <= 3
-    }).length
-
-    const methodLabel = METHODS.find(m => m.key === selectedMethod)?.label || selectedMethod
-
-    const parts: string[] = []
-    parts.push(`Your inventory is valued at ${fmtUGX(methodTotals.selectedTotal, true)} (${methodLabel}).`)
-
-    if (totalActions === 0) {
-      parts.push('No actions are recommended — all metrics within benchmark.')
-    } else {
-      const actions: string[] = []
-      if (reorderCount > 0) actions.push(`reorder ${reorderCount} product${reorderCount > 1 ? 's' : ''} before stockout (total order value ${fmtUGX(reorderValue, true)})`)
-      const slowTotal = seasonal + investigate + merchant + obsolete
-      if (slowTotal > 0) {
-        const breakdown: string[] = []
-        if (seasonal > 0) breakdown.push(`${seasonal} likely seasonal`)
-        if (investigate > 0) breakdown.push(`${investigate} need investigation`)
-        if (merchant > 0) breakdown.push(`${merchant} need merchant follow-up`)
-        if (obsolete > 0) breakdown.push(`${obsolete} likely obsolete`)
-        actions.push(`review ${slowTotal} slow-moving product${slowTotal > 1 ? 's' : ''} (${breakdown.join(', ')})`)
-      }
-      if (nrvCount > 0) actions.push(`record ${fmtUGX(nrvTotal, true)} in write-downs where selling price has fallen below cost`)
-
-      parts.push(`${actions.length} action${actions.length > 1 ? 's' : ''} recommended: ${actions.map((a, i) => `(${i + 1}) ${a}`).join('; ')}.`)
-
-      if (urgentCount > 0) {
-        parts.push(`Action required today: ${urgentCount} product${urgentCount > 1 ? 's' : ''} will run out within 3 days.`)
-      } else {
-        parts.push('No action is urgent today.')
-      }
-    }
-
-    return parts.join(' ')
-  }, [data, methodTotals, selectedMethod, affectedProducts])
 
   // ── Loading state ──
   if (loading && !data) {
@@ -750,18 +700,6 @@ export default function InventoryValuationModule() {
         </Button>
       </OpsHeader>
 
-      {/* ── Section 00 — Decision Summary (executive memo) ── */}
-      {decisionSummary && (
-        <div className="bg-[#1B2A4A] text-white rounded-lg p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-[10px] uppercase tracking-wider text-blue-200/60 font-semibold">00 — Decision Summary</span>
-          </div>
-          <p className="text-[13px] leading-relaxed text-white">
-            {decisionSummary}
-          </p>
-        </div>
-      )}
-
       {/* ── Method toggle (yeezy.com MALE | FEMALE pattern) ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
@@ -883,7 +821,7 @@ export default function InventoryValuationModule() {
               03 — Slow-moving stock review
             </p>
             {(() => {
-              const totalSlow = affectedProducts.seasonal.length + affectedProducts.investigate.length + affectedProducts.merchantFollowUp.length + affectedProducts.obsolete.length + affectedProducts.nrv.length
+              const totalSlow = affectedProducts.seasonal.length + affectedProducts.investigate.length + affectedProducts.merchantFollowUp.length + affectedProducts.tracking.length + affectedProducts.obsolete.length + affectedProducts.nrv.length
               if (totalSlow === 0) {
                 return (
                   <p className="text-[13px] text-gray-700 leading-relaxed">
@@ -922,6 +860,16 @@ export default function InventoryValuationModule() {
                       affectedProducts={affectedProducts.merchantFollowUp}
                       affectedColumns={['currentStock', 'carryingValue']}
                       affectedTitle="Products with no sales history (contact merchant)"
+                    />
+                  )}
+                  {affectedProducts.tracking.length > 0 && (
+                    <IssueExpander
+                      status="monitor"
+                      compact={`Tracking — ${affectedProducts.tracking.length} product${affectedProducts.tracking.length > 1 ? 's' : ''} · less than 12 months of data, seasonality not yet determined`}
+                      detail="These products have been in the system for less than 12 months. The system is tracking their sales pattern monthly and will classify their seasonality once a full year of data is available. Action: no action needed — the system will automatically classify these products when enough data exists. Check back after the product's first anniversary."
+                      affectedProducts={affectedProducts.tracking}
+                      affectedColumns={['currentStock', 'carryingValue']}
+                      affectedTitle="Products being tracked (insufficient data for seasonal classification)"
                     />
                   )}
                   {affectedProducts.obsolete.length > 0 && (
