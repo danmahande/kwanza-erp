@@ -89,6 +89,9 @@ interface ProductValuation {
   holdingCostPerUnit: number
   abcClass: 'A' | 'B' | 'C'
   varianceFlagged: boolean
+  seasonality: 'in-season' | 'off-season' | 'steady' | 'no-history'
+  activeMonths: number[]
+  soldThisMonthHistorically: boolean
 }
 
 interface VarianceRow {
@@ -534,8 +537,15 @@ export default function InventoryValuationModule() {
       nrv: [] as ProductValuation[],
       variance: [] as ProductValuation[],
       stockout: [] as ProductValuation[],
+      reorderQueue: [] as ProductValuation[],
+      seasonal: [] as ProductValuation[],
+      investigate: [] as ProductValuation[],
+      merchantFollowUp: [] as ProductValuation[],
+      obsolete: [] as ProductValuation[],
     }
     const ps = filteredProducts
+    const slowMoving = ps.filter(p => p.daysInventoryOutstanding > 90 || p.inventoryTurnover < 4)
+
     return {
       turnover: ps.filter(p => p.inventoryTurnover > 0 && p.inventoryTurnover < 4).sort((a, b) => a.inventoryTurnover - b.inventoryTurnover),
       dio: ps.filter(p => p.daysInventoryOutstanding > 90).sort((a, b) => b.daysInventoryOutstanding - a.daysInventoryOutstanding),
@@ -544,8 +554,72 @@ export default function InventoryValuationModule() {
       nrv: ps.filter(p => p.writeDownRequired).sort((a, b) => b.writeDownTotal - a.writeDownTotal),
       variance: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
       stockout: ps.filter(p => p.stockoutRisk === 'critical').sort((a, b) => a.currentStock - b.currentStock),
+      // Reorder queue: products at/below reorder point, ranked by days of cover (ascending)
+      reorderQueue: ps.filter(p => p.reorderPoint > 0 && p.currentStock <= p.reorderPoint)
+        .sort((a, b) => {
+          const aDays = a.annualDemand > 0 ? (a.currentStock / (a.annualDemand / 365)) : 999
+          const bDays = b.annualDemand > 0 ? (b.currentStock / (b.annualDemand / 365)) : 999
+          return aDays - bDays
+        }),
+      // Slow-moving stock segmented by likely cause:
+      seasonal: slowMoving.filter(p => p.seasonality === 'off-season'),
+      investigate: slowMoving.filter(p => p.seasonality === 'in-season' || p.seasonality === 'steady'),
+      merchantFollowUp: slowMoving.filter(p => p.seasonality === 'no-history' && p.currentStock > 0),
+      obsolete: slowMoving.filter(p => p.daysInventoryOutstanding > 365 && p.seasonality !== 'off-season'),
     }
   }, [data, filteredProducts])
+
+  // ── Decision Summary (template-based executive memo) ──
+  const decisionSummary = useMemo(() => {
+    if (!data || !methodTotals) return null
+    const seasonal = affectedProducts.seasonal.length
+    const investigate = affectedProducts.investigate.length
+    const merchant = affectedProducts.merchantFollowUp.length
+    const obsolete = affectedProducts.obsolete.length
+    const reorderCount = affectedProducts.reorderQueue.length
+    const reorderValue = affectedProducts.reorderQueue.reduce((s, p) => s + (p.eoq > 0 ? p.eoq * p.standardCost : 0), 0)
+    const nrvCount = affectedProducts.nrv.length
+    const nrvTotal = affectedProducts.nrv.reduce((s, p) => s + p.writeDownTotal, 0)
+    const totalActions = seasonal + investigate + merchant + obsolete + reorderCount + nrvCount
+
+    // Urgency: if any product has ≤3 days of cover, it's urgent
+    const urgentCount = affectedProducts.reorderQueue.filter(p => {
+      const days = p.annualDemand > 0 ? (p.currentStock / (p.annualDemand / 365)) : 999
+      return days <= 3
+    }).length
+
+    const methodLabel = METHODS.find(m => m.key === selectedMethod)?.label || selectedMethod
+
+    const parts: string[] = []
+    parts.push(`Your inventory is valued at ${fmtUGX(methodTotals.selectedTotal, true)} (${methodLabel}).`)
+
+    if (totalActions === 0) {
+      parts.push('No actions are recommended — all metrics within benchmark.')
+    } else {
+      const actions: string[] = []
+      if (reorderCount > 0) actions.push(`reorder ${reorderCount} product${reorderCount > 1 ? 's' : ''} before stockout (total order value ${fmtUGX(reorderValue, true)})`)
+      const slowTotal = seasonal + investigate + merchant + obsolete
+      if (slowTotal > 0) {
+        const breakdown: string[] = []
+        if (seasonal > 0) breakdown.push(`${seasonal} likely seasonal`)
+        if (investigate > 0) breakdown.push(`${investigate} need investigation`)
+        if (merchant > 0) breakdown.push(`${merchant} need merchant follow-up`)
+        if (obsolete > 0) breakdown.push(`${obsolete} likely obsolete`)
+        actions.push(`review ${slowTotal} slow-moving product${slowTotal > 1 ? 's' : ''} (${breakdown.join(', ')})`)
+      }
+      if (nrvCount > 0) actions.push(`record ${fmtUGX(nrvTotal, true)} in write-downs where selling price has fallen below cost`)
+
+      parts.push(`${actions.length} action${actions.length > 1 ? 's' : ''} recommended: ${actions.map((a, i) => `(${i + 1}) ${a}`).join('; ')}.`)
+
+      if (urgentCount > 0) {
+        parts.push(`Action required today: ${urgentCount} product${urgentCount > 1 ? 's' : ''} will run out within 3 days.`)
+      } else {
+        parts.push('No action is urgent today.')
+      }
+    }
+
+    return parts.join(' ')
+  }, [data, methodTotals, selectedMethod, affectedProducts])
 
   // ── Loading state ──
   if (loading && !data) {
@@ -676,6 +750,18 @@ export default function InventoryValuationModule() {
         </Button>
       </OpsHeader>
 
+      {/* ── Section 00 — Decision Summary (executive memo) ── */}
+      {decisionSummary && (
+        <div className="bg-[#1B2A4A] text-white rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-[10px] uppercase tracking-wider text-blue-200/60 font-semibold">00 — Decision Summary</span>
+          </div>
+          <p className="text-[13px] leading-relaxed text-white">
+            {decisionSummary}
+          </p>
+        </div>
+      )}
+
       {/* ── Method toggle (yeezy.com MALE | FEMALE pattern) ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-4">
         <div className="flex items-center justify-between mb-3">
@@ -721,6 +807,11 @@ export default function InventoryValuationModule() {
             <p className="text-[13px] text-gray-900 leading-relaxed">
               Under {activeMethod.full} ({activeMethod.ias}), your inventory is valued at <span className="font-mono font-semibold text-[#FF6B35]">{fmtUGX(total, true)}</span>.
               {' '}This is the cost of all stock currently in the warehouse, computed using the {activeMethod.label} costing method per IAS 2.
+            </p>
+            {/* NRV plain-English explanation — shown once, first mention */}
+            <p className="text-[11px] text-gray-500 leading-relaxed italic">
+              Net Realisable Value (NRV) is what you could sell the product for today, minus selling costs.
+              IAS 2 requires inventory to be valued at the lower of cost or NRV — so if you bought stock for UGX 500 but can only sell it for UGX 450, you must write it down to UGX 450.
             </p>
             {/* Factual cross-method comparison — no fake benchmark, just the numbers side by side */}
             <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-500">
@@ -786,30 +877,126 @@ export default function InventoryValuationModule() {
             />
           </div>
 
-          {/* Section 03 — Warnings (compact, clickable) */}
+          {/* Section 03 — Slow-moving stock review (segmented by cause) */}
           <div className="space-y-1.5 pt-3 border-t border-gray-50">
             <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">
-              03 — Warnings
+              03 — Slow-moving stock review
             </p>
-            {warnings.length === 0 ? (
-              <p className="text-[13px] text-gray-700 leading-relaxed">
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-2 align-middle" />
-                No warnings. All metrics within benchmark.
-              </p>
-            ) : (
-              warnings.map((w, i) => (
-                <IssueExpander
-                  key={i}
-                  status={w.status}
-                  compact={w.compact}
-                  detail={w.narrative}
-                  affectedProducts={w.affectedProducts}
-                  affectedColumns={w.affectedColumns}
-                  affectedTitle={w.affectedTitle}
-                />
-              ))
-            )}
+            {(() => {
+              const totalSlow = affectedProducts.seasonal.length + affectedProducts.investigate.length + affectedProducts.merchantFollowUp.length + affectedProducts.obsolete.length + affectedProducts.nrv.length
+              if (totalSlow === 0) {
+                return (
+                  <p className="text-[13px] text-gray-700 leading-relaxed">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-2 align-middle" />
+                    No slow-moving stock. All products are moving at a healthy pace.
+                  </p>
+                )
+              }
+              return (
+                <>
+                  {affectedProducts.seasonal.length > 0 && (
+                    <IssueExpander
+                      status="monitor"
+                      compact={`Likely seasonal — ${affectedProducts.seasonal.length} product${affectedProducts.seasonal.length > 1 ? 's' : ''} · off-season now, historically sells in other months`}
+                      detail="These products haven't sold recently, but they have a seasonal pattern — they sell in specific months and are currently in their off-season. Action: hold. Review again when their season returns. No write-down needed unless the product is damaged."
+                      affectedProducts={affectedProducts.seasonal}
+                      affectedColumns={['dio', 'turnover']}
+                      affectedTitle="Off-season products (hold — review when season returns)"
+                    />
+                  )}
+                  {affectedProducts.investigate.length > 0 && (
+                    <IssueExpander
+                      status="critical"
+                      compact={`Need investigation — ${affectedProducts.investigate.length} product${affectedProducts.investigate.length > 1 ? 's' : ''} · in-season or steady but not selling`}
+                      detail="These products should be selling (they're in-season or normally sell year-round) but aren't. This suggests a pricing issue, quality problem, or market shift. Action: check competitor prices, review recent customer feedback, consider a promotion or repricing."
+                      affectedProducts={affectedProducts.investigate}
+                      affectedColumns={['dio', 'turnover', 'mpv']}
+                      affectedTitle="Products that should be selling but aren't"
+                    />
+                  )}
+                  {affectedProducts.merchantFollowUp.length > 0 && (
+                    <IssueExpander
+                      status="monitor"
+                      compact={`Merchant follow-up — ${affectedProducts.merchantFollowUp.length} product${affectedProducts.merchantFollowUp.length > 1 ? 's' : ''} · no sales history, merchant may have abandoned`}
+                      detail="These products have no delivery history in the trailing 365 days. The merchant may have stopped restocking, stopped selling through your warehouse, or the product may be new. Action: contact the merchant to confirm whether they still want to sell this product through your warehouse."
+                      affectedProducts={affectedProducts.merchantFollowUp}
+                      affectedColumns={['currentStock', 'carryingValue']}
+                      affectedTitle="Products with no sales history (contact merchant)"
+                    />
+                  )}
+                  {affectedProducts.obsolete.length > 0 && (
+                    <IssueExpander
+                      status="critical"
+                      compact={`Likely obsolete — ${affectedProducts.obsolete.length} product${affectedProducts.obsolete.length > 1 ? 's' : ''} · no movement in 365+ days, not seasonal`}
+                      detail="These products haven't moved in over a year and aren't seasonal. They're likely obsolete. Options: (1) discount to clear — take a loss now, free the warehouse space; (2) return to vendor (RTV) — send the stock back to the merchant; (3) dispose — write off and destroy if no residual value."
+                      affectedProducts={affectedProducts.obsolete}
+                      affectedColumns={['carryingValue', 'dio']}
+                      affectedTitle="Obsolete products (discount, RTV, or dispose)"
+                    />
+                  )}
+                  {affectedProducts.nrv.length > 0 && (
+                    <IssueExpander
+                      status={portfolio.nrvStatus}
+                      compact={`Selling price below cost — ${affectedProducts.nrv.length} product${affectedProducts.nrv.length > 1 ? 's' : ''} · ${fmtUGX(affectedProducts.nrv.reduce((s, p) => s + p.writeDownTotal, 0), true)} to write down`}
+                      detail="These products cost more to buy than they'd sell for today. Per accounting rules (IAS 2), you must record the difference as a loss. This doesn't mean the product is worthless — it means the market price dropped below what you paid. The write-down reduces the inventory value on your balance sheet to reflect reality."
+                      affectedProducts={affectedProducts.nrv}
+                      affectedColumns={['nrvPerUnit', 'writeDownTotal', 'carryingValue']}
+                      affectedTitle="Products where selling price has fallen below cost"
+                    />
+                  )}
+                </>
+              )
+            })()}
           </div>
+
+          {/* Section 03b — Reorder Queue (products at/below reorder point) */}
+          {affectedProducts.reorderQueue.length > 0 && (
+            <div className="space-y-1.5 pt-3 border-t border-gray-50">
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+                  03b — Reorder queue
+                </p>
+                <span className="text-[10px] text-gray-400">
+                  {affectedProducts.reorderQueue.length} product{affectedProducts.reorderQueue.length > 1 ? 's' : ''} at/below reorder point
+                </span>
+              </div>
+              <div className="bg-gray-50 border border-gray-100 rounded-md overflow-hidden">
+                <table className="w-full text-[11px]">
+                  <thead>
+                    <tr className="text-gray-400 text-[9px] uppercase">
+                      <th className="px-2 py-1 text-left font-semibold">Product</th>
+                      <th className="px-2 py-1 text-right font-semibold">Stock</th>
+                      <th className="px-2 py-1 text-right font-semibold">Days cover</th>
+                      <th className="px-2 py-1 text-right font-semibold">EOQ</th>
+                      <th className="px-2 py-1 text-right font-semibold">Order value</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {affectedProducts.reorderQueue.slice(0, 15).map(p => {
+                      const daysCover = p.annualDemand > 0 ? (p.currentStock / (p.annualDemand / 365)) : 999
+                      const orderValue = p.eoq > 0 ? p.eoq * p.standardCost : 0
+                      return (
+                        <tr key={p.productId} className="border-t border-gray-100 hover:bg-white">
+                          <td className="px-2 py-1 text-gray-900 truncate max-w-[180px]">{p.productLabel}</td>
+                          <td className="px-2 py-1 text-right font-mono text-gray-700">{fmtNum(p.currentStock)}</td>
+                          <td className={`px-2 py-1 text-right font-mono font-semibold ${daysCover <= 3 ? 'text-red-700' : daysCover <= 7 ? 'text-amber-700' : 'text-gray-700'}`}>
+                            {daysCover === 999 ? '—' : `${daysCover.toFixed(0)}d`}
+                          </td>
+                          <td className="px-2 py-1 text-right font-mono text-blue-700">{p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'}</td>
+                          <td className="px-2 py-1 text-right font-mono text-gray-900">{fmtUGX(orderValue, true)}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                {affectedProducts.reorderQueue.length > 15 && (
+                  <div className="px-2 py-1 text-[10px] text-gray-400 text-center">
+                    + {affectedProducts.reorderQueue.length - 15} more
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

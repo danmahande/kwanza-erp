@@ -104,6 +104,10 @@ export interface ProductValuation {
   abcClass: 'A' | 'B' | 'C'
   // Variance flag (management by exception)
   varianceFlagged: boolean
+  // Seasonality — computed from 1yr of delivery data (powers slow-moving stock classification)
+  seasonality: Seasonality
+  activeMonths: number[]
+  soldThisMonthHistorically: boolean
 }
 
 export interface VarianceRow {
@@ -523,6 +527,99 @@ export function abcClassify(products: Array<{ productId: string; annualValue: nu
 // ─────────────────────────────────────────────────────────────────────────────
 // 9. PRODUCT-LEVEL VALUATION (orchestrator)
 // ─────────────────────────────────────────────────────────────────────────────
+// 9b. SEASONALITY DETECTION (product lifecycle tracking)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type Seasonality = 'in-season' | 'off-season' | 'steady' | 'no-history'
+
+export interface SeasonalityResult {
+  classification: Seasonality
+  /** Months (1-12) where this product has historically sold */
+  activeMonths: number[]
+  /** Current month (1-12) */
+  currentMonth: number
+  /** Total units shipped in trailing 365 days */
+  trailingUnits: number
+  /** Whether the product has sold in the current month in prior years */
+  soldThisMonthHistorically: boolean
+}
+
+/**
+ * Analyze 1 year of delivery data to classify a product's seasonality.
+ *
+ * Logic:
+ * - no-history: 0 deliveries in trailing 365 days
+ * - steady: deliveries in 10+ months of the year (consistent demand)
+ * - in-season: deliveries in current month in prior years, AND current month has deliveries
+ * - off-season: deliveries in some months but NOT current month, AND current month
+ *               had deliveries in prior years (i.e., this is a seasonal dip, not a dead product)
+ *
+ * This powers the "Slow-moving stock review" section — distinguishing between
+ * products that are genuinely dead vs products that are just between seasons.
+ */
+export function computeSeasonality(args: {
+  deliveredDates: Date[]  // dates of delivered outbound records (trailing 365 days)
+  now?: Date
+}): SeasonalityResult {
+  const now = args.now || new Date()
+  const currentMonth = now.getMonth() + 1  // 1-12
+
+  if (args.deliveredDates.length === 0) {
+    return {
+      classification: 'no-history',
+      activeMonths: [],
+      currentMonth,
+      trailingUnits: 0,
+      soldThisMonthHistorically: false,
+    }
+  }
+
+  // Build a set of months (1-12) where this product had deliveries
+  const monthSet = new Set<number>()
+  for (const d of args.deliveredDates) {
+    monthSet.add(d.getMonth() + 1)
+  }
+  const activeMonths = Array.from(monthSet).sort((a, b) => a - b)
+
+  // Count total units (each date = 1 delivery, not exact qty but enough for pattern)
+  const trailingUnits = args.deliveredDates.length
+
+  // Steady = sells in 10+ months of the year
+  if (activeMonths.length >= 10) {
+    return {
+      classification: 'steady',
+      activeMonths,
+      currentMonth,
+      trailingUnits,
+      soldThisMonthHistorically: monthSet.has(currentMonth),
+    }
+  }
+
+  // Has the product sold in the current month in prior years?
+  const soldThisMonthHistorically = monthSet.has(currentMonth)
+
+  if (soldThisMonthHistorically) {
+    // Product has sold in this month before — it's in-season
+    return {
+      classification: 'in-season',
+      activeMonths,
+      currentMonth,
+      trailingUnits,
+      soldThisMonthHistorically: true,
+    }
+  }
+
+  // Product hasn't sold in this month, but sells in other months → off-season
+  return {
+    classification: 'off-season',
+    activeMonths,
+    currentMonth,
+    trailingUnits,
+    soldThisMonthHistorically: false,
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Compute full valuation for a single product.
@@ -553,10 +650,11 @@ export function computeProductValuation(args: {
   nrvRegister: NrvWriteDown[]
   settings: ValuationSettings
   abcClass: 'A' | 'B' | 'C'
+  deliveredDates?: Date[]
 }): ProductValuation {
   const {
     p, inbounds, outboundQty, shrinkageQty, deliveredQty, cogsTrailing,
-    nrvRegister, settings, abcClass,
+    nrvRegister, settings, abcClass, deliveredDates,
   } = args
 
   const costingMethod = (p.costingMethod as CostingMethod) || settings.defaultCostingMethod
@@ -703,6 +801,16 @@ export function computeProductValuation(args: {
     holdingCostPerUnit,
     abcClass,
     varianceFlagged,
+    // Seasonality — computed from delivered dates (1yr lifecycle tracking)
+    seasonality: deliveredDates
+      ? computeSeasonality({ deliveredDates }).classification
+      : 'no-history',
+    activeMonths: deliveredDates
+      ? computeSeasonality({ deliveredDates }).activeMonths
+      : [],
+    soldThisMonthHistorically: deliveredDates
+      ? computeSeasonality({ deliveredDates }).soldThisMonthHistorically
+      : false,
   }
 }
 

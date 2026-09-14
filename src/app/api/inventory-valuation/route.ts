@@ -167,6 +167,8 @@ export async function GET(req: NextRequest) {
       const deliveredQty = delivered?.qty ?? 0
       const cogsTrailing = fifoIssueCost({ inbounds, issues: delivered?.issues ?? [] })
       const nrvRegister = nrvByProduct.get(p.productId) || []
+      // Seasonality: extract delivery dates from the issues array
+      const deliveredDates = (delivered?.issues ?? []).map(i => i.occurredAt)
       return computeProductValuation({
         p,
         inbounds: inbounds.map(r => ({ id: r.id, qtyIn: r.qtyIn, unitPrice: r.unitPrice, createdAt: r.createdAt })),
@@ -177,6 +179,7 @@ export async function GET(req: NextRequest) {
         nrvRegister,
         settings,
         abcClass: abcMap.get(p.productId) || 'C',
+        deliveredDates,
       })
     })
 
