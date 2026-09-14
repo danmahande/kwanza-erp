@@ -19,6 +19,16 @@ import { toast } from 'sonner'
 import {
   OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr,
 } from '@/components/shared/ops-ui'
+import {
+  portfolioValuationNarrative,
+  turnoverNarrative,
+  dioNarrative,
+  holdingCostNarrative,
+  mpvNarrative,
+  nrvNarrative,
+  varianceFlaggedNarrative,
+  stockoutNarrative,
+} from '@/lib/inventory-valuation-narrative'
 
 // ── Types (mirror of API response) ──
 interface Settings {
@@ -550,40 +560,32 @@ export default function InventoryValuationModule() {
   const withinRange = total >= methodTotals.range.min && total <= methodTotals.range.max
 
   // Warnings list
-  const warnings: Array<{ label: string; value: string; status: Status }> = []
+  const warnings: Array<{ narrative: string; status: Status }> = []
   if (methodTotals.nrvWriteDownCount > 0) {
     warnings.push({
-      label: `${methodTotals.nrvWriteDownCount} product${methodTotals.nrvWriteDownCount > 1 ? 's' : ''} require NRV write-down (IAS 2 §9)`,
-      value: fmtUGX(methodTotals.writeDownTotal, true),
+      narrative: nrvNarrative({
+        count: methodTotals.nrvWriteDownCount,
+        total: methodTotals.writeDownTotal,
+        inventoryValue: kpis.totalInventoryAtCost,
+        status: portfolio.nrvStatus,
+      }),
       status: portfolio.nrvStatus,
     })
   }
   if (methodTotals.varianceFlaggedCount > 0) {
     warnings.push({
-      label: `${methodTotals.varianceFlaggedCount} variance${methodTotals.varianceFlaggedCount > 1 ? 's' : ''} flagged for investigation (>${(data.settings.varianceMaterialityPct * 100).toFixed(1)}%)`,
-      value: 'Material',
+      narrative: varianceFlaggedNarrative({
+        count: methodTotals.varianceFlaggedCount,
+        status: portfolio.varianceStatus,
+        materialityPct: data.settings.varianceMaterialityPct,
+      }),
       status: portfolio.varianceStatus,
     })
   }
   if (methodTotals.stockoutCriticalCount > 0) {
     warnings.push({
-      label: `${methodTotals.stockoutCriticalCount} product${methodTotals.stockoutCriticalCount > 1 ? 's' : ''} at critical stockout risk`,
-      value: '≤ 7 days cover',
+      narrative: stockoutNarrative({ count: methodTotals.stockoutCriticalCount }),
       status: 'critical',
-    })
-  }
-  if (portfolio.holdingStatus === 'critical' || portfolio.holdingStatus === 'monitor') {
-    warnings.push({
-      label: `Holding cost ${portfolio.holdingStatus === 'critical' ? 'excessive' : 'above benchmark'}`,
-      value: fmtPct(portfolio.holdingPct),
-      status: portfolio.holdingStatus,
-    })
-  }
-  if (portfolio.turnoverStatus === 'critical' || portfolio.turnoverStatus === 'monitor') {
-    warnings.push({
-      label: `Inventory turnover ${portfolio.turnoverStatus === 'critical' ? 'too slow' : 'below benchmark'}`,
-      value: `${portfolio.turnover.toFixed(2)}× / yr`,
-      status: portfolio.turnoverStatus,
     })
   }
 
@@ -662,33 +664,26 @@ export default function InventoryValuationModule() {
         </div>
 
         {/* Selected method detail row */}
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Selected total + benchmark range */}
-          <div className="md:col-span-2">
-            <div className="flex items-baseline gap-3">
-              <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">
-                {activeMethod.full} · {activeMethod.ias}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-3 mt-1">
-              <span className="text-2xl font-bold text-gray-900 font-mono tabular-nums">
-                {fmtUGX(total, true)}
-              </span>
-              {!withinRange && total > 0 && (
-                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
-                  <AlertTriangle size={10} /> Outside benchmark
-                </span>
-              )}
-            </div>
-            <p className="text-[11px] text-gray-500 mt-1.5 leading-relaxed">{activeMethod.hint}</p>
-
-            {/* Benchmark range bar */}
-            <div className="mt-3">
-              <div className="flex items-baseline justify-between text-[10px] text-gray-400 mb-1">
-                <span>Healthy range: {fmtUGX(methodTotals.range.min, true)} – {fmtUGX(methodTotals.range.max, true)}</span>
-                <span>80–120% of cross-method avg</span>
-              </div>
-              <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+        <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+          {/* Section 01 — Portfolio Valuation */}
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              01 — Portfolio Valuation
+            </p>
+            <p className="text-[13px] text-gray-900 leading-relaxed">
+              {portfolioValuationNarrative({
+                total,
+                methodName: activeMethod.label,
+                methodFull: activeMethod.full,
+                iasRef: activeMethod.ias,
+                rangeMin: methodTotals.range.min,
+                rangeMax: methodTotals.range.max,
+                withinRange,
+              })}
+            </p>
+            {/* Inline range bar — small, supports the sentence */}
+            <div className="flex items-center gap-2 mt-2">
+              <div className="flex-1 relative h-1 bg-gray-100 rounded-full overflow-hidden">
                 <div className="absolute h-full bg-green-100" style={{
                   left: `${Math.max(0, Math.min(100, (methodTotals.range.min / methodTotals.range.max) * 100))}%`,
                   width: `${Math.max(0, Math.min(100, ((methodTotals.range.max - methodTotals.range.min) / methodTotals.range.max) * 100))}%`,
@@ -697,82 +692,61 @@ export default function InventoryValuationModule() {
                   const pct = Math.max(0, Math.min(100, (total / methodTotals.range.max) * 100))
                   return (
                     <div
-                      className={`absolute h-3 w-0.5 -top-0.5 ${withinRange ? 'bg-green-600' : 'bg-red-600'}`}
+                      className={`absolute h-2.5 w-0.5 -top-0.5 ${withinRange ? 'bg-green-600' : 'bg-red-600'}`}
                       style={{ left: `${pct}%` }}
                     />
                   )
                 })()}
               </div>
+              <span className="text-[10px] text-gray-400 font-mono shrink-0">
+                {fmtUGX(methodTotals.range.min, true)} – {fmtUGX(methodTotals.range.max, true)}
+              </span>
             </div>
           </div>
 
-          {/* Portfolio metrics — compact */}
-          <div className="border-l border-gray-100 pl-4 space-y-2">
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">Turnover</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.turnoverStatus)}`} />
-                <span className={`font-mono font-semibold ${statusColor(portfolio.turnoverStatus)}`}>
-                  {portfolio.turnover.toFixed(2)}×
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">DIO</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.dioStatus)}`} />
-                <span className={`font-mono font-semibold ${statusColor(portfolio.dioStatus)}`}>
-                  {portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">Holding cost</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.holdingStatus)}`} />
-                <span className={`font-mono font-semibold ${statusColor(portfolio.holdingStatus)}`}>
-                  {fmtPct(portfolio.holdingPct)}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between text-[11px]">
-              <span className="text-gray-500">MPV (90d)</span>
-              <div className="flex items-center gap-1.5">
-                <span className={`w-1.5 h-1.5 rounded-full ${statusDot(portfolio.varianceStatus)}`} />
-                <span className={`font-mono font-semibold ${statusColor(portfolio.varianceStatus)}`}>
-                  {kpis.totalMaterialPriceVariance >= 0 ? '+' : ''}{fmtUGX(kpis.totalMaterialPriceVariance, true)}
-                </span>
-              </div>
-            </div>
+          {/* Section 02 — Performance */}
+          <div className="space-y-2.5 pt-3 border-t border-gray-50">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              02 — Performance
+            </p>
+            <NarrativeLine status={portfolio.turnoverStatus}>
+              {turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
+            </NarrativeLine>
+            <NarrativeLine status={portfolio.dioStatus}>
+              {dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
+            </NarrativeLine>
+            <NarrativeLine status={portfolio.holdingStatus}>
+              {holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
+            </NarrativeLine>
+            <NarrativeLine status={portfolio.varianceStatus}>
+              {mpvNarrative({ variance: kpis.totalMaterialPriceVariance, status: portfolio.varianceStatus, materialityPct: data.settings.varianceMaterialityPct })}
+            </NarrativeLine>
+          </div>
+
+          {/* Section 03 — Warnings (sequential list, not grid) */}
+          <div className="space-y-2.5 pt-3 border-t border-gray-50">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
+              03 — Warnings
+            </p>
+            {warnings.length === 0 ? (
+              <p className="text-[13px] text-gray-700 leading-relaxed">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-2 align-middle" />
+                No warnings. All metrics within benchmark.
+              </p>
+            ) : (
+              warnings.map((w, i) => (
+                <NarrativeLine key={i} status={w.status}>
+                  {w.narrative}
+                </NarrativeLine>
+              ))
+            )}
           </div>
         </div>
       </div>
 
-      {/* ── Warnings banner (compact, matches system pattern) ── */}
-      {warnings.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 mb-2">
-            <AlertTriangle size={12} className="text-amber-700" />
-            <span className="text-[10px] uppercase tracking-wider text-amber-900 font-semibold">
-              Warnings · {warnings.length}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {warnings.map((w, i) => (
-              <div key={i} className="flex items-center justify-between bg-white/60 rounded px-2.5 py-1.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${statusDot(w.status)}`} />
-                  <span className="text-[11px] text-gray-700 truncate">{w.label}</span>
-                </div>
-                <span className="text-[11px] font-mono font-semibold text-gray-900 shrink-0 ml-2">{w.value}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Filters ── */}
+      {/* ── Section 04 — Filters ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-3">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">04 — Filters</p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <Label className="text-[10px] uppercase tracking-wider text-gray-500">Product</Label>
@@ -820,7 +794,10 @@ export default function InventoryValuationModule() {
         </div>
       </div>
 
-      {/* ── Product table — grouped by category, showing only selected method ── */}
+      {/* ── Section 05 — Products ── */}
+      <div className="mb-2">
+        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">05 — Products</p>
+      </div>
       <DenseTable>
         <thead>
           <tr>
@@ -896,6 +873,21 @@ export default function InventoryValuationModule() {
 
       {/* ── Help dialog ── */}
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// NARRATIVE LINE — a single sentence with a status dot, used in sequential sections
+// ════════════════════════════════════════════════════════════════════════════
+function NarrativeLine({ status, children }: { status: Status; children: React.ReactNode }) {
+  const dotColor = status === 'healthy' ? 'bg-green-500'
+    : status === 'monitor' ? 'bg-amber-500'
+    : 'bg-red-500'
+  return (
+    <div className="flex items-start gap-2">
+      <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} mt-1.5 shrink-0`} />
+      <p className="text-[13px] text-gray-900 leading-relaxed">{children}</p>
     </div>
   )
 }
