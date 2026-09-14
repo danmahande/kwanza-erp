@@ -511,6 +511,30 @@ export default function InventoryValuationModule() {
     a.click(); URL.revokeObjectURL(url)
   }
 
+  // ── Affected products per metric (for clickable issue tables) ──
+  // MUST be before early returns — React hooks cannot be after conditional returns.
+  const affectedProducts = useMemo(() => {
+    if (!data) return {
+      turnover: [] as ProductValuation[],
+      dio: [] as ProductValuation[],
+      holding: [] as ProductValuation[],
+      mpv: [] as ProductValuation[],
+      nrv: [] as ProductValuation[],
+      variance: [] as ProductValuation[],
+      stockout: [] as ProductValuation[],
+    }
+    const ps = filteredProducts
+    return {
+      turnover: ps.filter(p => p.inventoryTurnover > 0 && p.inventoryTurnover < 4).sort((a, b) => a.inventoryTurnover - b.inventoryTurnover),
+      dio: ps.filter(p => p.daysInventoryOutstanding > 90).sort((a, b) => b.daysInventoryOutstanding - a.daysInventoryOutstanding),
+      holding: ps.filter(p => p.holdingCostPerUnit > 0).sort((a, b) => b.holdingCostPerUnit - a.holdingCostPerUnit).slice(0, 20),
+      mpv: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
+      nrv: ps.filter(p => p.writeDownRequired).sort((a, b) => b.writeDownTotal - a.writeDownTotal),
+      variance: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
+      stockout: ps.filter(p => p.stockoutRisk === 'critical').sort((a, b) => a.currentStock - b.currentStock),
+    }
+  }, [data, filteredProducts])
+
   // ── Loading state ──
   if (loading && !data) {
     return (
@@ -551,35 +575,13 @@ export default function InventoryValuationModule() {
 
   if (!data || !portfolio || !methodTotals) return null
 
+  // ── After null check: safe to use data, portfolio, methodTotals without null guards ──
   const { kpis } = data
   const activeMethod = METHODS.find(m => m.key === selectedMethod) || METHODS[0]
   const total = methodTotals.selectedTotal
   const withinRange = total >= methodTotals.range.min && total <= methodTotals.range.max
 
-  // ── Affected products per metric (for clickable issue tables) ──
-  const affectedProducts = useMemo(() => {
-    if (!data) return {
-      turnover: [] as ProductValuation[],
-      dio: [] as ProductValuation[],
-      holding: [] as ProductValuation[],
-      mpv: [] as ProductValuation[],
-      nrv: [] as ProductValuation[],
-      variance: [] as ProductValuation[],
-      stockout: [] as ProductValuation[],
-    }
-    const ps = filteredProducts
-    return {
-      turnover: ps.filter(p => p.inventoryTurnover > 0 && p.inventoryTurnover < 4).sort((a, b) => a.inventoryTurnover - b.inventoryTurnover),
-      dio: ps.filter(p => p.daysInventoryOutstanding > 90).sort((a, b) => b.daysInventoryOutstanding - a.daysInventoryOutstanding),
-      holding: ps.filter(p => p.holdingCostPerUnit > 0).sort((a, b) => b.holdingCostPerUnit - a.holdingCostPerUnit).slice(0, 20),
-      mpv: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
-      nrv: ps.filter(p => p.writeDownRequired).sort((a, b) => b.writeDownTotal - a.writeDownTotal),
-      variance: ps.filter(p => p.varianceFlagged).sort((a, b) => Math.abs(b.materialPriceVariance) - Math.abs(a.materialPriceVariance)),
-      stockout: ps.filter(p => p.stockoutRisk === 'critical').sort((a, b) => a.currentStock - b.currentStock),
-    }
-  }, [data, filteredProducts])
-
-  // Warnings list — built after affectedProducts so each warning can include its affected product set
+  // Warnings list — built after null check so methodTotals/portfolio/kpis are safe
   const warnings: Array<{
     compact: string; narrative: string; status: Status
     affectedProducts: ProductValuation[]; affectedColumns: string[]; affectedTitle: string
