@@ -48,76 +48,76 @@ export function turnoverNarrative(args: {
   status: Status
 }): string {
   const { turnover, status } = args
-  const benchmark = '4–6× per year'
+  const benchmark = '4–6 turns per year (APICS/ASCM)'
 
   if (turnover === 0) {
-    return `Inventory turnover: no data (no delivered sales in the trailing 365 days). The benchmark is ${benchmark}. Once orders start delivering, this metric will compute.`
+    return `Throughput Turn: no data (no units shipped in the trailing 365 days). The benchmark is ${benchmark}. Once orders start shipping, this metric will compute.`
   }
 
   if (status === 'healthy') {
-    return `Inventory turnover is ${turnover.toFixed(2)}× per year — within the healthy benchmark of ${benchmark}. Stock is moving at a sustainable pace.`
+    return `Throughput Turn is ${turnover.toFixed(2)}× per year — within the healthy benchmark of ${benchmark}. This means stock moves through the warehouse ${turnover.toFixed(2)} times per year, or roughly every ${(365 / turnover).toFixed(0)} days. Stock is moving at a sustainable pace.`
   }
 
   if (status === 'monitor') {
     if (turnover < 4) {
-      return `Inventory turnover is ${turnover.toFixed(2)}× per year — below the ${benchmark} benchmark. Stock is sitting longer than ideal, which ties up capital. Consider clearing slow-moving items or reducing reorder quantities.`
+      return `Throughput Turn is ${turnover.toFixed(2)}× per year — below the ${benchmark} benchmark. Stock is sitting in the warehouse longer than ideal (roughly ${(365 / turnover).toFixed(0)} days per unit). This ties up merchant capital and increases holding costs. Consider clearing slow-moving items or reducing reorder quantities.`
     }
-    return `Inventory turnover is ${turnover.toFixed(2)}× per year — above the ${benchmark} benchmark. Stock is moving fast, but this may indicate understocking — you could be missing sales. Review reorder points.`
+    return `Throughput Turn is ${turnover.toFixed(2)}× per year — above the ${benchmark} benchmark. Stock is moving fast (roughly every ${(365 / turnover).toFixed(0)} days), but this may indicate understocking — you could be missing sales. Review reorder points.`
   }
 
   // critical
-  return `Inventory turnover is ${turnover.toFixed(2)}× per year — critically slow. The benchmark is ${benchmark}. At this rate, capital is locked in inventory for far too long, which strains cash flow. This is a serious issue: either demand has collapsed, or you're holding too much stock. Action required.`
+  return `Throughput Turn is ${turnover.toFixed(2)}× per year — critically slow. The benchmark is ${benchmark}. At this rate, stock sits in the warehouse for roughly ${(365 / turnover).toFixed(0)} days before shipping. This strains merchant cash flow and increases obsolescence risk. Either demand has collapsed, or you're holding too much stock. Action required.`
 }
 
-// ── Days Inventory Outstanding (DIO) ──
+// ── Days of Supply (replaces DIO — 3PL-appropriate, no COGS needed) ──
 export function dioNarrative(args: {
   dio: number
   status: Status
 }): string {
   const { dio, status } = args
-  const benchmark = '60–90 days'
+  const benchmark = '60–90 days (APICS/ASCM)'
 
   if (dio === 0) {
-    return `Days inventory outstanding: no data. The benchmark is ${benchmark}.`
+    return `Days of Supply: no data. The benchmark is ${benchmark}.`
   }
 
   if (status === 'healthy') {
-    return `Days inventory outstanding: ${dio.toFixed(0)} days — within the ${benchmark} benchmark. Stock converts to sales at a healthy pace.`
+    return `Days of Supply: ${dio.toFixed(0)} days — within the ${benchmark} benchmark. On average, a unit spends ${dio.toFixed(0)} days in the warehouse before shipping. Stock converts to shipments at a healthy pace.`
   }
 
   if (status === 'monitor') {
     if (dio > 90) {
-      return `Days inventory outstanding: ${dio.toFixed(0)} days — above the ${benchmark} benchmark. Stock is sitting on shelves longer than typical for this industry. Capital is tied up for ${((dio - 90) / 30).toFixed(0)} extra month(s) beyond the upper benchmark.`
+      return `Days of Supply: ${dio.toFixed(0)} days — above the ${benchmark} benchmark. Units are sitting on shelves longer than typical for this industry (about ${((dio - 90) / 30).toFixed(0)} extra month(s) beyond the upper benchmark). Capital is tied up and obsolescence risk increases.`
     }
-    return `Days inventory outstanding: ${dio.toFixed(0)} days — below the ${benchmark} benchmark. Stock is turning over very quickly, which is good for cash flow but may indicate understocking risk.`
+    return `Days of Supply: ${dio.toFixed(0)} days — below the ${benchmark} benchmark. Stock is shipping very quickly, which is good for cash flow but may indicate understocking risk.`
   }
 
   // critical
-  return `Days inventory outstanding: ${dio.toFixed(0)} days — critically high. The benchmark is ${benchmark}. At this rate, capital is locked in inventory for ${(dio / 365).toFixed(1)} year(s) before converting to sales. This is unsustainable — each day beyond 90 represents capital that could be deployed elsewhere.`
+  return `Days of Supply: ${dio.toFixed(0)} days — critically high. The benchmark is ${benchmark}. At this rate, units spend ${(dio / 365).toFixed(1)} year(s) in the warehouse before shipping. This is unsustainable — each day beyond 90 represents capital that could be deployed elsewhere, and increases the risk of NRV write-downs under IAS 2.`
 }
 
-// ── Holding Cost ──
+// ── Holding Cost (source: APICS/ASCM, not ACCA/CIMA) ──
 export function holdingCostNarrative(args: {
   pct: number
   total: number
   status: Status
 }): string {
   const { pct, total, status } = args
-  const benchmark = '15–30% of inventory value'
+  const benchmark = '15–30% of inventory value (APICS/ASCM)'
 
   if (status === 'healthy') {
-    return `Holding cost is ${fmtPct(pct)} of inventory value (${fmtUGX(total, { compact: true })} annually) — within the healthy benchmark of ${benchmark}. The cost of storing, insuring, and financing stock is proportionate to its value.`
+    return `Holding cost is ${fmtPct(pct)} of inventory value (${fmtUGX(total, { compact: true })} annually) — within the healthy benchmark of ${benchmark}. This means for every UGX 100 of stock held for a year, it costs UGX ${(pct * 100).toFixed(0)} to store, insure, and finance it. The cost is proportionate to the inventory value.`
   }
 
   if (status === 'monitor') {
     if (pct > 0.30) {
-      return `Holding cost is ${fmtPct(pct)} of inventory value — above the ${benchmark} benchmark. You're spending ${fmtUGX(total, { compact: true })} per year to hold stock. The excess is likely from overstocking or high capital costs — review storage rates and order quantities.`
+      return `Holding cost is ${fmtPct(pct)} of inventory value — above the ${benchmark} benchmark. You're spending ${fmtUGX(total, { compact: true })} per year to hold stock (UGX ${(pct * 100).toFixed(0)} per UGX 100 of inventory). The excess is likely from overstocking or high capital costs — review storage rates and order quantities.`
     }
-    return `Holding cost is ${fmtPct(pct)} of inventory value — below the ${benchmark} benchmark. This may indicate under-investment in storage security, insurance, or climate control. Verify all holding cost components are captured in Settings.`
+    return `Holding cost is ${fmtPct(pct)} of inventory value — below the ${benchmark} benchmark. This may indicate under-investment in storage security, insurance, or climate control. Verify all 4 components (capital, storage, service, risk) are captured in Settings.`
   }
 
   // critical
-  return `Holding cost is ${fmtPct(pct)} of inventory value — excessive. The benchmark is ${benchmark}. You're spending ${fmtUGX(total, { compact: true })} per year to hold inventory, which is disproportionate to its value. This typically signals severe overstocking — reduce order quantities and clear slow-moving stock immediately.`
+  return `Holding cost is ${fmtPct(pct)} of inventory value — excessive. The benchmark is ${benchmark}. You're spending ${fmtUGX(total, { compact: true })} per year to hold inventory (UGX ${(pct * 100).toFixed(0)} per UGX 100 of stock), which is disproportionate to its value. This typically signals severe overstocking — reduce order quantities and clear slow-moving stock immediately.`
 }
 
 // ── Material Price Variance (MPV) ──
@@ -224,32 +224,33 @@ export function sectionHeading(number: string, title: string): string {
 // ════════════════════════════════════════════════════════════════════════════
 
 export function turnoverCompact(turnover: number, status: Status): string {
-  if (turnover === 0) return 'Turnover — no data'
+  if (turnover === 0) return 'Throughput Turn — no data'
+  const daysPerTurn = 365 / turnover
   const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (turnover < 4 ? 'slow' : 'fast') : 'critically slow'
-  return `Turnover ${turnover.toFixed(2)}× · ${label} · benchmark 4–6×`
+  return `Throughput Turn ${turnover.toFixed(2)}×/yr · ${label} · stock moves every ${daysPerTurn.toFixed(0)}d · benchmark 4–6×`
 }
 
 export function dioCompact(dio: number, status: Status): string {
-  if (dio === 0) return 'DIO — no data'
+  if (dio === 0) return 'Days of Supply — no data'
   const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (dio > 90 ? 'above benchmark' : 'below benchmark') : 'critically high'
-  return `DIO ${dio.toFixed(0)}d · ${label} · benchmark 60–90d`
+  return `Days of Supply ${dio.toFixed(0)}d · ${label} · benchmark 60–90d`
 }
 
 export function holdingCompact(pct: number, status: Status): string {
   const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (pct > 0.30 ? 'high' : 'low') : 'excessive'
-  return `Holding ${fmtPct(pct)} · ${label} · benchmark 15–30%`
+  return `Holding ${fmtPct(pct)} · ${label} · UGX ${(pct * 100).toFixed(0)}/100 stock · benchmark 15–30%`
 }
 
 export function mpvCompact(variance: number, status: Status): string {
   if (variance === 0) return 'MPV — no data (90d)'
   const kind = variance >= 0 ? 'F' : 'A'
   const label = status === 'healthy' ? 'within threshold' : status === 'monitor' ? 'flagged' : 'critical'
-  return `MPV ${kind} ${fmtUGX(Math.abs(variance), { compact: true })} · ${label} · threshold 5%`
+  return `MPV ${kind} ${fmtUGX(Math.abs(variance), { compact: true })} · ${label} · threshold 5% (ISA 320)`
 }
 
 export function nrvCompact(count: number, total: number, status: Status): string {
-  if (count === 0) return 'NRV — all at cost, no write-downs'
-  const label = status === 'healthy' ? 'within threshold' : status === 'monitor' ? 'above threshold' : 'critical'
+  if (count === 0) return 'NRV — all at cost, no write-downs required'
+  const label = status === 'healthy' ? 'within convention' : status === 'monitor' ? 'above convention' : 'critical'
   return `NRV ${count} product${count > 1 ? 's' : ''} · ${fmtUGX(total, { compact: true })} · ${label}`
 }
 

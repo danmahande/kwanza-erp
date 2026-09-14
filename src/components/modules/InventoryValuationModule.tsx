@@ -20,7 +20,6 @@ import {
   OpsHeader, DenseTable, DenseTh, DenseTd, AnimatedDenseTr,
 } from '@/components/shared/ops-ui'
 import {
-  portfolioValuationNarrative,
   turnoverNarrative, dioNarrative, holdingCostNarrative, mpvNarrative,
   nrvNarrative, varianceFlaggedNarrative, stockoutNarrative,
   turnoverCompact, dioCompact, holdingCompact, mpvCompact,
@@ -166,13 +165,26 @@ const METHODS: Array<{ key: MethodKey; label: string; full: string; ias: string;
   { key: 'specific_id', label: 'SPECIFIC ID', full: 'Specific Identification',        ias: 'IAS 2 §23', hint: 'Cost traced to specific physical item. For non-interchangeable goods.' },
 ]
 
-// ── Benchmarks (ACCA MDC + IAS 2) ──
+// ── Benchmarks — corrected sources per research/inventory_benchmarks.md ──
+// Sources: APICS/ASCM Dictionary, IAS 2, ISA 320, Silver-Pyke-Thomas textbook
 const BENCHMARKS = {
-  turnover: { min: 4, max: 6, label: '4–6 turns/year', source: 'ACCA MDC' },
-  dio:      { min: 60, max: 90, label: '60–90 days', source: 'ACCA MDC' },
-  holding:  { min: 0.15, max: 0.30, label: '15–30% of inventory value', source: 'ACCA MDC' },
-  nrv:      { max: 0.05, label: '< 5% of inventory value', source: 'IAS 2 §9' },
-  variance: { max: 0.05, label: '< 5% of standard cost', source: 'ACCA MDC materiality' },
+  // Throughput Turn (3PL-appropriate, replaces COGS-based Inventory Turnover)
+  // Source: APICS/ASCM body of knowledge (not IFRS/ACCA — 3PLs have no COGS)
+  // Range applies to durable goods / general manufacturing; 3PL equivalent.
+  throughputTurn: { min: 4, max: 6, label: '4–6 turns/year', source: 'APICS/ASCM' },
+  // Days of Supply (3PL-appropriate, replaces DIO which requires COGS)
+  // Source: APICS/ASCM — operational metric, not financial
+  daysOfSupply: { min: 60, max: 90, label: '60–90 days', source: 'APICS/ASCM' },
+  // Holding cost 4-component split: Capital/Storage/Service/Risk
+  // Source: APICS/ASCM (not ACCA/CIMA — corrected from previous attribution)
+  holding:  { min: 0.15, max: 0.30, label: '15–30% of inventory value', source: 'APICS/ASCM' },
+  // NRV write-down: IAS 2 §9 is principles-based — NO % threshold exists.
+  // Any write-down is required when NRV < cost, regardless of size.
+  // The 5% below is an internal analytical convention, not an IFRS standard.
+  nrv:      { max: 0.05, label: '< 5% (internal convention)', source: 'IAS 2 §9 (principles-based, no % threshold)' },
+  // MPV materiality: NOT an ACCA standard. Originates from US GAAP audit rule of thumb.
+  // Authoritative anchor is ISA 320 (judgment-based, no fixed %).
+  variance: { max: 0.05, label: '< 5% of standard cost', source: 'ISA 320 (internal policy)' },
 }
 
 // ── Formatters ──
@@ -203,15 +215,15 @@ const fmtDate = (d: string): string => {
 type Status = 'healthy' | 'monitor' | 'critical'
 function turnoverStatus(t: number): Status {
   if (t === 0) return 'monitor'
-  if (t < BENCHMARKS.turnover.min) return 'critical'
-  if (t > BENCHMARKS.turnover.max) return 'monitor'
+  if (t < BENCHMARKS.throughputTurn.min) return 'critical'
+  if (t > BENCHMARKS.throughputTurn.max) return 'monitor'
   return 'healthy'
 }
 function dioStatus(d: number): Status {
   if (d === 0) return 'monitor'
   if (d > 120) return 'critical'
-  if (d > BENCHMARKS.dio.max) return 'monitor'
-  if (d < BENCHMARKS.dio.min) return 'monitor'
+  if (d > BENCHMARKS.daysOfSupply.max) return 'monitor'
+  if (d < BENCHMARKS.daysOfSupply.min) return 'monitor'
   return 'healthy'
 }
 function holdingStatus(pct: number): Status {
@@ -579,7 +591,6 @@ export default function InventoryValuationModule() {
   const { kpis } = data
   const activeMethod = METHODS.find(m => m.key === selectedMethod) || METHODS[0]
   const total = methodTotals.selectedTotal
-  const withinRange = total >= methodTotals.range.min && total <= methodTotals.range.max
 
   // Warnings list — built after null check so methodTotals/portfolio/kpis are safe
   const warnings: Array<{
@@ -708,36 +719,31 @@ export default function InventoryValuationModule() {
               01 — Portfolio Valuation
             </p>
             <p className="text-[13px] text-gray-900 leading-relaxed">
-              {portfolioValuationNarrative({
-                total,
-                methodName: activeMethod.label,
-                methodFull: activeMethod.full,
-                iasRef: activeMethod.ias,
-                rangeMin: methodTotals.range.min,
-                rangeMax: methodTotals.range.max,
-                withinRange,
-              })}
+              Under {activeMethod.full} ({activeMethod.ias}), your inventory is valued at <span className="font-mono font-semibold text-[#FF6B35]">{fmtUGX(total, true)}</span>.
+              {' '}This is the cost of all stock currently in the warehouse, computed using the {activeMethod.label} costing method per IAS 2.
             </p>
-            {/* Inline range bar — small, supports the sentence */}
-            <div className="flex items-center gap-2 mt-2">
-              <div className="flex-1 relative h-1 bg-gray-100 rounded-full overflow-hidden">
-                <div className="absolute h-full bg-green-100" style={{
-                  left: `${Math.max(0, Math.min(100, (methodTotals.range.min / methodTotals.range.max) * 100))}%`,
-                  width: `${Math.max(0, Math.min(100, ((methodTotals.range.max - methodTotals.range.min) / methodTotals.range.max) * 100))}%`,
-                }} />
-                {(() => {
-                  const pct = Math.max(0, Math.min(100, (total / methodTotals.range.max) * 100))
-                  return (
-                    <div
-                      className={`absolute h-2.5 w-0.5 -top-0.5 ${withinRange ? 'bg-green-600' : 'bg-red-600'}`}
-                      style={{ left: `${pct}%` }}
-                    />
-                  )
-                })()}
-              </div>
-              <span className="text-[10px] text-gray-400 font-mono shrink-0">
-                {fmtUGX(methodTotals.range.min, true)} – {fmtUGX(methodTotals.range.max, true)}
+            {/* Factual cross-method comparison — no fake benchmark, just the numbers side by side */}
+            <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-500">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Cross-method comparison:</span>
+              <span className={selectedMethod === 'fifo' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+                FIFO {fmtUGX(methodTotals.fifoTotal, true)}
               </span>
+              <span className={selectedMethod === 'avco' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+                AVCO {fmtUGX(methodTotals.avcoTotal, true)}
+              </span>
+              <span className={selectedMethod === 'standard' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+                STD {fmtUGX(methodTotals.stdTotal, true)}
+              </span>
+              {(() => {
+                const max = Math.max(methodTotals.fifoTotal, methodTotals.avcoTotal, methodTotals.stdTotal)
+                const min = Math.min(methodTotals.fifoTotal, methodTotals.avcoTotal, methodTotals.stdTotal)
+                const spread = max > 0 ? ((max - min) / max) * 100 : 0
+                return (
+                  <span className="text-[10px] text-gray-400">
+                    spread {spread.toFixed(1)}%
+                  </span>
+                )
+              })()}
             </div>
           </div>
 
@@ -936,6 +942,19 @@ export default function InventoryValuationModule() {
 
       {/* ── Help dialog ── */}
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+
+      {/* ── Sources footnote ── */}
+      <div className="mt-6 pt-4 border-t border-gray-100 text-[10px] text-gray-400 leading-relaxed">
+        <p className="font-semibold uppercase tracking-wider text-gray-500 mb-1">Benchmark sources</p>
+        <p>
+          Throughput Turn &amp; Days of Supply: <span className="font-mono">APICS/ASCM Supply Chain Dictionary</span> (operational metrics, not IFRS).
+          Holding cost 4-component split: <span className="font-mono">APICS/ASCM body of knowledge</span> (Capital/Storage/Service/Risk).
+          Costing methods &amp; NRV test: <span className="font-mono">IAS 2 — Inventories</span> (IFRS Foundation).
+          MPV materiality threshold: <span className="font-mono">ISA 320</span> (judgment-based internal policy, no fixed %).
+          LIFO prohibited: <span className="font-mono">IAS 2 §25</span>.
+          Cross-method comparison is factual, not benchmarked — no authoritative range exists.
+        </p>
+      </div>
     </div>
   )
 }
@@ -1631,8 +1650,8 @@ function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div>
             <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Benchmarks</p>
             <div className="space-y-1 text-xs text-gray-600">
-              <div className="flex justify-between"><span>Inventory turnover</span><span className="font-mono">{BENCHMARKS.turnover.label} ({BENCHMARKS.turnover.source})</span></div>
-              <div className="flex justify-between"><span>Days inventory outstanding</span><span className="font-mono">{BENCHMARKS.dio.label} ({BENCHMARKS.dio.source})</span></div>
+              <div className="flex justify-between"><span>Throughput Turn</span><span className="font-mono">{BENCHMARKS.throughputTurn.label} ({BENCHMARKS.throughputTurn.source})</span></div>
+              <div className="flex justify-between"><span>Days of Supply</span><span className="font-mono">{BENCHMARKS.daysOfSupply.label} ({BENCHMARKS.daysOfSupply.source})</span></div>
               <div className="flex justify-between"><span>Holding cost</span><span className="font-mono">{BENCHMARKS.holding.label} ({BENCHMARKS.holding.source})</span></div>
               <div className="flex justify-between"><span>NRV write-down</span><span className="font-mono">{BENCHMARKS.nrv.label} ({BENCHMARKS.nrv.source})</span></div>
               <div className="flex justify-between"><span>Variance materiality</span><span className="font-mono">{BENCHMARKS.variance.label} ({BENCHMARKS.variance.source})</span></div>
