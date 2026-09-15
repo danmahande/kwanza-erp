@@ -771,129 +771,143 @@ export default function InventoryValuationModule() {
             </div>
           </Panel>
 
-          {/* Section 02 — Performance */}
+          {/* Section 02 — Performance — visual instrument widgets, not text lines */}
           <Panel title="Performance" number="02" variant="raised">
-          <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 hidden">
-              02 — Performance
-            </p>
-            <IssueExpander
-              status={portfolio.turnoverStatus}
-              compact={turnoverCompact(portfolio.turnover, portfolio.turnoverStatus)}
-              detail={turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
-              affectedProducts={affectedProducts.turnover}
-              affectedColumns={['turnover', 'dio']}
-              affectedTitle="Products with turnover below 4×"
-            />
-            <IssueExpander
-              status={portfolio.dioStatus}
-              compact={dioCompact(portfolio.dio, portfolio.dioStatus)}
-              detail={dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
-              affectedProducts={affectedProducts.dio}
-              affectedColumns={['dio', 'turnover']}
-              affectedTitle="Products with DIO above 90 days"
-            />
-            <IssueExpander
-              status={portfolio.holdingStatus}
-              compact={holdingCompact(portfolio.holdingPct, portfolio.holdingStatus)}
-              detail={holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
-              affectedProducts={affectedProducts.holding}
-              affectedColumns={['holdingCost', 'carryingValue']}
-              affectedTitle="Products by holding cost per unit (top 20)"
-            />
-            <IssueExpander
-              status={portfolio.varianceStatus}
-              compact={mpvCompact(kpis.totalMaterialPriceVariance, portfolio.varianceStatus)}
-              detail={mpvNarrative({ variance: kpis.totalMaterialPriceVariance, status: portfolio.varianceStatus, materialityPct: data.settings.varianceMaterialityPct })}
-              affectedProducts={affectedProducts.mpv}
-              affectedColumns={['mpv', 'standardCost']}
-              affectedTitle="Products with material price variance flagged"
-            />
-          </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <MetricWidget
+                status={portfolio.turnoverStatus}
+                label="Throughput Turn"
+                value={portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—'}
+                benchmark="4–6×"
+                barPct={portfolio.turnover > 0 ? Math.min(100, (portfolio.turnover / 6) * 100) : 0}
+                benchmarkPct={(4 / 6) * 100}
+                affectedCount={affectedProducts.turnover.length}
+                detail={turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
+                affectedProducts={affectedProducts.turnover}
+                affectedColumns={['turnover', 'dio']}
+              />
+              <MetricWidget
+                status={portfolio.dioStatus}
+                label="Days of Supply"
+                value={portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}
+                benchmark="60–90d"
+                barPct={portfolio.dio > 0 ? Math.min(100, (portfolio.dio / 120) * 100) : 0}
+                benchmarkPct={(60 / 120) * 100}
+                affectedCount={affectedProducts.dio.length}
+                detail={dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
+                affectedProducts={affectedProducts.dio}
+                affectedColumns={['dio', 'turnover']}
+              />
+              <MetricWidget
+                status={portfolio.holdingStatus}
+                label="Holding Cost"
+                value={fmtPct(portfolio.holdingPct)}
+                benchmark="15–30%"
+                barPct={Math.min(100, (portfolio.holdingPct / 0.40) * 100)}
+                benchmarkPct={(0.15 / 0.40) * 100}
+                affectedCount={affectedProducts.holding.length}
+                detail={holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
+                affectedProducts={affectedProducts.holding}
+                affectedColumns={['holdingCost', 'carryingValue']}
+              />
+              <MetricWidget
+                status={portfolio.varianceStatus}
+                label="Price Variance"
+                value={kpis.totalMaterialPriceVariance === 0 ? '—' : `${kpis.totalMaterialPriceVariance >= 0 ? '+' : ''}${fmtUGX(kpis.totalMaterialPriceVariance, true)}`}
+                benchmark="< 5%"
+                barPct={kpis.cogsTrailing > 0 ? Math.min(100, (Math.abs(kpis.totalMaterialPriceVariance) / (kpis.cogsTrailing * 0.15)) * 100) : 0}
+                benchmarkPct={(0.05 / 0.15) * 100}
+                affectedCount={affectedProducts.mpv.length}
+                detail={mpvNarrative({ variance: kpis.totalMaterialPriceVariance, status: portfolio.varianceStatus, materialityPct: data.settings.varianceMaterialityPct })}
+                affectedProducts={affectedProducts.mpv}
+                affectedColumns={['mpv', 'standardCost']}
+              />
+            </div>
           </Panel>
 
-          {/* Section 03 — Slow-moving stock review */}
+          {/* Section 03 — Slow-moving stock — status cards, not text descriptions */}
           <Panel title="Slow-moving Stock Review" number="03" variant="raised">
-          <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 hidden">
-              03 — Slow-moving stock review
-            </p>
             {(() => {
               const totalSlow = affectedProducts.seasonal.length + affectedProducts.investigate.length + affectedProducts.merchantFollowUp.length + affectedProducts.tracking.length + affectedProducts.obsolete.length + affectedProducts.nrv.length
               if (totalSlow === 0) {
                 return (
-                  <p className="text-[13px] text-gray-700 leading-relaxed">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-500 mr-2 align-middle" />
-                    No slow-moving stock. All products are moving at a healthy pace.
-                  </p>
+                  <div className="flex items-center gap-2 py-4">
+                    <LED status="healthy" size={12} />
+                    <span className="text-[13px] text-gray-700">No slow-moving stock — all products healthy.</span>
+                  </div>
                 )
               }
               return (
-                <>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                   {affectedProducts.seasonal.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status="monitor"
-                      compact={`Likely seasonal — ${affectedProducts.seasonal.length} product${affectedProducts.seasonal.length > 1 ? 's' : ''} · off-season now, historically sells in other months`}
-                      detail="These products haven't sold recently, but they have a seasonal pattern — they sell in specific months and are currently in their off-season. Action: hold. Review again when their season returns. No write-down needed unless the product is damaged."
+                      label="Seasonal"
+                      count={affectedProducts.seasonal.length}
+                      action="Hold — review when season returns"
+                      detail="These products have a seasonal pattern and are currently off-season. No write-down needed unless damaged."
                       affectedProducts={affectedProducts.seasonal}
                       affectedColumns={['dio', 'turnover']}
-                      affectedTitle="Off-season products (hold — review when season returns)"
                     />
                   )}
                   {affectedProducts.investigate.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status="critical"
-                      compact={`Need investigation — ${affectedProducts.investigate.length} product${affectedProducts.investigate.length > 1 ? 's' : ''} · in-season or steady but not selling`}
-                      detail="These products should be selling (they're in-season or normally sell year-round) but aren't. This suggests a pricing issue, quality problem, or market shift. Action: check competitor prices, review recent customer feedback, consider a promotion or repricing."
+                      label="Investigate"
+                      count={affectedProducts.investigate.length}
+                      action="Check pricing — should be selling"
+                      detail="These products should be selling but aren't. Suggests pricing, quality, or market shift."
                       affectedProducts={affectedProducts.investigate}
                       affectedColumns={['dio', 'turnover', 'mpv']}
-                      affectedTitle="Products that should be selling but aren't"
                     />
                   )}
                   {affectedProducts.merchantFollowUp.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status="monitor"
-                      compact={`Merchant follow-up — ${affectedProducts.merchantFollowUp.length} product${affectedProducts.merchantFollowUp.length > 1 ? 's' : ''} · no sales history, merchant may have abandoned`}
-                      detail="These products have no delivery history in the trailing 365 days. The merchant may have stopped restocking, stopped selling through your warehouse, or the product may be new. Action: contact the merchant to confirm whether they still want to sell this product through your warehouse."
+                      label="Merchant Follow-up"
+                      count={affectedProducts.merchantFollowUp.length}
+                      action="Contact merchant — no sales history"
+                      detail="No delivery history in 365 days. Merchant may have abandoned this product."
                       affectedProducts={affectedProducts.merchantFollowUp}
                       affectedColumns={['currentStock', 'carryingValue']}
-                      affectedTitle="Products with no sales history (contact merchant)"
                     />
                   )}
                   {affectedProducts.tracking.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status="monitor"
-                      compact={`Tracking — ${affectedProducts.tracking.length} product${affectedProducts.tracking.length > 1 ? 's' : ''} · less than 12 months of data, seasonality not yet determined`}
-                      detail="These products have been in the system for less than 12 months. The system is tracking their sales pattern monthly and will classify their seasonality once a full year of data is available. Action: no action needed — the system will automatically classify these products when enough data exists. Check back after the product's first anniversary."
+                      label="Tracking"
+                      count={affectedProducts.tracking.length}
+                      action="No action — data collecting"
+                      detail="Less than 12 months of data. System will classify seasonality after 1 year."
                       affectedProducts={affectedProducts.tracking}
                       affectedColumns={['currentStock', 'carryingValue']}
-                      affectedTitle="Products being tracked (insufficient data for seasonal classification)"
                     />
                   )}
                   {affectedProducts.obsolete.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status="critical"
-                      compact={`Likely obsolete — ${affectedProducts.obsolete.length} product${affectedProducts.obsolete.length > 1 ? 's' : ''} · no movement in 365+ days, not seasonal`}
-                      detail="These products haven't moved in over a year and aren't seasonal. They're likely obsolete. Options: (1) discount to clear — take a loss now, free the warehouse space; (2) return to vendor (RTV) — send the stock back to the merchant; (3) dispose — write off and destroy if no residual value."
+                      label="Obsolete"
+                      count={affectedProducts.obsolete.length}
+                      action="Discount, RTV, or dispose"
+                      detail="No movement in 365+ days, not seasonal. Options: discount to clear, return to vendor, or dispose."
                       affectedProducts={affectedProducts.obsolete}
                       affectedColumns={['carryingValue', 'dio']}
-                      affectedTitle="Obsolete products (discount, RTV, or dispose)"
                     />
                   )}
                   {affectedProducts.nrv.length > 0 && (
-                    <IssueExpander
+                    <StatusChip
                       status={portfolio.nrvStatus}
-                      compact={`Selling price below cost — ${affectedProducts.nrv.length} product${affectedProducts.nrv.length > 1 ? 's' : ''} · ${fmtUGX(affectedProducts.nrv.reduce((s, p) => s + p.writeDownTotal, 0), true)} to write down`}
-                      detail="These products cost more to buy than they'd sell for today. Per accounting rules (IAS 2), you must record the difference as a loss. This doesn't mean the product is worthless — it means the market price dropped below what you paid. The write-down reduces the inventory value on your balance sheet to reflect reality."
+                      label="Price Below Cost"
+                      count={affectedProducts.nrv.length}
+                      action={`Write down ${fmtUGX(affectedProducts.nrv.reduce((s, p) => s + p.writeDownTotal, 0), true)}`}
+                      detail="Selling price has fallen below cost. IAS 2 requires writing down to NRV."
                       affectedProducts={affectedProducts.nrv}
                       affectedColumns={['nrvPerUnit', 'writeDownTotal', 'carryingValue']}
-                      affectedTitle="Products where selling price has fallen below cost"
                     />
                   )}
-                </>
+                </div>
               )
             })()}
-          </div>
           </Panel>
 
           {/* Section 03b — Reorder Queue */}
@@ -1225,6 +1239,170 @@ function MiniGauge({ stock, reorderPoint }: {
         {/* Fill */}
         <div className={`h-full ${fillColor} transition-all duration-300`} style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// METRIC WIDGET — visual instrument card for Performance section.
+// Shows: LED + label + big value + mini bar gauge + affected count.
+// Click to expand: shows narrative + affected product chips (not a table).
+// ════════════════════════════════════════════════════════════════════════════
+function MetricWidget({ status, label, value, benchmark, barPct, benchmarkPct, affectedCount, detail, affectedProducts, affectedColumns }: {
+  status: Status
+  label: string
+  value: string
+  benchmark: string
+  barPct: number
+  benchmarkPct: number
+  affectedCount: number
+  detail: string
+  affectedProducts: ProductValuation[]
+  affectedColumns: string[]
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const fillColor = status === 'healthy' ? 'bg-green-500'
+    : status === 'monitor' ? 'bg-amber-500'
+    : 'bg-red-500'
+
+  return (
+    <div className={`rounded-lg border bg-white p-3 transition-all cursor-pointer ${
+      expanded ? 'border-[#FF6B35] shadow-md' : 'border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'
+    }`} onClick={() => setExpanded(!expanded)}>
+      {/* Top row: LED + label + value */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-1.5">
+          <LED status={status} size={10} />
+          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{label}</span>
+        </div>
+        <span className="text-base font-mono font-bold text-gray-900">{value}</span>
+      </div>
+      {/* Mini bar gauge — the visual instrument */}
+      <div className="relative h-2 bg-gray-200 rounded-full overflow-hidden border border-gray-300 shadow-inner mb-1">
+        {/* Benchmark threshold mark */}
+        <div className="absolute h-full w-px bg-gray-500 z-10" style={{ left: `${benchmarkPct}%` }} />
+        {/* Value fill */}
+        <div className={`h-full ${fillColor} transition-all duration-300`} style={{ width: `${barPct}%` }} />
+      </div>
+      {/* Bottom row: benchmark + count */}
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] text-gray-400 font-mono">bm {benchmark}</span>
+        {affectedCount > 0 && (
+          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
+            status === 'critical' ? 'bg-red-50 text-red-600' : status === 'monitor' ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'
+          }`}>{affectedCount} affected</span>
+        )}
+      </div>
+      {/* Expanded detail — narrative + product chips */}
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+          <p className="text-[11px] text-gray-600 leading-relaxed">{detail}</p>
+          {affectedProducts.length > 0 && (
+            <ProductChips products={affectedProducts} columns={affectedColumns} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// STATUS CHIP — visual status card for Slow-moving stock section.
+// Shows: LED + label + big count number + action recommendation.
+// Click to expand: shows detail + affected product chips.
+// ════════════════════════════════════════════════════════════════════════════
+function StatusChip({ status, label, count, action, detail, affectedProducts, affectedColumns }: {
+  status: Status
+  label: string
+  count: number
+  action: string
+  detail: string
+  affectedProducts: ProductValuation[]
+  affectedColumns: string[]
+}) {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div className={`rounded-lg border bg-white p-3 transition-all cursor-pointer ${
+      expanded ? 'border-[#FF6B35] shadow-md' : 'border-gray-200 shadow-sm hover:shadow-md hover:border-gray-300'
+    }`} onClick={() => setExpanded(!expanded)}>
+      {/* Top: LED + label */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <LED status={status} size={10} />
+        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{label}</span>
+      </div>
+      {/* Big count number — the primary visual */}
+      <div className="flex items-baseline gap-1.5 mb-1">
+        <span className="text-2xl font-bold text-gray-900 font-mono">{count}</span>
+        <span className="text-[10px] text-gray-400">products</span>
+      </div>
+      {/* Action recommendation — short, one line */}
+      <p className="text-[11px] text-gray-600 leading-snug">{action}</p>
+      {/* Expand chevron */}
+      <div className="flex items-center justify-end mt-1">
+        <ChevronDown size={12} className={`text-gray-400 transition-transform ${expanded ? 'rotate-180 text-[#FF6B35]' : ''}`} />
+      </div>
+      {/* Expanded: detail + product chips */}
+      {expanded && (
+        <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+          <p className="text-[11px] text-gray-500 leading-relaxed">{detail}</p>
+          {affectedProducts.length > 0 && (
+            <ProductChips products={affectedProducts} columns={affectedColumns} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PRODUCT CHIPS — visual product list (replaces MiniProductTable).
+// Each product is a card/chip with name + key metric, not a table row.
+// ════════════════════════════════════════════════════════════════════════════
+function ProductChips({ products, columns }: {
+  products: ProductValuation[]
+  columns: string[]
+}) {
+  const getColumnValue = (p: ProductValuation, col: string): string => {
+    switch (col) {
+      case 'turnover': return p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—'
+      case 'dio': return p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—'
+      case 'holdingCost': return fmtUGX(p.holdingCostPerUnit, true)
+      case 'carryingValue': return fmtUGX(p.carryingValue, true)
+      case 'mpv': return p.materialPriceVariance >= 0 ? `+${fmtUGX(p.materialPriceVariance, true)}` : fmtUGX(p.materialPriceVariance, true)
+      case 'standardCost': return fmtUGX(p.standardCost, true)
+      case 'nrvPerUnit': return fmtUGX(p.nrvPerUnit, true)
+      case 'writeDownTotal': return p.writeDownRequired ? `−${fmtUGX(p.writeDownTotal, true)}` : '—'
+      case 'currentStock': return fmtNum(p.currentStock)
+      default: return '—'
+    }
+  }
+  const getColumnLabel = (col: string): string => {
+    const labels: Record<string, string> = {
+      turnover: 'Turn', dio: 'DIO', holdingCost: 'Hold', carryingValue: 'Carry',
+      mpv: 'MPV', standardCost: 'Std', nrvPerUnit: 'NRV', writeDownTotal: 'W/D',
+      currentStock: 'Stock',
+    }
+    return labels[col] || col
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {products.slice(0, 15).map(p => (
+        <div key={p.productId} className="inline-flex flex-col gap-0.5 px-2 py-1.5 rounded-md border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 hover:shadow-sm transition-all">
+          <span className="text-[11px] font-semibold text-gray-900 truncate max-w-[140px]">{p.productLabel}</span>
+          <div className="flex items-center gap-2">
+            {columns.map(col => (
+              <span key={col} className="text-[9px] text-gray-500 font-mono">
+                {getColumnLabel(col)}: <span className="text-gray-700 font-semibold">{getColumnValue(p, col)}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+      {products.length > 15 && (
+        <span className="text-[10px] text-gray-400 self-center">+ {products.length - 15} more</span>
+      )}
     </div>
   )
 }
