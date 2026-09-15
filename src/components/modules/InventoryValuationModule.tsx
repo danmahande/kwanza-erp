@@ -771,14 +771,16 @@ export default function InventoryValuationModule() {
             </div>
           </Panel>
 
-          {/* Section 02 — Performance — visual instrument widgets, not text lines */}
+          {/* Section 02 — Performance — Windows XP Display Properties style */}
           <Panel title="Performance" number="02" variant="raised">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <MetricWidget
-                status={portfolio.turnoverStatus}
+            {/* Sunken content area — like the XP dialog's recessed groove */}
+            <div className="border-2 border-gray-300 rounded-md shadow-inner bg-gray-50 p-3 space-y-3">
+              {/* Form-style rows: Label (left) + Control (right) — like XP's "Theme: [dropdown]" */}
+              <PerformanceRow
                 label="Throughput Turn"
+                status={portfolio.turnoverStatus}
                 value={portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—'}
-                benchmark="4–6×"
+                benchmark="4–6×/yr"
                 barPct={portfolio.turnover > 0 ? Math.min(100, (portfolio.turnover / 6) * 100) : 0}
                 benchmarkPct={(4 / 6) * 100}
                 affectedCount={affectedProducts.turnover.length}
@@ -786,9 +788,9 @@ export default function InventoryValuationModule() {
                 affectedProducts={affectedProducts.turnover}
                 affectedColumns={['turnover', 'dio']}
               />
-              <MetricWidget
-                status={portfolio.dioStatus}
+              <PerformanceRow
                 label="Days of Supply"
+                status={portfolio.dioStatus}
                 value={portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}
                 benchmark="60–90d"
                 barPct={portfolio.dio > 0 ? Math.min(100, (portfolio.dio / 120) * 100) : 0}
@@ -798,9 +800,9 @@ export default function InventoryValuationModule() {
                 affectedProducts={affectedProducts.dio}
                 affectedColumns={['dio', 'turnover']}
               />
-              <MetricWidget
-                status={portfolio.holdingStatus}
+              <PerformanceRow
                 label="Holding Cost"
+                status={portfolio.holdingStatus}
                 value={fmtPct(portfolio.holdingPct)}
                 benchmark="15–30%"
                 barPct={Math.min(100, (portfolio.holdingPct / 0.40) * 100)}
@@ -810,9 +812,9 @@ export default function InventoryValuationModule() {
                 affectedProducts={affectedProducts.holding}
                 affectedColumns={['holdingCost', 'carryingValue']}
               />
-              <MetricWidget
-                status={portfolio.varianceStatus}
+              <PerformanceRow
                 label="Price Variance"
+                status={portfolio.varianceStatus}
                 value={kpis.totalMaterialPriceVariance === 0 ? '—' : `${kpis.totalMaterialPriceVariance >= 0 ? '+' : ''}${fmtUGX(kpis.totalMaterialPriceVariance, true)}`}
                 benchmark="< 5%"
                 barPct={kpis.cogsTrailing > 0 ? Math.min(100, (Math.abs(kpis.totalMaterialPriceVariance) / (kpis.cogsTrailing * 0.15)) * 100) : 0}
@@ -1296,6 +1298,78 @@ function MetricWidget({ status, label, value, benchmark, barPct, benchmarkPct, a
       {/* Expanded detail — narrative + product chips */}
       {expanded && (
         <div className="mt-2 pt-2 border-t border-gray-100 space-y-2">
+          <p className="text-[11px] text-gray-600 leading-relaxed">{detail}</p>
+          {affectedProducts.length > 0 && (
+            <ProductChips products={affectedProducts} columns={affectedColumns} />
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PERFORMANCE ROW — Windows XP Display Properties style form row.
+// Label on the left, recessed value display on the right, bar gauge below.
+// Like XP's "Theme: [Windows XP]" form layout.
+// ════════════════════════════════════════════════════════════════════════════
+function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct, affectedCount, detail, affectedProducts, affectedColumns }: {
+  label: string
+  status: Status
+  value: string
+  benchmark: string
+  barPct: number
+  benchmarkPct: number
+  affectedCount: number
+  detail: string
+  affectedProducts: ProductValuation[]
+  affectedColumns: string[]
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const fillColor = status === 'healthy' ? 'bg-green-500'
+    : status === 'monitor' ? 'bg-amber-500'
+    : 'bg-red-500'
+
+  return (
+    <div className={`rounded border bg-white transition-all ${
+      expanded ? 'border-[#FF6B35] shadow-md' : 'border-gray-200 shadow-sm hover:shadow-sm hover:border-gray-300'
+    }`}>
+      {/* Top row: Label (left) + Value display (right) — like XP form layout */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center gap-3 px-3 py-2 text-left"
+      >
+        {/* Label with LED — like XP's left-aligned form labels */}
+        <div className="flex items-center gap-2 w-32 shrink-0">
+          <LED status={status} size={10} />
+          <span className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold">{label}</span>
+        </div>
+        {/* Value display — recessed, like XP's inset input fields */}
+        <div className="flex-1 flex items-center gap-2">
+          <div className="flex-1 relative h-5 bg-gray-200 rounded-sm overflow-hidden border border-gray-300 shadow-inner">
+            {/* Benchmark threshold mark — like a tick on a gauge */}
+            <div className="absolute h-full w-px bg-gray-500 z-10" style={{ left: `${benchmarkPct}%` }} />
+            {/* Value fill */}
+            <div className={`h-full ${fillColor} transition-all duration-300`} style={{ width: `${barPct}%` }} />
+          </div>
+          {/* Value text — like the text inside a dropdown/field */}
+          <span className="text-sm font-mono font-bold text-gray-900 w-20 text-right shrink-0">{value}</span>
+          {/* Benchmark label */}
+          <span className="text-[9px] text-gray-400 font-mono w-12 shrink-0">bm {benchmark}</span>
+        </div>
+        {/* Affected count — like a notification badge */}
+        {affectedCount > 0 && (
+          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
+            status === 'critical' ? 'bg-red-50 text-red-600 border border-red-200'
+            : status === 'monitor' ? 'bg-amber-50 text-amber-600 border border-amber-200'
+            : 'bg-gray-50 text-gray-500 border border-gray-200'
+          }`}>{affectedCount}</span>
+        )}
+        <ChevronDown size={12} className={`text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180 text-[#FF6B35]' : ''}`} />
+      </button>
+      {/* Expanded detail — narrative + product chips */}
+      {expanded && (
+        <div className="mt-0 px-3 pb-3 pt-2 border-t border-gray-100 space-y-2">
           <p className="text-[11px] text-gray-600 leading-relaxed">{detail}</p>
           {affectedProducts.length > 0 && (
             <ProductChips products={affectedProducts} columns={affectedColumns} />
