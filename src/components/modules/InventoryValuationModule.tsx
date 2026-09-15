@@ -683,31 +683,31 @@ export default function InventoryValuationModule() {
         onSearchChange={setSearch}
         searchPlaceholder="Search products..."
       >
-        <Button size="sm" variant="outline" onClick={load} className="h-7 text-xs rounded-md">
+        <Button size="sm" variant="outline" onClick={load} className="h-7 text-xs rounded-md shadow-sm hover:shadow-md active:shadow-inner active:translate-y-px transition-all">
           <RefreshCw size={12} className="mr-1" /> Refresh
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} className="h-7 text-xs rounded-md">
+        <Button size="sm" variant="outline" onClick={() => setSettingsOpen(true)} className="h-7 text-xs rounded-md shadow-sm hover:shadow-md active:shadow-inner active:translate-y-px transition-all">
           <SettingsIcon size={12} className="mr-1" /> Settings
         </Button>
-        <Button size="sm" variant="outline" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md">
+        <Button size="sm" variant="outline" onClick={() => setHelpOpen(true)} className="h-7 text-xs rounded-md shadow-sm hover:shadow-md active:shadow-inner active:translate-y-px transition-all">
           <HelpCircle size={12} className="mr-1" /> Help
         </Button>
-        <Button size="sm" variant="outline" onClick={exportCsv} className="h-7 text-xs rounded-md">
+        <Button size="sm" variant="outline" onClick={exportCsv} className="h-7 text-xs rounded-md shadow-sm hover:shadow-md active:shadow-inner active:translate-y-px transition-all">
           <Download size={12} className="mr-1" /> Export
         </Button>
-        <Button size="sm" onClick={() => setNrvOpen(true)} className="h-7 text-xs rounded-md bg-red-600 hover:bg-red-700 text-white">
+        <Button size="sm" onClick={() => setNrvOpen(true)} className="h-7 text-xs rounded-md bg-[#FF6B35] hover:bg-[#E55A25] text-white shadow-sm hover:shadow-md active:shadow-inner active:translate-y-px transition-all">
           <Plus size={12} className="mr-1" /> NRV Write-Down
         </Button>
       </OpsHeader>
 
-      {/* ── Method toggle (yeezy.com MALE | FEMALE pattern) ── */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
+      {/* ── Method toggle — physical tab buttons with active indicator ── */}
+      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
           <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Costing Method · IAS 2</span>
           <span className="text-[10px] text-gray-400">LIFO prohibited under IAS 2 §25</span>
         </div>
-        {/* Toggle — text labels, active=orange bold, inactive=gray (like MALE | FEMALE) */}
-        <div className="flex items-center gap-6 border-b border-gray-100 pb-3">
+        {/* Toggle — physical tabs with bottom border accent on active */}
+        <div className="flex items-center gap-1 border-b-2 border-gray-100 pb-0">
           {METHODS.map(m => {
             const isActive = selectedMethod === m.key
             const methodTotal = m.key === 'fifo' ? methodTotals.fifoTotal
@@ -718,15 +718,19 @@ export default function InventoryValuationModule() {
               <button
                 key={m.key}
                 onClick={() => setSelectedMethod(m.key)}
-                className={`group flex flex-col items-start transition-all ${isActive ? '' : 'hover:opacity-70'}`}
+                className={`group flex flex-col items-start px-3 py-2 rounded-t-md transition-all active:translate-y-px ${
+                  isActive
+                    ? 'bg-orange-50 border-b-2 border-[#FF6B35] -mb-px'
+                    : 'hover:bg-gray-50 border-b-2 border-transparent'
+                }`}
               >
                 <span className={`text-sm font-bold tracking-wide transition-colors ${
-                  isActive ? 'text-[#FF6B35]' : 'text-gray-400'
+                  isActive ? 'text-[#FF6B35]' : 'text-gray-400 group-hover:text-gray-600'
                 }`}>
                   {m.label}
                 </span>
                 <span className={`text-[10px] font-mono mt-0.5 transition-colors ${
-                  isActive ? 'text-gray-700' : 'text-gray-300'
+                  isActive ? 'text-gray-700' : 'text-gray-300 group-hover:text-gray-400'
                 }`}>
                   {fmtUGX(methodTotal, true)}
                 </span>
@@ -752,15 +756,15 @@ export default function InventoryValuationModule() {
               IAS 2 requires inventory to be valued at the lower of cost or NRV — so if you bought stock for UGX 500 but can only sell it for UGX 450, you must write it down to UGX 450.
             </p>
             {/* Factual cross-method comparison — no fake benchmark, just the numbers side by side */}
-            <div className="flex items-center gap-4 mt-2 text-[11px] text-gray-500">
+            <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-500">
               <span className="text-[10px] uppercase tracking-wider text-gray-400">Cross-method comparison:</span>
-              <span className={selectedMethod === 'fifo' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'fifo' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
                 FIFO {fmtUGX(methodTotals.fifoTotal, true)}
               </span>
-              <span className={selectedMethod === 'avco' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'avco' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
                 AVCO {fmtUGX(methodTotals.avcoTotal, true)}
               </span>
-              <span className={selectedMethod === 'standard' ? 'font-mono font-bold text-[#FF6B35]' : 'font-mono text-gray-400'}>
+              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'standard' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
                 STD {fmtUGX(methodTotals.stdTotal, true)}
               </span>
               {(() => {
@@ -948,8 +952,8 @@ export default function InventoryValuationModule() {
         </div>
       </div>
 
-      {/* ── Section 04 — Filters ── */}
-      <div className="bg-white rounded-lg border border-gray-200 p-3">
+      {/* ── Section 04 — Filters (inset panel, visually distinct from content above) ── */}
+      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 shadow-inner">
         <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">04 — Filters</p>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
@@ -998,10 +1002,12 @@ export default function InventoryValuationModule() {
         </div>
       </div>
 
-      {/* ── Section 05 — Products ── */}
-      <div className="mb-2">
+      {/* ── Section 05 — Products (elevated surface, the main workspace) ── */}
+      <div className="mb-2 flex items-center justify-between">
         <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">05 — Products</p>
+        <span className="text-[10px] text-gray-400">{filteredProducts.length} products · click any row to expand</span>
       </div>
+      <div className="shadow-md rounded-lg overflow-hidden">
       <DenseTable>
         <thead>
           <tr>
@@ -1058,6 +1064,7 @@ export default function InventoryValuationModule() {
           </tfoot>
         )}
       </DenseTable>
+      </div>
 
       {/* ── Settings modal ── */}
       <SettingsModal
@@ -1113,28 +1120,32 @@ function IssueExpander({ status, compact, detail, affectedProducts, affectedColu
   const hasAffected = affectedProducts.length > 0
 
   return (
-    <div className="border-b border-gray-50 last:border-0 pb-1.5">
-      {/* Compact one-liner — always visible */}
+    <div className="border-b border-gray-100 last:border-0 pb-0.5">
+      {/* Compact one-liner — always visible, hover shows left accent */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-2 text-left py-1 hover:bg-gray-50 -mx-1 px-1 rounded transition-colors"
+        className={`w-full flex items-center gap-2 text-left py-1.5 px-2 -mx-1 rounded-md transition-all border-l-2 ${
+          expanded
+            ? 'bg-gray-50 border-l-[#FF6B35]'
+            : 'border-l-transparent hover:bg-gray-50 hover:border-l-gray-200'
+        }`}
       >
-        <span className={`inline-block w-1.5 h-1.5 rounded-full ${dotColor} shrink-0`} />
+        <span className={`inline-block w-2 h-2 rounded-full ${dotColor} shrink-0 ${status !== 'healthy' ? 'ring-2 ring-offset-1' : ''} ring-${status === 'critical' ? 'red-200' : status === 'monitor' ? 'amber-200' : 'green-200'}`} />
         <span className="text-[12px] text-gray-900 font-mono flex-1">{compact}</span>
         {hasAffected && (
-          <span className="text-[10px] text-gray-400 font-mono shrink-0">
+          <span className="text-[10px] text-gray-500 font-mono shrink-0 px-1.5 py-0.5 rounded bg-gray-100">
             {affectedProducts.length} product{affectedProducts.length > 1 ? 's' : ''}
           </span>
         )}
         <ChevronDown
-          size={12}
-          className={`text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          size={14}
+          className={`text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180 text-[#FF6B35]' : ''}`}
         />
       </button>
 
       {/* Expanded detail — full narrative + affected products table */}
       {expanded && (
-        <div className="mt-1.5 ml-3.5 space-y-2">
+        <div className="mt-1 ml-4 pl-3 border-l-2 border-gray-100 space-y-2">
           <p className="text-[12px] text-gray-600 leading-relaxed">{detail}</p>
           {hasAffected && (
             <MiniProductTable
@@ -1322,7 +1333,18 @@ function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, e
           </div>
         </DenseTd>
         <DenseTd className="text-gray-600 truncate max-w-[120px]">{p.merchantName}</DenseTd>
-        <DenseTd mono right>{fmtNum(p.currentStock)}</DenseTd>
+        <DenseTd mono right>
+          <div className="flex items-center justify-end gap-1.5">
+            <span>{fmtNum(p.currentStock)}</span>
+            {/* Mini stock level indicator — green/amber/red bar */}
+            <div className="w-8 h-1.5 rounded-full overflow-hidden bg-gray-100 shrink-0">
+              <div className={`h-full rounded-full ${
+                p.currentStock === 0 ? 'bg-red-500' :
+                p.currentStock <= 10 ? 'bg-amber-500' : 'bg-green-500'
+              }`} style={{ width: `${Math.min(100, (p.currentStock / Math.max(p.reorderPoint || 50, 50)) * 100)}%` }} />
+            </div>
+          </div>
+        </DenseTd>
         {/* Selected method value — orange bold */}
         <DenseTd mono right className="text-[#FF6B35] font-bold">{fmtUGX(methodValue, true)}</DenseTd>
         {/* Selected method unit cost */}
@@ -1333,27 +1355,39 @@ function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, e
         </DenseTd>
         <DenseTd>
           {p.writeDownRequired ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700">
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
               <TrendingDown size={11} /> −{fmtUGX(p.writeDownTotal, true)}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] text-green-600">
+            <span className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
               <CheckCircle2 size={11} /> OK
             </span>
           )}
         </DenseTd>
         <DenseTd>
           <span className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-[10px] font-bold rounded border ${
-            p.abcClass === 'A' ? 'bg-red-100 text-red-700 border-red-200'
-            : p.abcClass === 'B' ? 'bg-amber-100 text-amber-700 border-amber-200'
-            : 'bg-gray-100 text-gray-600 border-gray-200'
+            p.abcClass === 'A' ? 'bg-red-50 text-red-700 border-red-200'
+            : p.abcClass === 'B' ? 'bg-amber-50 text-amber-700 border-amber-200'
+            : 'bg-gray-50 text-gray-600 border-gray-200'
           }`}>
             {p.abcClass}
           </span>
         </DenseTd>
-        <DenseTd mono right>{p.inventoryTurnover > 0 ? p.inventoryTurnover.toFixed(2) : '—'}</DenseTd>
-        <DenseTd mono right className={p.daysInventoryOutstanding > 90 ? 'text-amber-700' : p.daysInventoryOutstanding > 180 ? 'text-red-700' : ''}>
-          {p.daysInventoryOutstanding > 0 ? p.daysInventoryOutstanding.toFixed(0) : '—'}
+        <DenseTd mono right>
+          <div className="flex items-center justify-end gap-1.5">
+            <span>{p.inventoryTurnover > 0 ? p.inventoryTurnover.toFixed(2) : '—'}</span>
+            {p.inventoryTurnover > 0 && (
+              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                p.inventoryTurnover >= 4 ? 'bg-green-500' :
+                p.inventoryTurnover >= 2 ? 'bg-amber-500' : 'bg-red-500'
+              }`} />
+            )}
+          </div>
+        </DenseTd>
+        <DenseTd mono right>
+          <span className={p.daysInventoryOutstanding > 180 ? 'text-red-700 font-semibold' : p.daysInventoryOutstanding > 90 ? 'text-amber-700' : ''}>
+            {p.daysInventoryOutstanding > 0 ? p.daysInventoryOutstanding.toFixed(0) : '—'}
+          </span>
         </DenseTd>
         <DenseTd mono right className="text-blue-700">{p.eoq > 0 ? fmtNum(Math.ceil(p.eoq)) : '—'}</DenseTd>
         <DenseTd mono right className="text-purple-700">{p.reorderPoint > 0 ? p.reorderPoint : '—'}</DenseTd>
