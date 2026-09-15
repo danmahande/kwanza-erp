@@ -771,11 +771,11 @@ export default function InventoryValuationModule() {
             </div>
           </Panel>
 
-          {/* Section 02 — Performance — Windows XP Display Properties style */}
+          {/* Section 02 — Performance — Windows XP dialog style */}
           <Panel title="Performance" number="02" variant="raised">
-            {/* Sunken content area — like the XP dialog's recessed groove */}
-            <div className="border-2 border-gray-300 rounded-md shadow-inner bg-gray-50 p-3 space-y-3">
-              {/* Form-style rows: Label (left) + Control (right) — like XP's "Theme: [dropdown]" */}
+            {/* Clean white content area — like XP dialog body */}
+            <div className="bg-white rounded border border-gray-200 p-3 space-y-2">
+              {/* Form-style rows: Label (left) + sunken input field (right) */}
               <PerformanceRow
                 label="Throughput Turn"
                 status={portfolio.turnoverStatus}
@@ -1329,50 +1329,63 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
   const fillColor = status === 'healthy' ? 'bg-green-500'
     : status === 'monitor' ? 'bg-amber-500'
     : 'bg-red-500'
+  const borderColor = status === 'healthy' ? 'border-green-300'
+    : status === 'monitor' ? 'border-amber-300'
+    : 'border-red-300'
 
   return (
-    <div className={`rounded border bg-white transition-all ${
-      expanded ? 'border-[#FF6B35] shadow-md' : 'border-gray-200 shadow-sm hover:shadow-sm hover:border-gray-300'
+    <div className={`rounded transition-all ${
+      expanded ? 'ring-1 ring-[#FF6B35] ring-offset-1' : ''
     }`}>
-      {/* Top row: Label (left) + Value display (right) — like XP form layout */}
+      {/* Form row: Label (left, bold) + sunken field (right) — like XP "Theme: [dropdown]" */}
       <button
         onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center gap-3 px-3 py-2 text-left"
+        className="w-full flex items-center gap-3 py-1.5 text-left group"
       >
-        {/* Label with LED — like XP's left-aligned form labels */}
-        <div className="flex items-center gap-2 w-32 shrink-0">
-          <LED status={status} size={10} />
-          <span className="text-[11px] uppercase tracking-wider text-gray-600 font-semibold">{label}</span>
+        {/* Label — bold, left-aligned, like XP form labels */}
+        <div className="flex items-center gap-2 w-36 shrink-0">
+          <LED status={status} size={8} />
+          <span className="text-[11px] font-semibold text-gray-700">{label}:</span>
         </div>
-        {/* Value display — recessed, like XP's inset input fields */}
+        {/* Sunken input field — looks like a recessed XP combo box */}
         <div className="flex-1 flex items-center gap-2">
-          <div className="flex-1 relative h-5 bg-gray-200 rounded-sm overflow-hidden border border-gray-300 shadow-inner">
-            {/* Benchmark threshold mark — like a tick on a gauge */}
-            <div className="absolute h-full w-px bg-gray-500 z-10" style={{ left: `${benchmarkPct}%` }} />
-            {/* Value fill */}
-            <div className={`h-full ${fillColor} transition-all duration-300`} style={{ width: `${barPct}%` }} />
+          <div className={`flex-1 relative h-6 bg-white rounded-sm overflow-hidden border ${borderColor} shadow-inner`}>
+            {/* Benchmark zone (green band showing healthy range) */}
+            <div className="absolute h-full bg-green-50"
+              style={{ left: '0%', width: `${benchmarkPct}%` }} />
+            {/* Benchmark threshold mark */}
+            <div className="absolute h-full w-px bg-gray-400 z-10" style={{ left: `${benchmarkPct}%` }} />
+            {/* Value fill — like liquid filling the field */}
+            <div className={`h-full ${fillColor} opacity-60 transition-all duration-300`} style={{ width: `${barPct}%` }} />
+            {/* Value text inside the field — like text in a dropdown */}
+            <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-gray-900">
+              {value}
+            </span>
           </div>
-          {/* Value text — like the text inside a dropdown/field */}
-          <span className="text-sm font-mono font-bold text-gray-900 w-20 text-right shrink-0">{value}</span>
-          {/* Benchmark label */}
-          <span className="text-[9px] text-gray-400 font-mono w-12 shrink-0">bm {benchmark}</span>
+          {/* Benchmark label — like a helper hint next to the field */}
+          <span className="text-[9px] text-gray-400 font-mono w-14 shrink-0">{benchmark}</span>
+          {/* Affected count — like a system notification */}
+          {affectedCount > 0 && (
+            <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
+              status === 'critical' ? 'bg-red-50 text-red-600 border-red-200'
+              : status === 'monitor' ? 'bg-amber-50 text-amber-600 border-amber-200'
+              : 'bg-gray-50 text-gray-500 border-gray-200'
+            }`}>{affectedCount}</span>
+          )}
+          {/* Dropdown-style arrow — like XP combo box arrow */}
+          <div className={`w-5 h-5 flex items-center justify-center rounded-sm border border-gray-300 bg-gradient-to-b from-white to-gray-100 shadow-sm shrink-0 transition-transform ${expanded ? 'from-gray-100 to-gray-200' : 'group-hover:from-gray-50'}`}>
+            <ChevronDown size={10} className={`text-gray-600 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </div>
         </div>
-        {/* Affected count — like a notification badge */}
-        {affectedCount > 0 && (
-          <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 ${
-            status === 'critical' ? 'bg-red-50 text-red-600 border border-red-200'
-            : status === 'monitor' ? 'bg-amber-50 text-amber-600 border border-amber-200'
-            : 'bg-gray-50 text-gray-500 border border-gray-200'
-          }`}>{affectedCount}</span>
-        )}
-        <ChevronDown size={12} className={`text-gray-400 shrink-0 transition-transform ${expanded ? 'rotate-180 text-[#FF6B35]' : ''}`} />
       </button>
-      {/* Expanded detail — narrative + product chips */}
+      {/* Expanded detail — slides down like an XP "Details" section */}
       {expanded && (
-        <div className="mt-0 px-3 pb-3 pt-2 border-t border-gray-100 space-y-2">
-          <p className="text-[11px] text-gray-600 leading-relaxed">{detail}</p>
+        <div className="ml-39 pl-2 pr-2 pb-2 pt-1 border-l-2 border-[#FF6B35]/20 space-y-2">
+          <p className="text-[11px] text-gray-600 leading-relaxed pl-3">{detail}</p>
           {affectedProducts.length > 0 && (
-            <ProductChips products={affectedProducts} columns={affectedColumns} />
+            <div className="pl-3">
+              <ProductChips products={affectedProducts} columns={affectedColumns} />
+            </div>
           )}
         </div>
       )}
