@@ -700,14 +700,14 @@ export default function InventoryValuationModule() {
         </Button>
       </OpsHeader>
 
-      {/* ── Method toggle — physical tab buttons with active indicator ── */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Costing Method · IAS 2</span>
-          <span className="text-[10px] text-gray-400">LIFO prohibited under IAS 2 §25</span>
+      {/* ── Method toggle — physical control panel ── */}
+      <Panel title="Costing Method Selection" number="▸" variant="raised">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] text-gray-400">Select a costing method to recompute the entire module · IAS 2</span>
+          <span className="text-[10px] text-gray-400">LIFO prohibited §25</span>
         </div>
-        {/* Toggle — physical tabs with bottom border accent on active */}
-        <div className="flex items-center gap-1 border-b-2 border-gray-100 pb-0">
+        {/* Physical tab buttons — active tab appears pressed in */}
+        <div className="flex items-center gap-1 border-b-2 border-gray-200 pb-0">
           {METHODS.map(m => {
             const isActive = selectedMethod === m.key
             const methodTotal = m.key === 'fifo' ? methodTotals.fifoTotal
@@ -718,10 +718,10 @@ export default function InventoryValuationModule() {
               <button
                 key={m.key}
                 onClick={() => setSelectedMethod(m.key)}
-                className={`group flex flex-col items-start px-3 py-2 rounded-t-md transition-all active:translate-y-px ${
+                className={`group flex flex-col items-start px-4 py-2.5 rounded-t-md transition-all ${
                   isActive
-                    ? 'bg-orange-50 border-b-2 border-[#FF6B35] -mb-px'
-                    : 'hover:bg-gray-50 border-b-2 border-transparent'
+                    ? 'bg-gray-100 shadow-inner border-2 border-gray-300 border-b-gray-100 -mb-px text-[#FF6B35]'
+                    : 'bg-gray-50 border-2 border-transparent hover:bg-gray-100 hover:shadow-sm active:translate-y-px'
                 }`}
               >
                 <span className={`text-sm font-bold tracking-wide transition-colors ${
@@ -739,50 +739,42 @@ export default function InventoryValuationModule() {
           })}
         </div>
 
-        {/* Selected method detail row */}
-        <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
-          {/* Section 01 — Portfolio Valuation */}
-          <div className="space-y-1.5">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-              01 — Portfolio Valuation
-            </p>
-            <p className="text-[13px] text-gray-900 leading-relaxed">
-              Under {activeMethod.full} ({activeMethod.ias}), your inventory is valued at <span className="font-mono font-semibold text-[#FF6B35]">{fmtUGX(total, true)}</span>.
-              {' '}This is the cost of all stock currently in the warehouse, computed using the {activeMethod.label} costing method per IAS 2.
-            </p>
-            {/* NRV plain-English explanation — shown once, first mention */}
-            <p className="text-[11px] text-gray-500 leading-relaxed italic">
+        {/* Selected method detail */}
+        <div className="mt-3 space-y-4">
+          {/* Section 01 — Portfolio Valuation with Gauge */}
+          <Panel title={activeMethod.full + ' · ' + activeMethod.ias} number="01" variant="inset">
+            {/* NRV explanation */}
+            <p className="text-[11px] text-gray-500 leading-relaxed italic mb-3">
               Net Realisable Value (NRV) is what you could sell the product for today, minus selling costs.
-              IAS 2 requires inventory to be valued at the lower of cost or NRV — so if you bought stock for UGX 500 but can only sell it for UGX 450, you must write it down to UGX 450.
+              IAS 2 requires inventory at the lower of cost or NRV — so if you bought stock for UGX 500 but can only sell it for UGX 450, you must write it down to UGX 450.
             </p>
-            {/* Factual cross-method comparison — no fake benchmark, just the numbers side by side */}
-            <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-500">
-              <span className="text-[10px] uppercase tracking-wider text-gray-400">Cross-method comparison:</span>
-              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'fifo' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+            {/* The gauge IS the data — number is secondary */}
+            <Gauge
+              value={total}
+              min={methodTotals.range.min}
+              max={methodTotals.range.max}
+              label="Portfolio Value"
+              sublabel="orange = within range · red = outside"
+            />
+            {/* Cross-method comparison chips */}
+            <div className="flex items-center gap-2 mt-3 pt-3 border-t border-gray-200">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Cross-method:</span>
+              <span className={`font-mono px-2 py-0.5 rounded text-[11px] ${selectedMethod === 'fifo' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                 FIFO {fmtUGX(methodTotals.fifoTotal, true)}
               </span>
-              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'avco' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+              <span className={`font-mono px-2 py-0.5 rounded text-[11px] ${selectedMethod === 'avco' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                 AVCO {fmtUGX(methodTotals.avcoTotal, true)}
               </span>
-              <span className={`font-mono px-2 py-0.5 rounded ${selectedMethod === 'standard' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-50 text-gray-400 border border-gray-100'}`}>
+              <span className={`font-mono px-2 py-0.5 rounded text-[11px] ${selectedMethod === 'standard' ? 'bg-[#FF6B35]/10 text-[#FF6B35] font-bold border border-[#FF6B35]/20' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
                 STD {fmtUGX(methodTotals.stdTotal, true)}
               </span>
-              {(() => {
-                const max = Math.max(methodTotals.fifoTotal, methodTotals.avcoTotal, methodTotals.stdTotal)
-                const min = Math.min(methodTotals.fifoTotal, methodTotals.avcoTotal, methodTotals.stdTotal)
-                const spread = max > 0 ? ((max - min) / max) * 100 : 0
-                return (
-                  <span className="text-[10px] text-gray-400">
-                    spread {spread.toFixed(1)}%
-                  </span>
-                )
-              })()}
             </div>
-          </div>
+          </Panel>
 
-          {/* Section 02 — Performance (compact, clickable) */}
-          <div className="space-y-1.5 pt-3 border-t border-gray-50">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">
+          {/* Section 02 — Performance */}
+          <Panel title="Performance" number="02" variant="raised">
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 hidden">
               02 — Performance
             </p>
             <IssueExpander
@@ -818,10 +810,12 @@ export default function InventoryValuationModule() {
               affectedTitle="Products with material price variance flagged"
             />
           </div>
+          </Panel>
 
-          {/* Section 03 — Slow-moving stock review (segmented by cause) */}
-          <div className="space-y-1.5 pt-3 border-t border-gray-50">
-            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">
+          {/* Section 03 — Slow-moving stock review */}
+          <Panel title="Slow-moving Stock Review" number="03" variant="raised">
+          <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2 hidden">
               03 — Slow-moving stock review
             </p>
             {(() => {
@@ -900,19 +894,17 @@ export default function InventoryValuationModule() {
               )
             })()}
           </div>
+          </Panel>
 
-          {/* Section 03b — Reorder Queue (products at/below reorder point) */}
+          {/* Section 03b — Reorder Queue */}
           {affectedProducts.reorderQueue.length > 0 && (
-            <div className="space-y-1.5 pt-3 border-t border-gray-50">
-              <div className="flex items-center justify-between">
-                <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">
-                  03b — Reorder queue
-                </p>
+            <Panel title="Reorder Queue" number="03b" variant="inset">
+              <div className="flex items-center justify-between mb-2">
                 <span className="text-[10px] text-gray-400">
                   {affectedProducts.reorderQueue.length} product{affectedProducts.reorderQueue.length > 1 ? 's' : ''} at/below reorder point
                 </span>
               </div>
-              <div className="bg-gray-50 border border-gray-100 rounded-md overflow-hidden">
+              <div className="bg-white border border-gray-200 rounded-md overflow-hidden shadow-sm">
                 <table className="w-full text-[11px]">
                   <thead>
                     <tr className="text-gray-400 text-[9px] uppercase">
@@ -947,14 +939,13 @@ export default function InventoryValuationModule() {
                   </div>
                 )}
               </div>
-            </div>
+            </Panel>
           )}
         </div>
-      </div>
+      </Panel>
 
-      {/* ── Section 04 — Filters (inset panel, visually distinct from content above) ── */}
-      <div className="bg-gray-50 rounded-lg border border-gray-200 p-3 shadow-inner">
-        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold mb-2">04 — Filters</p>
+      {/* ── Section 04 — Filters ── */}
+      <Panel title="Filters" number="04" variant="inset">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="lg:col-span-2">
             <Label className="text-[10px] uppercase tracking-wider text-gray-500">Product</Label>
@@ -1000,14 +991,14 @@ export default function InventoryValuationModule() {
           </span>
           <span className="uppercase tracking-wider">Showing {activeMethod.label} valuation</span>
         </div>
-      </div>
+      </Panel>
 
-      {/* ── Section 05 — Products (elevated surface, the main workspace) ── */}
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-[10px] uppercase tracking-wider text-gray-400 font-semibold">05 — Products</p>
-        <span className="text-[10px] text-gray-400">{filteredProducts.length} products · click any row to expand</span>
-      </div>
-      <div className="shadow-md rounded-lg overflow-hidden">
+      {/* ── Section 05 — Products ── */}
+      <Panel title="Products" number="05" variant="raised">
+        <div className="mb-2 flex items-center justify-between">
+          <span className="text-[10px] text-gray-400">{filteredProducts.length} products · click any row to expand</span>
+        </div>
+        <div className="shadow-md rounded-lg overflow-hidden border border-gray-300">
       <DenseTable>
         <thead>
           <tr>
@@ -1064,7 +1055,8 @@ export default function InventoryValuationModule() {
           </tfoot>
         )}
       </DenseTable>
-      </div>
+        </div>
+      </Panel>
 
       {/* ── Settings modal ── */}
       <SettingsModal
@@ -1102,6 +1094,142 @@ export default function InventoryValuationModule() {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// PANEL — window-style container with title bar + raised border.
+// Creates a "station" feel — each panel is a self-contained context.
+// ════════════════════════════════════════════════════════════════════════════
+function Panel({ title, number, children, variant = 'raised' }: {
+  title: string
+  number?: string
+  children: React.ReactNode
+  variant?: 'raised' | 'inset'
+}) {
+  return (
+    <div className={`rounded-lg border border-gray-300 overflow-hidden ${
+      variant === 'raised' ? 'bg-white shadow-md' : 'bg-gray-50 shadow-inner'
+    }`}>
+      {/* Title bar — like a window title, communicates "you are at this station" */}
+      <div className={`flex items-center justify-between px-3 py-1.5 border-b border-gray-300 ${
+        variant === 'raised' ? 'bg-gray-100' : 'bg-gray-200/50'
+      }`}>
+        <div className="flex items-center gap-2">
+          {number && <span className="text-[9px] font-mono font-bold text-gray-400">{number}</span>}
+          <span className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold">{title}</span>
+        </div>
+      </div>
+      {/* Content area */}
+      <div className="p-3">
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// GAUGE — visual instrument showing where a value sits within a range.
+// The gauge IS the data — the number is secondary, shown below.
+// Inspired by retro progress bars: a recessed channel with a filled block.
+// ════════════════════════════════════════════════════════════════════════════
+function Gauge({ value, min, max, label, sublabel }: {
+  value: number
+  min: number
+  max: number
+  label: string
+  sublabel?: string
+}) {
+  const valuePct = max > 0 ? Math.max(0, Math.min(100, (value / max) * 100)) : 0
+  const minPct = max > 0 ? (min / max) * 100 : 0
+  const healthyWidth = Math.max(0, 100 - minPct)
+  const withinRange = value >= min && value <= max
+
+  return (
+    <div className="space-y-1">
+      {/* Label row */}
+      <div className="flex items-baseline justify-between">
+        <span className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">{label}</span>
+        {sublabel && <span className="text-[9px] text-gray-400">{sublabel}</span>}
+      </div>
+      {/* The gauge — recessed channel with fill block */}
+      <div className="relative h-6 bg-gray-200 rounded overflow-hidden border border-gray-300 shadow-inner">
+        {/* Healthy zone marker */}
+        <div className="absolute h-full bg-green-100 border-x border-green-200"
+          style={{ left: `${minPct}%`, width: `${healthyWidth}%` }} />
+        {/* Value fill */}
+        <div
+          className={`absolute h-full transition-all duration-300 ${withinRange ? 'bg-[#FF6B35]' : 'bg-red-500'}`}
+          style={{ width: `${valuePct}%` }}
+        />
+        {/* Min/max tick marks */}
+        <div className="absolute h-full w-px bg-gray-400" style={{ left: `${minPct}%` }} />
+        <div className="absolute h-full w-px bg-gray-400" style={{ left: `100%` }} />
+      </div>
+      {/* Value + range below */}
+      <div className="flex items-baseline justify-between">
+        <span className={`text-sm font-mono font-bold ${withinRange ? 'text-gray-900' : 'text-red-700'}`}>
+          {fmtUGX(value, true)}
+        </span>
+        <span className="text-[9px] text-gray-400 font-mono">
+          {fmtUGX(min, true)} – {fmtUGX(max, true)}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// LED — physical status indicator. Looks like an LED on a machine panel.
+// Green = healthy, Amber = monitor, Red = critical.
+// ════════════════════════════════════════════════════════════════════════════
+function LED({ status, size = 10 }: {
+  status: Status
+  size?: number
+}) {
+  const colors: Record<Status, { glow: string; core: string; ring: string }> = {
+    healthy:  { glow: 'bg-green-300',  core: 'bg-green-500',  ring: 'ring-green-200' },
+    monitor:  { glow: 'bg-amber-300',  core: 'bg-amber-500',  ring: 'ring-amber-200' },
+    critical: { glow: 'bg-red-300',   core: 'bg-red-500',   ring: 'ring-red-200' },
+  }
+  const c = colors[status]
+  return (
+    <span
+      className={`inline-block rounded-full ring-2 ${c.ring} shrink-0 relative`}
+      style={{ width: size, height: size }}
+    >
+      <span className={`absolute inset-0 rounded-full ${c.core}`} />
+      <span className={`absolute inset-0 rounded-full ${c.glow} opacity-50`} />
+      {/* Highlight dot — simulates light reflection on an LED */}
+      <span className="absolute top-[1px] left-[1px] rounded-full bg-white/60" style={{ width: Math.max(2, size / 3), height: Math.max(2, size / 3) }} />
+    </span>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MINI GAUGE — compact stock level indicator for table rows.
+// Shows stock as a fill bar with ROP threshold + green/amber/red zones.
+// ════════════════════════════════════════════════════════════════════════════
+function MiniGauge({ stock, reorderPoint }: {
+  stock: number
+  reorderPoint: number
+}) {
+  const max = Math.max(reorderPoint * 2, 50)
+  const pct = Math.min(100, (stock / max) * 100)
+  const ropPct = Math.min(100, (reorderPoint / max) * 100)
+  const status: Status = stock === 0 ? 'critical' : stock <= reorderPoint ? 'monitor' : 'healthy'
+  const fillColor = status === 'critical' ? 'bg-red-500' : status === 'monitor' ? 'bg-amber-500' : 'bg-green-500'
+
+  return (
+    <div className="flex items-center gap-1.5 justify-end">
+      <span className="font-mono text-xs text-gray-700">{fmtNum(stock)}</span>
+      <div className="relative w-10 h-3 bg-gray-200 rounded-sm overflow-hidden border border-gray-300 shadow-inner shrink-0">
+        {/* ROP threshold line */}
+        <div className="absolute h-full w-px bg-gray-500/50 z-10" style={{ left: `${ropPct}%` }} />
+        {/* Fill */}
+        <div className={`h-full ${fillColor} transition-all duration-300`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // ISSUE EXPANDER — compact one-liner that expands on click to show full
 // narrative + a mini table of affected products. Used in Performance + Warnings.
 // ════════════════════════════════════════════════════════════════════════════
@@ -1130,7 +1258,7 @@ function IssueExpander({ status, compact, detail, affectedProducts, affectedColu
             : 'border-l-transparent hover:bg-gray-50 hover:border-l-gray-200'
         }`}
       >
-        <span className={`inline-block w-2 h-2 rounded-full ${dotColor} shrink-0 ${status !== 'healthy' ? 'ring-2 ring-offset-1' : ''} ring-${status === 'critical' ? 'red-200' : status === 'monitor' ? 'amber-200' : 'green-200'}`} />
+        <LED status={status} size={10} />
         <span className="text-[12px] text-gray-900 font-mono flex-1">{compact}</span>
         {hasAffected && (
           <span className="text-[10px] text-gray-500 font-mono shrink-0 px-1.5 py-0.5 rounded bg-gray-100">
@@ -1333,17 +1461,9 @@ function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, e
           </div>
         </DenseTd>
         <DenseTd className="text-gray-600 truncate max-w-[120px]">{p.merchantName}</DenseTd>
-        <DenseTd mono right>
-          <div className="flex items-center justify-end gap-1.5">
-            <span>{fmtNum(p.currentStock)}</span>
-            {/* Mini stock level indicator — green/amber/red bar */}
-            <div className="w-8 h-1.5 rounded-full overflow-hidden bg-gray-100 shrink-0">
-              <div className={`h-full rounded-full ${
-                p.currentStock === 0 ? 'bg-red-500' :
-                p.currentStock <= 10 ? 'bg-amber-500' : 'bg-green-500'
-              }`} style={{ width: `${Math.min(100, (p.currentStock / Math.max(p.reorderPoint || 50, 50)) * 100)}%` }} />
-            </div>
-          </div>
+        {/* Stock — MiniGauge instrument (number + bar with ROP threshold) */}
+        <DenseTd right>
+          <MiniGauge stock={p.currentStock} reorderPoint={p.reorderPoint} />
         </DenseTd>
         {/* Selected method value — orange bold */}
         <DenseTd mono right className="text-[#FF6B35] font-bold">{fmtUGX(methodValue, true)}</DenseTd>
@@ -1353,16 +1473,18 @@ function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, e
         <DenseTd mono right className={p.writeDownRequired ? 'text-red-700 font-semibold' : 'text-gray-600'}>
           {fmtUGX(p.nrvPerUnit, true)}
         </DenseTd>
+        {/* NRV Test — LED + status badge */}
         <DenseTd>
-          {p.writeDownRequired ? (
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-              <TrendingDown size={11} /> −{fmtUGX(p.writeDownTotal, true)}
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded border border-green-200">
-              <CheckCircle2 size={11} /> OK
-            </span>
-          )}
+          <div className="flex items-center gap-1.5">
+            <LED status={p.writeDownRequired ? 'critical' : 'healthy'} size={8} />
+            {p.writeDownRequired ? (
+              <span className="text-[10px] font-bold text-red-700">
+                −{fmtUGX(p.writeDownTotal, true)}
+              </span>
+            ) : (
+              <span className="text-[10px] text-green-600">OK</span>
+            )}
+          </div>
         </DenseTd>
         <DenseTd>
           <span className={`inline-flex items-center justify-center min-w-[24px] px-1.5 py-0.5 text-[10px] font-bold rounded border ${
@@ -1377,10 +1499,7 @@ function ValuationRow({ p, index, selectedMethod, methodValue, methodUnitCost, e
           <div className="flex items-center justify-end gap-1.5">
             <span>{p.inventoryTurnover > 0 ? p.inventoryTurnover.toFixed(2) : '—'}</span>
             {p.inventoryTurnover > 0 && (
-              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                p.inventoryTurnover >= 4 ? 'bg-green-500' :
-                p.inventoryTurnover >= 2 ? 'bg-amber-500' : 'bg-red-500'
-              }`} />
+              <LED status={p.inventoryTurnover >= 4 ? 'healthy' : p.inventoryTurnover >= 2 ? 'monitor' : 'critical'} size={8} />
             )}
           </div>
         </DenseTd>
