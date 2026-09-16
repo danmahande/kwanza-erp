@@ -13,7 +13,7 @@
  *   - critical: three sentences (metric + benchmark + severity + business impact)
  */
 
-import { fmtUGX, fmtPct, fmtNum } from './inventory-valuation'
+import { fmtUGX, fmtPct } from './inventory-valuation'
 
 export type Status = 'healthy' | 'monitor' | 'critical'
 

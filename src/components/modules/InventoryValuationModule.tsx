@@ -1,19 +1,17 @@
 'use client'
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  Search, RefreshCw, Download, Plus, Settings as SettingsIcon,
-  TrendingDown, TrendingUp, AlertTriangle, CheckCircle2, X, ChevronDown,
-  HelpCircle, Calculator,
+  RefreshCw, Download, Plus, Settings as SettingsIcon,
+  TrendingDown, AlertTriangle, X, ChevronDown,
+  HelpCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -22,7 +20,6 @@ import {
 import {
   turnoverNarrative, dioNarrative, holdingCostNarrative, mpvNarrative,
   nrvNarrative, varianceFlaggedNarrative, stockoutNarrative,
-  turnoverCompact, dioCompact, holdingCompact, mpvCompact,
   nrvCompact, varianceFlaggedCompact, stockoutCompact,
 } from '@/lib/inventory-valuation-narrative'
 
@@ -283,6 +280,8 @@ export default function InventoryValuationModule() {
   const [nrvOpen, setNrvOpen] = useState(false)
   const [helpOpen, setHelpOpen] = useState(false)
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
+  // Active property-sheet tab in the Performance section (Section 02)
+  const [perfTab, setPerfTab] = useState<'turnover' | 'dio' | 'holding'>('turnover')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -298,9 +297,9 @@ export default function InventoryValuationModule() {
       if (json.settings?.defaultCostingMethod) {
         setSelectedMethod(json.settings.defaultCostingMethod as MethodKey)
       }
-    } catch (e: any) {
+    } catch (e) {
       console.error(e)
-      const msg = e?.message || 'Unknown error'
+      const msg = e instanceof Error ? e.message : 'Unknown error'
       setLoadError(msg)
       toast.error(msg.length > 200 ? msg.slice(0, 200) + '…' : msg)
     } finally {
@@ -456,7 +455,7 @@ export default function InventoryValuationModule() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
       toast.success('Valuation settings updated')
       await load()
-    } catch (e: any) { toast.error(e.message || 'Failed to save settings') }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to save settings') }
   }
 
   const handleMethodChange = async (productId: string, method: string) => {
@@ -468,7 +467,7 @@ export default function InventoryValuationModule() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
       toast.success(`Costing method changed to ${method.toUpperCase()}`)
       await load()
-    } catch (e: any) { toast.error(e.message || 'Failed to change method') }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to change method') }
   }
 
   const handleNrvSubmit = async (d: { productId: string; qty: number; unitCost: number; nrvPerUnit: number; reason: string }) => {
@@ -480,7 +479,7 @@ export default function InventoryValuationModule() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
       toast.success('NRV write-down recorded (IAS 2 §9)')
       await load()
-    } catch (e: any) { toast.error(e.message || 'Failed to record write-down') }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to record write-down') }
   }
 
   const handleNrvReverse = async (row: NrvRow) => {
@@ -496,7 +495,7 @@ export default function InventoryValuationModule() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Failed') }
       toast.success('NRV reversal recorded (IAS 2 §33)')
       await load()
-    } catch (e: any) { toast.error(e.message || 'Failed to record reversal') }
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Failed to record reversal') }
   }
 
   const exportCsv = () => {
@@ -672,6 +671,85 @@ export default function InventoryValuationModule() {
     { label: 'COGS (365d)', value: fmtUGX(kpis.cogsTrailing, true) },
   ]
 
+  // ── Performance tab config (Section 02) ──
+  // Each metric is a property-sheet tab: headline number + healthy-range
+  // comparison bar + a sortable details list of the products driving it.
+  // Per-product holding rate = holdingCostPerUnit / carryingValuePerUnit —
+  // the same definition as the portfolio holdingCostPct, so both sit on the
+  // same 15–30% scale and are directly comparable on the bar.
+  const perfTabs = [
+    {
+      key: 'turnover' as const,
+      label: 'Throughput Turn',
+      status: portfolio.turnoverStatus,
+      value: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
+      benchmark: '4–6×/yr',
+      source: 'APICS/ASCM',
+      band: { min: 4, max: 6 },
+      domain: 8,
+      metricLabel: 'Turn',
+      portfolioValue: portfolio.turnover,
+      metricOf: (p: ProductValuation) => p.inventoryTurnover,
+      fmtMetric: (n: number) => (n > 0 ? `${n.toFixed(2)}×` : '—'),
+      statusOf: (p: ProductValuation) => turnoverStatus(p.inventoryTurnover),
+      worstFirst: 'low' as const,
+      affectedCount: affectedProducts.turnover.length,
+      detail: turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus }),
+      affectedProducts: affectedProducts.turnover,
+      columns: [
+        { label: 'DIO', get: (p: ProductValuation) => (p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—') },
+        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+      ],
+    },
+    {
+      key: 'dio' as const,
+      label: 'Days of Supply',
+      status: portfolio.dioStatus,
+      value: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
+      benchmark: '60–90d',
+      source: 'APICS/ASCM',
+      band: { min: 60, max: 90 },
+      domain: 365,
+      metricLabel: 'DIO',
+      portfolioValue: portfolio.dio,
+      metricOf: (p: ProductValuation) => p.daysInventoryOutstanding,
+      fmtMetric: (n: number) => (n > 0 ? `${n.toFixed(0)}d` : '—'),
+      statusOf: (p: ProductValuation) => dioStatus(p.daysInventoryOutstanding),
+      worstFirst: 'high' as const,
+      affectedCount: affectedProducts.dio.length,
+      detail: dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus }),
+      affectedProducts: affectedProducts.dio,
+      columns: [
+        { label: 'Turn', get: (p: ProductValuation) => (p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—') },
+        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+      ],
+    },
+    {
+      key: 'holding' as const,
+      label: 'Holding Cost',
+      status: portfolio.holdingStatus,
+      value: fmtPct(portfolio.holdingPct),
+      benchmark: '15–30%',
+      source: 'APICS/ASCM',
+      band: { min: 15, max: 30 },
+      domain: 60,
+      metricLabel: 'Rate',
+      portfolioValue: portfolio.holdingPct * 100,
+      metricOf: (p: ProductValuation) => (p.carryingValuePerUnit > 0 ? (p.holdingCostPerUnit / p.carryingValuePerUnit) * 100 : 0),
+      fmtMetric: (n: number) => `${n.toFixed(1)}%`,
+      statusOf: (p: ProductValuation) => holdingStatus(p.carryingValuePerUnit > 0 ? p.holdingCostPerUnit / p.carryingValuePerUnit : 0),
+      worstFirst: 'high' as const,
+      affectedCount: affectedProducts.holding.length,
+      detail: holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus }),
+      affectedProducts: affectedProducts.holding,
+      columns: [
+        { label: 'Hold/unit', get: (p: ProductValuation) => fmtUGX(p.holdingCostPerUnit, true) },
+        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+      ],
+    },
+  ]
+  const activePerf = perfTabs.find(t => t.key === perfTab) ?? perfTabs[0]
+
   return (
     <div className="space-y-3">
       {/* ── Header + KPI ribbon (same as every other module) ── */}
@@ -771,47 +849,113 @@ export default function InventoryValuationModule() {
             </div>
           </Panel>
 
-          {/* Section 02 — Performance — Windows XP dialog style */}
+          {/* Section 02 — Performance — property-sheet tabs in the module's
+              control-panel aesthetic: gray chrome, LED status, orange accent */}
           <Panel title="Performance" number="02" variant="raised">
-            {/* Clean white content area — like XP dialog body */}
-            <div className="bg-white rounded border border-gray-200 p-3 space-y-2">
-              {/* Form-style rows: Label (left) + sunken input field (right) */}
-              <PerformanceRow
-                label="Throughput Turn"
-                status={portfolio.turnoverStatus}
-                value={portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—'}
-                benchmark="4–6×/yr"
-                barPct={portfolio.turnover > 0 ? Math.min(100, (portfolio.turnover / 6) * 100) : 0}
-                benchmarkPct={(4 / 6) * 100}
-                affectedCount={affectedProducts.turnover.length}
-                detail={turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus })}
-                affectedProducts={affectedProducts.turnover}
-                affectedColumns={['turnover', 'dio']}
-              />
-              <PerformanceRow
-                label="Days of Supply"
-                status={portfolio.dioStatus}
-                value={portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—'}
-                benchmark="60–90d"
-                barPct={portfolio.dio > 0 ? Math.min(100, (portfolio.dio / 120) * 100) : 0}
-                benchmarkPct={(60 / 120) * 100}
-                affectedCount={affectedProducts.dio.length}
-                detail={dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus })}
-                affectedProducts={affectedProducts.dio}
-                affectedColumns={['dio', 'turnover']}
-              />
-              <PerformanceRow
-                label="Holding Cost"
-                status={portfolio.holdingStatus}
-                value={fmtPct(portfolio.holdingPct)}
-                benchmark="15–30%"
-                barPct={Math.min(100, (portfolio.holdingPct / 0.40) * 100)}
-                benchmarkPct={(0.15 / 0.40) * 100}
-                affectedCount={affectedProducts.holding.length}
-                detail={holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus })}
-                affectedProducts={affectedProducts.holding}
-                affectedColumns={['holdingCost', 'carryingValue']}
-              />
+            <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
+              Portfolio health metrics on a control-panel property sheet — each tab pairs the headline number with a
+              healthy-range comparison bar, a sortable product list, and a status strip. Click a column header to sort.
+            </p>
+            <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
+              {/* Tab strip — property-sheet header on the module's gray chrome */}
+              <div role="tablist" aria-label="Performance metrics" className="flex items-end gap-[3px] px-2.5 pt-2 bg-gray-100 border-b border-gray-300">
+                {perfTabs.map(t => {
+                  const active = t.key === activePerf.key
+                  return (
+                    <button
+                      key={t.key}
+                      role="tab"
+                      id={`perf-tab-${t.key}`}
+                      aria-selected={active}
+                      aria-controls={`perf-panel-${t.key}`}
+                      onClick={() => setPerfTab(t.key)}
+                      className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-t-[4px] border text-[11px] transition-colors -mb-px ${
+                        active
+                          ? 'relative z-10 bg-white border-gray-300 border-b-white text-gray-900 font-semibold shadow-[0_-1px_2px_rgba(0,0,0,0.06)]'
+                          : 'bg-gray-50 border-gray-200 border-b-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+                      }`}
+                    >
+                      <LED status={t.status} size={7} />
+                      <span>{t.label}</span>
+                      <span className={`font-mono text-[10px] ${active ? 'text-[#FF6B35] font-bold' : 'text-gray-400'}`}>{t.value}</span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Active tab panel — form row + comparison bar + details list + narrative */}
+              <div role="tabpanel" id={`perf-panel-${activePerf.key}`} aria-labelledby={`perf-tab-${activePerf.key}`} className="p-3 space-y-2.5">
+                {/* Summary form row — label + recessed value field, XP form style */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 w-36 shrink-0">
+                    <LED status={activePerf.status} size={8} />
+                    <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
+                  </div>
+                  <div className="relative h-7 w-28 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center px-2">
+                    <span className="text-xs font-mono font-bold text-gray-900">{activePerf.value}</span>
+                  </div>
+                  <span className="text-[9px] text-gray-400 font-mono shrink-0">bm {activePerf.benchmark}</span>
+                  {activePerf.affectedCount > 0 && (
+                    <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
+                      activePerf.status === 'critical' ? 'bg-red-50 text-red-600 border-red-200'
+                        : activePerf.status === 'monitor' ? 'bg-amber-50 text-amber-600 border-amber-200'
+                        : 'bg-gray-50 text-gray-500 border-gray-200'
+                    }`}>{activePerf.affectedCount} affected</span>
+                  )}
+                </div>
+
+                {/* Portfolio value vs healthy range — the comparison bar */}
+                <div className="flex items-center gap-2" title={`${activePerf.label}: ${activePerf.fmtMetric(activePerf.portfolioValue)} · healthy range ${activePerf.benchmark}`}>
+                  <span className="w-36 shrink-0 text-[10px] text-gray-500 font-medium">vs healthy range</span>
+                  <BenchmarkBar
+                    value={activePerf.portfolioValue}
+                    bandMin={activePerf.band.min}
+                    bandMax={activePerf.band.max}
+                    domainMax={activePerf.domain}
+                    status={activePerf.status}
+                    className="flex-1"
+                  />
+                  <span className="w-16 shrink-0 text-right text-[9px] text-gray-400 font-mono">{activePerf.benchmark}</span>
+                </div>
+
+                {/* Affected products — sortable details list in the module's aesthetic */}
+                <PerfProductList
+                  products={activePerf.affectedProducts}
+                  metricLabel={activePerf.metricLabel}
+                  metricOf={activePerf.metricOf}
+                  fmtMetric={activePerf.fmtMetric}
+                  statusOf={activePerf.statusOf}
+                  band={activePerf.band}
+                  domainMax={activePerf.domain}
+                  benchmarkLabel={activePerf.benchmark}
+                  worstFirst={activePerf.worstFirst}
+                  columns={activePerf.columns}
+                />
+
+                {/* Details pane — recessed footer strip carrying the narrative */}
+                <div className="flex items-start gap-2 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2">
+                  <LED status={activePerf.status} size={8} />
+                  <p className="text-[11px] text-gray-600 leading-relaxed">{activePerf.detail}</p>
+                </div>
+              </div>
+
+              {/* Status strip — recessed segments along the panel bottom */}
+              <div className="flex items-center gap-1 border-t border-gray-300 bg-gray-100 px-1.5 py-1">
+                <span className="border border-gray-200 bg-gray-50 rounded-sm px-2 py-0.5 text-[9px] font-mono text-gray-500">
+                  {Math.min(activePerf.affectedProducts.length, PERF_LIST_CAP)} of {activePerf.affectedProducts.length} affected products shown
+                </span>
+                <span className="border border-gray-200 bg-gray-50 rounded-sm px-2 py-0.5 text-[9px] font-mono text-gray-500">
+                  Benchmark {activePerf.benchmark} · {activePerf.source}
+                </span>
+                <span className="ml-auto flex items-center gap-1.5 border border-gray-200 bg-gray-50 rounded-sm px-2 py-0.5 text-[9px] font-mono text-gray-500">
+                  <LED status={activePerf.status} size={7} />
+                  {activePerf.status === 'critical' ? 'Critical' : activePerf.status === 'monitor' ? 'Monitor' : 'Healthy'}
+                </span>
+              </div>
+            </div>
+
+            {/* Price Variance — single expandable metric below the tabs */}
+            <div className="mt-2 pt-2 border-t border-gray-200">
               <PerformanceRow
                 label="Price Variance"
                 status={portfolio.varianceStatus}
@@ -1387,6 +1531,163 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
               <ProductChips products={affectedProducts} columns={affectedColumns} />
             </div>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// BENCHMARK BAR — healthy-range comparison bar (bullet-graph style).
+// Gray recessed track = full scale, green band = healthy range, colored
+// marker = actual value. Marker color follows the LED status so the bar
+// reads at a glance: inside the band is healthy, outside needs attention.
+// ════════════════════════════════════════════════════════════════════════════
+function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, className = '' }: {
+  value: number
+  bandMin: number
+  bandMax: number
+  domainMax: number
+  status: Status
+  hint?: string
+  className?: string
+}) {
+  const pct = (n: number) => Math.max(0, Math.min(100, (n / domainMax) * 100))
+  const markerCore = status === 'healthy' ? 'bg-green-500'
+    : status === 'monitor' ? 'bg-amber-500'
+    : 'bg-red-500'
+  return (
+    <div
+      className={`relative h-2.5 rounded-[2px] bg-gray-200 border border-gray-300 shadow-inner ${className}`}
+      title={hint}
+    >
+      {/* Healthy band — the comparison zone */}
+      <div
+        className="absolute inset-y-0 bg-green-100 border-x border-green-200"
+        style={{ left: `${pct(bandMin)}%`, width: `${pct(bandMax) - pct(bandMin)}%` }}
+      />
+      {/* Actual-value marker */}
+      <div
+        className={`absolute -top-[3px] w-[5px] h-[14px] rounded-[2px] border border-white shadow-sm ${markerCore}`}
+        style={{ left: `calc(${pct(value)}% - 2.5px)` }}
+      />
+    </div>
+  )
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PERF PRODUCT LIST — sortable details view for per-product data, dressed in
+// the module's control-panel aesthetic: gray chrome, LED status lights, orange
+// accent. Replaces the small product chips: column headers on a recessed
+// band, zebra rows, per-product LED, and a healthy-range comparison bar in
+// every row so products can be compared against the benchmark (and each
+// other) at a glance. Click the metric header to flip sort order.
+// ════════════════════════════════════════════════════════════════════════════
+const PERF_LIST_CAP = 50
+
+function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf, band, domainMax, benchmarkLabel, worstFirst, columns }: {
+  products: ProductValuation[]
+  metricLabel: string
+  metricOf: (p: ProductValuation) => number
+  fmtMetric: (n: number) => string
+  statusOf: (p: ProductValuation) => Status
+  band: { min: number; max: number }
+  domainMax: number
+  benchmarkLabel: string
+  worstFirst: 'high' | 'low'
+  columns: Array<{ label: string; get: (p: ProductValuation) => string }>
+}) {
+  const [flip, setFlip] = useState(false)
+  const sorted = useMemo(() => {
+    const base = worstFirst === 'high' ? -1 : 1 // worst-first direction
+    const dir = flip ? -base : base
+    return [...products].sort((a, b) => {
+      const d = (metricOf(a) - metricOf(b)) * dir
+      if (d !== 0) return d
+      return b.carryingValue - a.carryingValue // tie-break: bigger exposure first
+    })
+  }, [products, flip, worstFirst, metricOf])
+  const shown = sorted.slice(0, PERF_LIST_CAP)
+
+  if (products.length === 0) {
+    return (
+      <div className="flex items-center gap-2 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2.5">
+        <LED status="healthy" size={8} />
+        <span className="text-[11px] text-gray-600">All products are within the healthy range for this metric.</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="rounded-sm border border-gray-300 bg-white shadow-inner overflow-hidden">
+      <div className="max-h-60 overflow-y-auto">
+        <table className="w-full text-[11px] border-separate border-spacing-0">
+          <thead>
+            <tr>
+              <th className="sticky top-0 z-10 bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-left font-semibold text-gray-600">
+                Product
+              </th>
+              {columns.map(c => (
+                <th key={c.label} className="sticky top-0 z-10 hidden md:table-cell bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-right font-semibold text-gray-600 whitespace-nowrap">
+                  {c.label}
+                </th>
+              ))}
+              <th className="sticky top-0 z-10 bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-right">
+                <button
+                  onClick={() => setFlip(!flip)}
+                  className="inline-flex items-center gap-1 font-semibold text-gray-600 hover:text-[#FF6B35]"
+                  title="Click to flip sort order"
+                >
+                  {metricLabel}
+                  <ChevronDown size={9} className={`transition-transform ${flip ? 'rotate-180' : ''}`} />
+                </button>
+              </th>
+              <th className="sticky top-0 z-10 bg-gray-100 border-b border-gray-300 px-2 py-1 text-left font-semibold text-gray-600 w-[28%]">
+                vs healthy
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {shown.map((p, i) => {
+              const st = statusOf(p)
+              const v = metricOf(p)
+              return (
+                <tr key={p.productId} className={`${i % 2 === 1 ? 'bg-gray-50' : 'bg-white'} hover:bg-gray-100 transition-colors`}>
+                  <td className="border-b border-gray-200 px-2 py-[3px]">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <LED status={st} size={6} />
+                      <span className="text-gray-900 truncate max-w-[200px]" title={p.productLabel}>{p.productLabel}</span>
+                      <span className="hidden lg:inline text-[9px] text-gray-400 truncate max-w-[150px]">{p.merchantName}</span>
+                      <span className="text-[8px] font-mono text-gray-500 border border-gray-300 bg-gray-100 rounded-sm px-1 shrink-0">{p.abcClass}</span>
+                    </div>
+                  </td>
+                  {columns.map(c => (
+                    <td key={c.label} className="hidden md:table-cell border-b border-gray-200 px-2 py-[3px] text-right font-mono text-gray-500 whitespace-nowrap">
+                      {c.get(p)}
+                    </td>
+                  ))}
+                  <td className="border-b border-gray-200 px-2 py-[3px] text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
+                    {fmtMetric(v)}
+                  </td>
+                  <td className="border-b border-gray-200 px-2 py-[5px]">
+                    <BenchmarkBar
+                      value={v}
+                      bandMin={band.min}
+                      bandMax={band.max}
+                      domainMax={domainMax}
+                      status={st}
+                      hint={`${p.productLabel}: ${fmtMetric(v)} · healthy ${benchmarkLabel}`}
+                    />
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      {sorted.length > shown.length && (
+        <div className="border-t border-gray-200 bg-gray-50 px-2 py-1 text-[10px] text-gray-500 font-mono">
+          + {sorted.length - shown.length} more products
         </div>
       )}
     </div>
