@@ -853,8 +853,9 @@ export default function InventoryValuationModule() {
               control-panel aesthetic: gray chrome, LED status, orange accent */}
           <Panel title="Performance" number="02" variant="raised">
             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
-              Portfolio health metrics on a control-panel property sheet — each tab pairs the headline number with a
-              healthy-range comparison bar, a sortable product list, and a status strip. Click a column header to sort.
+              How fast stock moves, how long it will last, and what it costs to hold — the three numbers that tell
+              you whether inventory is earning or draining money. Each bar shows where you stand against the healthy
+              range, and the list underneath shows the products driving the number. Click a column header to re-sort.
             </p>
             <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
               {/* Tab strip — property-sheet header on the module's gray chrome */}
