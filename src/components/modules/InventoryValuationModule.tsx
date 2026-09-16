@@ -937,7 +937,7 @@ export default function InventoryValuationModule() {
                   {activePerf.value !== '—' && (
                     <span className="text-[10px] text-gray-500 shrink-0">{activePerf.unit}</span>
                   )}
-                  <span className="text-[9px] text-green-700 font-mono shrink-0">Acceptable: {activePerf.benchmark}</span>
+                  <span className="text-[9px] text-green-600 font-mono shrink-0">Acceptable: {activePerf.benchmark}</span>
                   {activePerf.affectedCount > 0 && (
                     <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
                       activePerf.status === 'critical' ? 'bg-red-50 text-red-600 border-red-200'
@@ -949,7 +949,6 @@ export default function InventoryValuationModule() {
 
                 {/* Portfolio value vs acceptable range — the comparison bar */}
                 <div className="flex items-center gap-2" title={`${activePerf.label}: ${activePerf.fmtMetric(activePerf.portfolioValue)} · acceptable range ${activePerf.benchmark}`}>
-                  <span className="w-36 shrink-0 text-[10px] text-green-700 font-medium">vs acceptable range</span>
                   <BenchmarkBar
                     value={activePerf.portfolioValue}
                     bandMin={activePerf.band.min}
@@ -958,7 +957,7 @@ export default function InventoryValuationModule() {
                     status={activePerf.status}
                     className="flex-1"
                   />
-                  <span className="w-24 shrink-0 text-right text-[9px] text-green-700 font-mono">{activePerf.benchmark}</span>
+                  <span className="w-24 shrink-0 text-right text-[9px] text-green-600 font-mono">{activePerf.benchmark}</span>
                 </div>
 
                 {/* Affected products — sortable details list in the module's aesthetic */}
@@ -1354,7 +1353,7 @@ function Gauge({ value, min, max, label, sublabel }: {
       {/* The gauge — recessed channel with fill block */}
       <div className="relative h-6 bg-gray-200 rounded overflow-hidden border border-gray-300 shadow-inner">
         {/* Healthy zone marker */}
-        <div className="absolute h-full bg-green-100 border-x border-green-200"
+        <div className="absolute h-full bg-green-600/25 border-x border-green-600/45"
           style={{ left: `${minPct}%`, width: `${healthyWidth}%` }} />
         {/* Value fill */}
         <div
@@ -1475,7 +1474,7 @@ function MetricWidget({ status, label, value, benchmark, barPct, benchmarkPct, a
       </div>
       {/* Bottom row: benchmark + count */}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-green-700 font-mono">Acceptable: {benchmark}</span>
+        <span className="text-[9px] text-green-600 font-mono">Acceptable: {benchmark}</span>
         {affectedCount > 0 && (
           <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
             status === 'critical' ? 'bg-red-50 text-red-600' : status === 'monitor' ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'
@@ -1538,7 +1537,7 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
         <div className="flex-1 flex items-center gap-2">
           <div className={`flex-1 relative h-6 bg-white rounded-sm overflow-hidden border ${borderColor} shadow-inner`}>
             {/* Benchmark zone (green band showing acceptable range) */}
-            <div className="absolute h-full bg-green-50"
+            <div className="absolute h-full bg-green-600/20"
               style={{ left: '0%', width: `${benchmarkPct}%` }} />
             {/* Benchmark threshold mark */}
             <div className="absolute h-full w-px bg-gray-400 z-10" style={{ left: `${benchmarkPct}%` }} />
@@ -1550,7 +1549,7 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
             </span>
           </div>
           {/* Benchmark label — like a helper hint next to the field */}
-          <span className="text-[9px] text-green-700 font-mono whitespace-nowrap shrink-0">Acceptable: {benchmark}</span>
+          <span className="text-[9px] text-green-600 font-mono whitespace-nowrap shrink-0">Acceptable: {benchmark}</span>
           {/* Affected count — like a system notification */}
           {affectedCount > 0 && (
             <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
@@ -1606,7 +1605,7 @@ function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, classN
     >
       {/* Acceptable band — the comparison zone */}
       <div
-        className="absolute inset-y-0 bg-green-100 border-x border-green-200"
+        className="absolute inset-y-0 bg-green-600/25 border-x border-green-600/45"
         style={{ left: `${pct(bandMin)}%`, width: `${pct(bandMax) - pct(bandMin)}%` }}
       />
       {/* Actual-value marker */}
@@ -1685,8 +1684,8 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
                   <ChevronDown size={9} className={`transition-transform ${flip ? 'rotate-180' : ''}`} />
                 </button>
               </th>
-              <th className="sticky top-0 z-10 bg-gray-100 border-b border-gray-300 px-2 py-1 text-left font-semibold text-green-700 w-[28%]">
-                vs acceptable
+              <th className="sticky top-0 z-10 bg-gray-100 border-b border-gray-300 px-2 py-1 text-left font-semibold text-green-600 w-[28%]">
+                Acceptable
               </th>
             </tr>
           </thead>
