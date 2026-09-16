@@ -32,14 +32,14 @@ export function portfolioValuationNarrative(args: {
   const base = `Under ${methodFull} (${iasRef}), your inventory is valued at ${fmtUGX(total, { compact: true })}.`
 
   if (withinRange) {
-    return `${base} This falls within the healthy range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}, which is 80–120% of the average across all four costing methods. The valuation is consistent with peers.`
+    return `${base} This falls within the acceptable range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}, which is 80–120% of the average across all four costing methods. The valuation is consistent with peers.`
   }
 
   if (total < rangeMin) {
-    return `${base} This is below the healthy range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}. The chosen method is producing a conservative valuation — inventory may be understated relative to other methods, which could affect loan collateral calculations or merchant statements.`
+    return `${base} This is below the acceptable range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}. The chosen method is producing a conservative valuation — inventory may be understated relative to other methods, which could affect loan collateral calculations or merchant statements.`
   }
 
-  return `${base} This is above the healthy range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}. The chosen method is producing an aggressive valuation — inventory may be overstated, which inflates assets on the balance sheet. Verify the cost layers are accurate.`
+  return `${base} This is above the acceptable range of ${fmtUGX(rangeMin, { compact: true })}–${fmtUGX(rangeMax, { compact: true })}. The chosen method is producing an aggressive valuation — inventory may be overstated, which inflates assets on the balance sheet. Verify the cost layers are accurate.`
 }
 
 // ── Inventory Turnover ──
@@ -55,7 +55,7 @@ export function turnoverNarrative(args: {
   }
 
   if (status === 'healthy') {
-    return `Throughput Turn is ${turnover.toFixed(2)}× per year — within the healthy benchmark of ${benchmark}. This means stock moves through the warehouse ${turnover.toFixed(2)} times per year, or roughly every ${(365 / turnover).toFixed(0)} days. Stock is moving at a sustainable pace.`
+    return `Throughput Turn is ${turnover.toFixed(2)}× per year — within the acceptable range of ${benchmark}. This means stock moves through the warehouse ${turnover.toFixed(2)} times per year, or roughly every ${(365 / turnover).toFixed(0)} days. Stock is moving at a sustainable pace.`
   }
 
   if (status === 'monitor') {
@@ -106,7 +106,7 @@ export function holdingCostNarrative(args: {
   const benchmark = '15–30% of inventory value (APICS/ASCM)'
 
   if (status === 'healthy') {
-    return `Holding cost is ${fmtPct(pct)} of inventory value (${fmtUGX(total, { compact: true })} annually) — within the healthy benchmark of ${benchmark}. This means for every UGX 100 of stock held for a year, it costs UGX ${(pct * 100).toFixed(0)} to store, insure, and finance it. The cost is proportionate to the inventory value.`
+    return `Holding cost is ${fmtPct(pct)} of inventory value (${fmtUGX(total, { compact: true })} annually) — within the acceptable range of ${benchmark}. This means for every UGX 100 of stock held for a year, it costs UGX ${(pct * 100).toFixed(0)} to store, insure, and finance it. The cost is proportionate to the inventory value.`
   }
 
   if (status === 'monitor') {

@@ -672,7 +672,7 @@ export default function InventoryValuationModule() {
   ]
 
   // ── Performance tab config (Section 02) ──
-  // Each metric is a property-sheet tab: headline number + healthy-range
+  // Each metric is a property-sheet tab: headline number + acceptable-range
   // comparison bar + a sortable details list of the products driving it.
   // Per-product holding rate = holdingCostPerUnit / carryingValuePerUnit —
   // the same definition as the portfolio holdingCostPct, so both sit on the
@@ -853,7 +853,7 @@ export default function InventoryValuationModule() {
               control-panel aesthetic: gray chrome, LED status, orange accent */}
           <Panel title="Performance" number="02" variant="raised">
             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
-              Each tab shows one metric compared with its healthy range. The bar marks the current value, and the
+              Each tab shows one metric compared with its acceptable range. The bar marks the current value, and the
               table lists the products involved. Click a column header to sort.
             </p>
             <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
@@ -904,9 +904,9 @@ export default function InventoryValuationModule() {
                   )}
                 </div>
 
-                {/* Portfolio value vs healthy range — the comparison bar */}
-                <div className="flex items-center gap-2" title={`${activePerf.label}: ${activePerf.fmtMetric(activePerf.portfolioValue)} · healthy range ${activePerf.benchmark}`}>
-                  <span className="w-36 shrink-0 text-[10px] text-gray-500 font-medium">vs healthy range</span>
+                {/* Portfolio value vs acceptable range — the comparison bar */}
+                <div className="flex items-center gap-2" title={`${activePerf.label}: ${activePerf.fmtMetric(activePerf.portfolioValue)} · acceptable range ${activePerf.benchmark}`}>
+                  <span className="w-36 shrink-0 text-[10px] text-gray-500 font-medium">vs acceptable range</span>
                   <BenchmarkBar
                     value={activePerf.portfolioValue}
                     bandMin={activePerf.band.min}
@@ -1494,7 +1494,7 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
         {/* Sunken input field — looks like a recessed XP combo box */}
         <div className="flex-1 flex items-center gap-2">
           <div className={`flex-1 relative h-6 bg-white rounded-sm overflow-hidden border ${borderColor} shadow-inner`}>
-            {/* Benchmark zone (green band showing healthy range) */}
+            {/* Benchmark zone (green band showing acceptable range) */}
             <div className="absolute h-full bg-green-50"
               style={{ left: '0%', width: `${benchmarkPct}%` }} />
             {/* Benchmark threshold mark */}
@@ -1538,10 +1538,10 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// BENCHMARK BAR — healthy-range comparison bar (bullet-graph style).
-// Gray recessed track = full scale, green band = healthy range, colored
+// BENCHMARK BAR — acceptable-range comparison bar (bullet-graph style).
+// Gray recessed track = full scale, green band = acceptable range, colored
 // marker = actual value. Marker color follows the LED status so the bar
-// reads at a glance: inside the band is healthy, outside needs attention.
+// reads at a glance: inside the band is acceptable, outside needs attention.
 // ════════════════════════════════════════════════════════════════════════════
 function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, className = '' }: {
   value: number
@@ -1561,7 +1561,7 @@ function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, classN
       className={`relative h-2.5 rounded-[2px] bg-gray-200 border border-gray-300 shadow-inner ${className}`}
       title={hint}
     >
-      {/* Healthy band — the comparison zone */}
+      {/* Acceptable band — the comparison zone */}
       <div
         className="absolute inset-y-0 bg-green-100 border-x border-green-200"
         style={{ left: `${pct(bandMin)}%`, width: `${pct(bandMax) - pct(bandMin)}%` }}
@@ -1579,7 +1579,7 @@ function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, classN
 // PERF PRODUCT LIST — sortable details view for per-product data, dressed in
 // the module's control-panel aesthetic: gray chrome, LED status lights, orange
 // accent. Replaces the small product chips: column headers on a recessed
-// band, zebra rows, per-product LED, and a healthy-range comparison bar in
+// band, zebra rows, per-product LED, and an acceptable-range comparison bar in
 // every row so products can be compared against the benchmark (and each
 // other) at a glance. Click the metric header to flip sort order.
 // ════════════════════════════════════════════════════════════════════════════
@@ -1613,7 +1613,7 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
     return (
       <div className="flex items-center gap-2 rounded-sm border border-gray-200 bg-gray-50 px-3 py-2.5">
         <LED status="healthy" size={8} />
-        <span className="text-[11px] text-gray-600">All products are within the healthy range for this metric.</span>
+        <span className="text-[11px] text-gray-600">All products are within the acceptable range for this metric.</span>
       </div>
     )
   }
@@ -1643,7 +1643,7 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
                 </button>
               </th>
               <th className="sticky top-0 z-10 bg-gray-100 border-b border-gray-300 px-2 py-1 text-left font-semibold text-gray-600 w-[28%]">
-                vs healthy
+                vs acceptable
               </th>
             </tr>
           </thead>
@@ -1676,7 +1676,7 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
                       bandMax={band.max}
                       domainMax={domainMax}
                       status={st}
-                      hint={`${p.productLabel}: ${fmtMetric(v)} · healthy ${benchmarkLabel}`}
+                      hint={`${p.productLabel}: ${fmtMetric(v)} · acceptable ${benchmarkLabel}`}
                     />
                   </td>
                 </tr>
