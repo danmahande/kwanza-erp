@@ -950,6 +950,7 @@ export default function InventoryValuationModule() {
                 {/* Portfolio value vs acceptable range — the comparison bar */}
                 <div className="flex items-center gap-2" title={`${activePerf.label}: ${activePerf.fmtMetric(activePerf.portfolioValue)} · acceptable range ${activePerf.benchmark}`}>
                   <BenchmarkBar
+                    key={activePerf.label}
                     value={activePerf.portfolioValue}
                     bandMin={activePerf.band.min}
                     bandMax={activePerf.band.max}
@@ -962,6 +963,7 @@ export default function InventoryValuationModule() {
 
                 {/* Affected products — sortable details list in the module's aesthetic */}
                 <PerfProductList
+                  key={activePerf.label}
                   products={activePerf.affectedProducts}
                   metricLabel={activePerf.metricLabel}
                   metricOf={activePerf.metricOf}
@@ -1584,7 +1586,9 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 // Gray recessed track = full scale, green band = acceptable range, colored
 // marker = actual value. Marker color follows the LED status so the bar
 // reads at a glance: inside the band is acceptable, outside needs attention.
-// ════════════════════════════════════════════════════════════════════════════
+// Motion carries the meaning without words: the marker travels the scale
+// from zero and lands in or out of the breathing green zone; a marker that
+// lands outside keeps blinking — readable in any language.
 function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, className = '' }: {
   value: number
   bandMin: number
@@ -1594,24 +1598,36 @@ function BenchmarkBar({ value, bandMin, bandMax, domainMax, status, hint, classN
   hint?: string
   className?: string
 }) {
+  // Start every marker at the zero end of the scale, then release it to its
+  // real position one frame after mount — the travel + landing IS the story.
+  const [landed, setLanded] = useState(false)
+  useEffect(() => {
+    const raf = requestAnimationFrame(() => setLanded(true))
+    return () => cancelAnimationFrame(raf)
+  }, [])
   const pct = (n: number) => Math.max(0, Math.min(100, (n / domainMax) * 100))
   const markerCore = status === 'healthy' ? 'bg-green-500'
     : status === 'monitor' ? 'bg-amber-500'
     : 'bg-red-500'
+  // Blink only after landing (1s delay) so the alarm fires at the value's
+  // real position, not mid-flight. Inside the band = calm, no blink.
+  const alarm = status === 'critical' ? 'perf-alarm-red'
+    : status === 'monitor' ? 'perf-alarm-amber'
+    : ''
   return (
     <div
       className={`relative h-2.5 rounded-[2px] bg-gray-200 border border-gray-300 shadow-inner ${className}`}
       title={hint}
     >
-      {/* Acceptable band — the comparison zone */}
+      {/* Acceptable band — the comparison zone (breathing = "this green area is the target") */}
       <div
-        className="absolute inset-y-0 bg-green-600/25 border-x border-green-600/45"
+        className="perf-bar-band absolute inset-y-0 bg-green-600/25 border-x border-green-600/45"
         style={{ left: `${pct(bandMin)}%`, width: `${pct(bandMax) - pct(bandMin)}%` }}
       />
-      {/* Actual-value marker */}
+      {/* Actual-value marker — slides from zero to its position on mount/tab switch */}
       <div
-        className={`absolute -top-[3px] w-[5px] h-[14px] rounded-[2px] border border-white shadow-sm ${markerCore}`}
-        style={{ left: `calc(${pct(value)}% - 2.5px)` }}
+        className={`perf-bar-marker absolute -top-[3px] w-[5px] h-[14px] rounded-[2px] border border-white shadow-sm ${markerCore} ${alarm}`}
+        style={{ left: landed ? `calc(${pct(value)}% - 2.5px)` : 'calc(0% - 2.5px)' }}
       />
     </div>
   )
