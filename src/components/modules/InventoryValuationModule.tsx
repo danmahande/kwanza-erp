@@ -682,12 +682,14 @@ export default function InventoryValuationModule() {
       key: 'turnover' as const,
       label: 'Throughput Turn',
       status: portfolio.turnoverStatus,
-      value: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
-      benchmark: '4–6×/yr',
+      value: portfolio.turnover > 0 ? portfolio.turnover.toFixed(2) : '—',
+      shortValue: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
+      unit: 'turns a year',
+      benchmark: '4–6 turns a year',
       source: 'APICS/ASCM',
       band: { min: 4, max: 6 },
       domain: 8,
-      metricLabel: 'Turn',
+      metricLabel: 'Turns/yr',
       portfolioValue: portfolio.turnover,
       metricOf: (p: ProductValuation) => p.inventoryTurnover,
       fmtMetric: (n: number) => (n > 0 ? `${n.toFixed(2)}×` : '—'),
@@ -697,20 +699,22 @@ export default function InventoryValuationModule() {
       detail: turnoverNarrative({ turnover: portfolio.turnover, status: portfolio.turnoverStatus }),
       affectedProducts: affectedProducts.turnover,
       columns: [
-        { label: 'DIO', get: (p: ProductValuation) => (p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—') },
-        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+        { label: 'Days', get: (p: ProductValuation) => (p.daysInventoryOutstanding > 0 ? `${p.daysInventoryOutstanding.toFixed(0)}d` : '—') },
+        { label: 'Carrying value', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
       ],
     },
     {
       key: 'dio' as const,
       label: 'Days of Supply',
       status: portfolio.dioStatus,
-      value: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
-      benchmark: '60–90d',
+      value: portfolio.dio > 0 ? Math.round(portfolio.dio).toLocaleString('en-US') : '—',
+      shortValue: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
+      unit: 'days of stock',
+      benchmark: '60–90 days',
       source: 'APICS/ASCM',
       band: { min: 60, max: 90 },
       domain: 365,
-      metricLabel: 'DIO',
+      metricLabel: 'Days',
       portfolioValue: portfolio.dio,
       metricOf: (p: ProductValuation) => p.daysInventoryOutstanding,
       fmtMetric: (n: number) => (n > 0 ? `${n.toFixed(0)}d` : '—'),
@@ -720,8 +724,8 @@ export default function InventoryValuationModule() {
       detail: dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus }),
       affectedProducts: affectedProducts.dio,
       columns: [
-        { label: 'Turn', get: (p: ProductValuation) => (p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—') },
-        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+        { label: 'Turns/yr', get: (p: ProductValuation) => (p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—') },
+        { label: 'Carrying value', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
       ],
     },
     {
@@ -729,11 +733,13 @@ export default function InventoryValuationModule() {
       label: 'Holding Cost',
       status: portfolio.holdingStatus,
       value: fmtPct(portfolio.holdingPct),
-      benchmark: '15–30%',
+      shortValue: fmtPct(portfolio.holdingPct),
+      unit: 'of stock value a year',
+      benchmark: '15–30% a year',
       source: 'APICS/ASCM',
       band: { min: 15, max: 30 },
       domain: 60,
-      metricLabel: 'Rate',
+      metricLabel: 'Rate/yr',
       portfolioValue: portfolio.holdingPct * 100,
       metricOf: (p: ProductValuation) => (p.carryingValuePerUnit > 0 ? (p.holdingCostPerUnit / p.carryingValuePerUnit) * 100 : 0),
       fmtMetric: (n: number) => `${n.toFixed(1)}%`,
@@ -743,8 +749,8 @@ export default function InventoryValuationModule() {
       detail: holdingCostNarrative({ pct: portfolio.holdingPct, total: portfolio.holdingTotal, status: portfolio.holdingStatus }),
       affectedProducts: affectedProducts.holding,
       columns: [
-        { label: 'Hold/unit', get: (p: ProductValuation) => fmtUGX(p.holdingCostPerUnit, true) },
-        { label: 'Carrying', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
+        { label: 'Hold /unit/yr', get: (p: ProductValuation) => fmtUGX(p.holdingCostPerUnit, true) },
+        { label: 'Carrying value', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
       ],
     },
   ]
@@ -877,7 +883,7 @@ export default function InventoryValuationModule() {
                     >
                       <LED status={t.status} size={7} />
                       <span>{t.label}</span>
-                      <span className={`font-mono text-[10px] ${active ? 'text-[#FF6B35] font-bold' : 'text-gray-400'}`}>{t.value}</span>
+                      <span className={`font-mono text-[10px] ${active ? 'text-[#FF6B35] font-bold' : 'text-gray-400'}`}>{t.shortValue}</span>
                     </button>
                   )
                 })}
@@ -886,7 +892,7 @@ export default function InventoryValuationModule() {
               {/* Active tab panel — form row + comparison bar + details list + narrative */}
               <div role="tabpanel" id={`perf-panel-${activePerf.key}`} aria-labelledby={`perf-tab-${activePerf.key}`} className="p-3 space-y-2.5">
                 {/* Summary form row — label + recessed value field, XP form style */}
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <div className="flex items-center gap-2 w-36 shrink-0">
                     <LED status={activePerf.status} size={8} />
                     <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
@@ -894,13 +900,16 @@ export default function InventoryValuationModule() {
                   <div className="relative h-7 w-28 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center px-2">
                     <span className="text-xs font-mono font-bold text-gray-900">{activePerf.value}</span>
                   </div>
-                  <span className="text-[9px] text-gray-400 font-mono shrink-0">bm {activePerf.benchmark}</span>
+                  {activePerf.value !== '—' && (
+                    <span className="text-[10px] text-gray-500 shrink-0">{activePerf.unit}</span>
+                  )}
+                  <span className="text-[9px] text-gray-400 font-mono shrink-0">Acceptable: {activePerf.benchmark}</span>
                   {activePerf.affectedCount > 0 && (
                     <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
                       activePerf.status === 'critical' ? 'bg-red-50 text-red-600 border-red-200'
                         : activePerf.status === 'monitor' ? 'bg-amber-50 text-amber-600 border-amber-200'
                         : 'bg-gray-50 text-gray-500 border-gray-200'
-                    }`}>{activePerf.affectedCount} affected</span>
+                    }`}>{activePerf.affectedCount} product{activePerf.affectedCount > 1 ? 's' : ''} {activePerf.worstFirst === 'low' ? 'below' : 'above'} range</span>
                   )}
                 </div>
 
@@ -915,7 +924,7 @@ export default function InventoryValuationModule() {
                     status={activePerf.status}
                     className="flex-1"
                   />
-                  <span className="w-16 shrink-0 text-right text-[9px] text-gray-400 font-mono">{activePerf.benchmark}</span>
+                  <span className="w-24 shrink-0 text-right text-[9px] text-gray-400 font-mono">{activePerf.benchmark}</span>
                 </div>
 
                 {/* Affected products — sortable details list in the module's aesthetic */}
@@ -945,7 +954,7 @@ export default function InventoryValuationModule() {
                   {Math.min(activePerf.affectedProducts.length, PERF_LIST_CAP)} of {activePerf.affectedProducts.length} affected products shown
                 </span>
                 <span className="border border-gray-200 bg-gray-50 rounded-sm px-2 py-0.5 text-[9px] font-mono text-gray-500">
-                  Benchmark {activePerf.benchmark} · {activePerf.source}
+                  Acceptable range: {activePerf.benchmark} · source {activePerf.source}
                 </span>
                 <span className="ml-auto flex items-center gap-1.5 border border-gray-200 bg-gray-50 rounded-sm px-2 py-0.5 text-[9px] font-mono text-gray-500">
                   <LED status={activePerf.status} size={7} />
@@ -1432,11 +1441,11 @@ function MetricWidget({ status, label, value, benchmark, barPct, benchmarkPct, a
       </div>
       {/* Bottom row: benchmark + count */}
       <div className="flex items-center justify-between">
-        <span className="text-[9px] text-gray-400 font-mono">bm {benchmark}</span>
+        <span className="text-[9px] text-gray-400 font-mono">Acceptable: {benchmark}</span>
         {affectedCount > 0 && (
           <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded ${
             status === 'critical' ? 'bg-red-50 text-red-600' : status === 'monitor' ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-500'
-          }`}>{affectedCount} affected</span>
+          }`}>{affectedCount} out of range</span>
         )}
       </div>
       {/* Expanded detail — narrative + product chips */}
@@ -1507,14 +1516,14 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
             </span>
           </div>
           {/* Benchmark label — like a helper hint next to the field */}
-          <span className="text-[9px] text-gray-400 font-mono w-14 shrink-0">{benchmark}</span>
+          <span className="text-[9px] text-gray-400 font-mono whitespace-nowrap shrink-0">Acceptable: {benchmark}</span>
           {/* Affected count — like a system notification */}
           {affectedCount > 0 && (
             <span className={`text-[9px] font-mono px-1.5 py-0.5 rounded shrink-0 border ${
               status === 'critical' ? 'bg-red-50 text-red-600 border-red-200'
               : status === 'monitor' ? 'bg-amber-50 text-amber-600 border-amber-200'
               : 'bg-gray-50 text-gray-500 border-gray-200'
-            }`}>{affectedCount}</span>
+            }`}>{affectedCount} flagged</span>
           )}
           {/* Dropdown-style arrow — like XP combo box arrow */}
           <div className={`w-5 h-5 flex items-center justify-center rounded-sm border border-gray-300 bg-gradient-to-b from-white to-gray-100 shadow-sm shrink-0 transition-transform ${expanded ? 'from-gray-100 to-gray-200' : 'group-hover:from-gray-50'}`}>
