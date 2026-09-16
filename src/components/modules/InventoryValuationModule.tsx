@@ -853,7 +853,8 @@ export default function InventoryValuationModule() {
               control-panel aesthetic: gray chrome, LED status, orange accent */}
           <Panel title="Performance" number="02" variant="raised">
             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
-              Each tab compares one metric to its healthy range. Click a column header to sort.
+              Each tab shows one metric compared with its healthy range. The bar marks the current value, and the
+              table lists the products involved. Click a column header to sort.
             </p>
             <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
               {/* Tab strip — property-sheet header on the module's gray chrome */}
