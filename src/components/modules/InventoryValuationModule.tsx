@@ -232,6 +232,40 @@ function holdingStatus(pct: number): Status {
   if (pct < 0.10) return 'monitor'
   return 'healthy'
 }
+
+/**
+ * Plain-English translation of a turnover figure: how long one full
+ * sell-through of the stock takes at the current pace. Chosen over the
+ * raw "turns" unit because time is instantly graspable for non-accountants
+ * (e.g. 0.05x → "≈ a full sell-through every 21 years").
+ */
+function sellThroughPhrase(turnover: number): string {
+  if (turnover <= 0) return ''
+  const days = 365 / turnover
+  if (days >= 730) {
+    const y = Math.round(days / 365)
+    return `≈ a full sell-through every ${y} ${y === 1 ? 'year' : 'years'}`
+  }
+  if (days >= 60) {
+    const m = Math.round(days / 30)
+    return `≈ a full sell-through every ${m} ${m === 1 ? 'month' : 'months'}`
+  }
+  return `≈ a full sell-through every ${Math.max(1, Math.round(days))} days`
+}
+
+/**
+ * Plain-English companion to the Days of Supply figure. Normal ranges read
+ * as "of stock at today's pace"; extreme stock cover is translated into
+ * years, which is what makes the number land (e.g. 7,566 days → "≈ 21 years").
+ */
+function dioPlainPhrase(dio: number): string {
+  if (dio <= 0) return ''
+  if (dio >= 730) {
+    const y = Math.round(dio / 365)
+    return `≈ ${y} ${y === 1 ? 'year' : 'years'} of stock at today's pace`
+  }
+  return "of stock at today's pace"
+}
 function nrvStatus(writeDown: number, totalCost: number): Status {
   if (totalCost === 0) return 'healthy'
   const pct = writeDown / totalCost
@@ -682,9 +716,9 @@ export default function InventoryValuationModule() {
       key: 'turnover' as const,
       label: 'Throughput Turn',
       status: portfolio.turnoverStatus,
-      value: portfolio.turnover > 0 ? portfolio.turnover.toFixed(2) : '—',
+      value: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
       shortValue: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
-      unit: 'turns a year',
+      unit: sellThroughPhrase(portfolio.turnover),
       benchmark: '4–6 turns a year',
       source: 'APICS/ASCM',
       band: { min: 4, max: 6 },
@@ -707,9 +741,9 @@ export default function InventoryValuationModule() {
       key: 'dio' as const,
       label: 'Days of Supply',
       status: portfolio.dioStatus,
-      value: portfolio.dio > 0 ? Math.round(portfolio.dio).toLocaleString('en-US') : '—',
+      value: portfolio.dio > 0 ? `${Math.round(portfolio.dio).toLocaleString('en-US')} days` : '—',
       shortValue: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
-      unit: 'days of stock',
+      unit: dioPlainPhrase(portfolio.dio),
       benchmark: '60–90 days',
       source: 'APICS/ASCM',
       band: { min: 60, max: 90 },
@@ -734,7 +768,7 @@ export default function InventoryValuationModule() {
       status: portfolio.holdingStatus,
       value: fmtPct(portfolio.holdingPct),
       shortValue: fmtPct(portfolio.holdingPct),
-      unit: 'of stock value a year',
+      unit: `≈ UGX ${Math.round(portfolio.holdingPct * 100)} per UGX 100 of stock, per year`,
       benchmark: '15–30% a year',
       source: 'APICS/ASCM',
       band: { min: 15, max: 30 },
