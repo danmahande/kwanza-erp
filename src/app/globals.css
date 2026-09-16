@@ -186,3 +186,59 @@
     transition: none !important;
   }
 }
+
+/* ═══ Performance metric glyphs — concept pictograms in the value box ═══
+   Each Performance tab shows a 20px looping animation that demonstrates what
+   the metric means without words. Loop duration is set inline from the real
+   value, so the speed itself is the data:
+   - turn:  stock sells down, holds empty a beat, then refills (one cycle per turn)
+   - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
+   - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
+@keyframes glyphCycle {
+  0% { transform: scaleY(1); }
+  42% { transform: scaleY(0.08); }
+  55% { transform: scaleY(0.08); }
+  100% { transform: scaleY(1); }
+}
+@keyframes glyphDrain {
+  0% { transform: scaleX(1); }
+  80% { transform: scaleX(0.12); }
+  90% { transform: scaleX(0.12); }
+  100% { transform: scaleX(1); }
+}
+@keyframes glyphDayTick {
+  0%, 24% { opacity: 1; }
+  25%, 49% { opacity: 0.2; }
+  50%, 74% { opacity: 1; }
+  75%, 99% { opacity: 0.2; }
+  100% { opacity: 1; }
+}
+@keyframes glyphLeak {
+  0%, 50% { transform: translate(0, 0); opacity: 0; }
+  58% { opacity: 1; }
+  100% { transform: translate(6px, 8px); opacity: 0; }
+}
+@keyframes glyphLeak2 {
+  0%, 62% { transform: translate(0, 0); opacity: 0; }
+  70% { opacity: 1; }
+  100% { transform: translate(5px, 6px); opacity: 0; }
+}
+.glyph-cycle { animation: glyphCycle cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
+.glyph-daytick { animation: glyphDayTick linear infinite; }
+.glyph-leak { animation: glyphLeak ease-in infinite; }
+.glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .glyph-cycle,
+  .glyph-drain,
+  .glyph-daytick,
+  .glyph-leak,
+  .glyph-leak2 {
+    animation: none !important;
+  }
+  /* Static fallbacks: full stock, full pile, day-dot lit, leak chips hidden */
+  .glyph-leak,
+  .glyph-leak2 {
+    opacity: 0 !important;
+  }
+}

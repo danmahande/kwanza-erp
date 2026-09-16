@@ -715,6 +715,9 @@ export default function InventoryValuationModule() {
     {
       key: 'turnover' as const,
       label: 'Throughput Turn',
+      anim: 'turn' as const,
+      // Concept-glyph loop speed follows the real value: slow turnover = slow cycle.
+      glyphSeconds: Math.min(9, Math.max(1.5, 2.5 / Math.max(portfolio.turnover, 0.01))),
       status: portfolio.turnoverStatus,
       value: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
       shortValue: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
@@ -740,6 +743,9 @@ export default function InventoryValuationModule() {
     {
       key: 'dio' as const,
       label: 'Days of Supply',
+      anim: 'days' as const,
+      // The pile drains over one loop per supply horizon: long supply = glacial drain.
+      glyphSeconds: Math.min(10, Math.max(2, portfolio.dio / 12)),
       status: portfolio.dioStatus,
       value: portfolio.dio > 0 ? `${Math.round(portfolio.dio).toLocaleString('en-US')} days` : '—',
       shortValue: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
@@ -765,6 +771,8 @@ export default function InventoryValuationModule() {
     {
       key: 'holding' as const,
       label: 'Holding Cost',
+      anim: 'hold' as const,
+      glyphSeconds: 3.2,
       status: portfolio.holdingStatus,
       value: fmtPct(portfolio.holdingPct),
       shortValue: fmtPct(portfolio.holdingPct),
@@ -931,8 +939,9 @@ export default function InventoryValuationModule() {
                     <LED status={activePerf.status} size={8} />
                     <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
                   </div>
-                  <div className="relative h-7 w-28 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center px-2">
-                    <span className="text-xs font-mono font-bold text-gray-900">{activePerf.value}</span>
+                  <div className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2">
+                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} />}
+                    <span className="text-xs font-mono font-bold text-gray-900 truncate">{activePerf.value}</span>
                   </div>
                   {activePerf.value !== '—' && (
                     <span className="text-[10px] text-gray-500 shrink-0">{activePerf.unit}</span>
@@ -1582,6 +1591,39 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// METRIC GLYPH — a 20px looping pictogram inside the value box that shows what
+// the metric MEANS, no words required: turnover = stock selling down and
+// refilling (one loop per turn, slower the slower the business turns), days of
+// supply = a pile draining day by day (the blinking dot = days passing),
+// holding cost = chips leaking off a sitting stock (the falling bits ARE the
+// yearly cost). Loop speed follows the real value, so the motion itself is the
+// data — a slow business literally animates slowly.
+function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
+  const dur = { animationDuration: `${seconds}s` }
+  if (kind === 'turn') return (
+    <span className="relative w-5 h-5 shrink-0 rounded-[3px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden" title="Stock sells down, then refills — one loop per turn">
+      <span className="glyph-cycle absolute inset-[2px] rounded-[2px] bg-[#FF6B35]/75" style={{ transformOrigin: 'bottom', ...dur }} />
+    </span>
+  )
+  if (kind === 'days') return (
+    <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The pile shrinks as days pass, then a restock resets it">
+      <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
+      <span className="relative w-5 h-[7px] rounded-[2px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden">
+        <span className="glyph-drain absolute inset-y-0 left-0 w-full bg-[#FF6B35]/75" style={dur} />
+      </span>
+    </span>
+  )
+  return (
+    <span className="relative w-5 h-5 shrink-0" title="Stock sits on the shelf while money leaks away — the falling chips are the yearly cost">
+      <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
+      <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
+      <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
+      <span className="glyph-leak absolute bottom-[10px] left-[9px] w-[3px] h-[3px] rounded-full bg-gray-500" style={dur} />
+      <span className="glyph-leak2 absolute bottom-[5px] left-[12px] w-[3px] h-[3px] rounded-full bg-gray-400" style={dur} />
+    </span>
+  )
+}
+
 // BENCHMARK BAR — acceptable-range comparison bar (bullet-graph style).
 // Gray recessed track = full scale, green band = acceptable range, colored
 // marker = actual value. Marker color follows the LED status so the bar
