@@ -372,18 +372,25 @@
   80%, 92% { transform: translate(6px, -3px); opacity: 1; }
   96%, 100% { transform: translate(6px, -3px); opacity: 0; }
 }
-/* HOLDING COST — while the stock sits still all year (waiting dots), its
-   money drains: the amber level starts at the full value and sinks to the
-   REAL remaining share (--hold-left = 1 − rate/100, set inline) by year
-   end, so the emptied top slice IS the holding cost. The 15-30% band
-   painted from the top is the standard: a surface that stops inside it is
-   healthy; one that sinks past it turns the money red and blinks the bar's
-   LED alarm. One loop = one year, the same fixed clock as the trucks
-   (duration comes inline from the metric config). */
-@keyframes holdDrain {
-  0%, 6% { transform: scaleY(1); }
-  72% { transform: scaleY(var(--hold-left, 0.8)); }
-  88%, 100% { transform: scaleY(var(--hold-left, 0.8)); }
+/* HOLDING COST — a loaf of bread = the stock's value, sitting still all
+   year. Once a year a knife drops and cuts off the year's holding cost:
+   the slice slides out and rests beside the loaf, and that slice IS the
+   money the year ate. The cut is scaled so one third of the loaf = 30%,
+   the top of the 15-30% standard band — the real DB rate cuts
+   proportionally (slice width and --slice-travel set inline), a costly
+   year cuts deeper and the slice turns red and blinks like the LED. One
+   loop = one year, the same fixed clock as the trucks (duration comes
+   inline from the metric config). */
+@keyframes breadKnife {
+  0%, 7% { transform: translateY(-9px); opacity: 0; }
+  12% { opacity: 1; }
+  20%, 28% { transform: translateY(0); opacity: 1; }
+  36%, 100% { transform: translateY(-9px); opacity: 0; }
+}
+@keyframes breadSlice {
+  0%, 24% { transform: translateX(0); opacity: 1; }
+  40%, 93% { transform: translateX(var(--slice-travel, 10px)); opacity: 1; }
+  98%, 100% { transform: translateX(var(--slice-travel, 10px)); opacity: 0; }
 }
 .truck-idle { animation: truckIdle linear infinite; }
 .truck-busy { animation: truckBusy linear infinite; }
@@ -396,7 +403,8 @@
 .factory-coin1 { animation: factoryCoin1 linear infinite; }
 .factory-coin2 { animation: factoryCoin2 linear infinite; }
 .factory-coin3 { animation: factoryCoin3 linear infinite; }
-.hold-money { animation: holdDrain linear infinite; transform-origin: bottom; }
+.bread-knife { animation: breadKnife ease-in-out infinite; }
+.bread-slice { animation: breadSlice ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
   .truck-idle,
   .truck-busy,
@@ -409,7 +417,8 @@
   .factory-coin1,
   .factory-coin2,
   .factory-coin3,
-  .hold-money {
+  .bread-knife,
+  .bread-slice {
     animation: none !important;
   }
   /* Static fallbacks: parked trucks, full year bar, factory water resting
@@ -428,10 +437,13 @@
     transform: scaleY(0.7) !important;
     background-color: #22c55e !important;
   }
-  /* The money rests drained to the real holding rate against the painted
-     standard band — the year-end reading IS the static summary. */
-  .hold-money {
-    transform: scaleY(var(--hold-left, 0.8)) !important;
+  /* The bread rests already cut — the separated slice IS the static
+     summary of the year's holding cost; the knife is gone after the cut. */
+  .bread-slice {
+    transform: translateX(var(--slice-travel, 10px)) !important;
+  }
+  .bread-knife {
+    display: none !important;
   }
   .truck-coin {
     opacity: 1 !important;

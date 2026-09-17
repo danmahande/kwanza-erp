@@ -1769,42 +1769,39 @@ function MetricGlyph({ kind, seconds, rate, status }: { kind: 'turn' | 'days' | 
       </span>
     )
   }
-  // HOLD — while the stock sits still all year, its money drains away. One
-  // loop = one year (the trucks' fixed clock): the amber level starts at
-  // the full value and sinks by the REAL holding rate (--hold-left = the
-  // share that remains). The 15-30% band painted from the top is the
-  // standard, so a surface that stops inside it is healthy; one that sinks
-  // past it turns the money red and blinks the bar like the LED. The stock
-  // blocks never shrink — only the money does.
+  // HOLD — a loaf of bread = the stock's value, sitting still all year.
+  // Once a year a knife drops and cuts off the year's holding cost: the
+  // slice that slides out and rests beside the loaf IS the money the year
+  // ate. The cut is scaled so one third of the loaf = 30%, the top of the
+  // 15-30% standard band — the real DB rate cuts proportionally, so a 30%
+  // year cuts exactly one third; past it the slice turns red and blinks
+  // like the LED. One loop = one year (the trucks' fixed clock).
   const ratePct = rate ?? 0
-  const holdLeft = Math.min(1, Math.max(0.02, 1 - ratePct / 100))
+  const LOAF_W = 19
+  const sliceW = Math.max(2.5, Math.min(LOAF_W / 2, (LOAF_W * ratePct) / 90))
+  const travel = sliceW + 3
   const alarm = status === 'critical' ? 'perf-alarm-red' : status === 'monitor' ? 'perf-alarm-amber' : ''
   return (
     <span className="relative w-[34px] h-6 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
-      {/* The stock sits still all year — nobody is buying (waiting dots) */}
-      <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
-      <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
-      <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
-      <span className="absolute bottom-[15px] left-[1px] flex gap-[2px]" aria-hidden>
-        {[0, 1, 2].map(i => (
-          <span
-            key={i}
-            className="glyph-waitdot w-[2px] h-[2px] rounded-full bg-gray-500"
-            style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
-          />
-        ))}
+      {/* The loaf = the stock's value. Its right end is the slice the year
+          will eat — flush now, resting apart after the knife drops. */}
+      <span className="absolute bottom-0 left-0 h-[10px] rounded-tl-[5px] rounded-bl-[2px] bg-amber-600/90" style={{ width: `${LOAF_W - sliceW}px` }}>
+        <span className="absolute top-[2px] left-[2px] h-px w-[8px] rounded-full bg-amber-200/90" />
+        <span className="absolute top-[4px] left-[3px] h-[3px] w-px -rotate-[18deg] rounded-full bg-amber-800/60" />
       </span>
-      {/* Its money as a level: starts full, sinks by the real rate over the
-          year. Green band from the top = the 15-30% standard zone; past it
-          the money turns red and the bar blinks with the metric's LED. */}
-      <span className={`absolute bottom-0 right-0 w-[13px] h-[19px] rounded-[1px] border border-gray-500 bg-gray-50 ${alarm}`}>
-        <span className="absolute inset-x-[2px] top-[2px] bottom-[2px] overflow-hidden bg-gray-100">
-          <span
-            className={`hold-money absolute inset-x-0 bottom-0 top-0 ${status === 'critical' ? 'bg-red-500/90' : 'bg-[#FF6B35]/80'}`}
-            style={{ ...dur, '--hold-left': `${holdLeft}` } as CSSProperties}
-          />
-          <span className="absolute inset-x-0 top-[15%] h-[15%] bg-green-600/20 border-y border-green-600/45" />
-        </span>
+      {/* The knife: drops in once during the year, cuts, lifts away */}
+      <span className="bread-knife absolute bottom-0 h-[13px] w-[2px]" style={{ left: `${LOAF_W - sliceW - 1}px`, ...dur }}>
+        <span className="absolute bottom-0 left-0 h-[12px] w-[2px] rounded-[1px] border border-gray-400 bg-gray-100" />
+        <span className="absolute bottom-[11px] left-[-1px] h-[3px] w-[4px] rounded-[1px] bg-gray-500" />
+      </span>
+      {/* The slice = the year's holding cost, resting beside the loaf.
+          Outer span carries the cut motion; inner span carries the color
+          and the LED-status alarm glow. */}
+      <span
+        className="bread-slice absolute bottom-0 h-[10px]"
+        style={{ left: `${LOAF_W - sliceW}px`, width: `${sliceW}px`, '--slice-travel': `${travel}px`, ...dur } as CSSProperties}
+      >
+        <span className={`absolute inset-0 rounded-tr-[5px] rounded-br-[2px] ${status === 'critical' ? 'bg-red-500/90' : 'bg-amber-600/90'} ${alarm}`} />
       </span>
     </span>
   )
