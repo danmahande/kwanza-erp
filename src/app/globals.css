@@ -192,12 +192,12 @@
    the metric means without words:
    - turn:  two box trucks on ONE SHARED YEAR CLOCK. The year-fill bar under
             each stage fills once per loop (quarter ticks = seasons) — one
-            loop = one year. Gray truck (orange timeline = the real year):
-            pays ONE coin-load early, then stays PARKED all year — pulsing
-            waiting dots overhead, its single coin resting on the ground.
-            Green truck: five loads (the 4-6 band middle) stream out across
-            the SAME year and the truck is always coming and going.
-            Counting loads per loop = "turns per year" — no words needed.
+            loop = one year. Every load (coin) sells while its truck is
+            parked, then rolls to the dock and RESTS there: the pile GROWS
+            as the year fills. Gray truck (orange timeline = the real year):
+            parked all year, ONE coin by year end. Green truck: five loads
+            (the 4-6 band middle), FIVE coins stacked by year end.
+            Counting the pile = "turns per year" — no words needed.
    - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
    - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
 @keyframes truckIdle {
@@ -227,21 +227,18 @@
   0% { transform: scaleX(0); }
   100% { transform: scaleX(1); }
 }
-@keyframes coinDrop {
+/* Every load (coin) sells while the truck is parked, then rolls to its dock
+   spot (--px/--py set inline per coin) and RESTS there for the rest of the
+   year — the pile grows 1..2..3..4..5 across the year, then resets with it.
+   Positive animation-delay per coin + "backwards" fill = each coin waits
+   hidden for its own sell moment. */
+@keyframes coinPile {
   0% { transform: translate(0, 0); opacity: 0; }
   2% { opacity: 1; }
-  7% { transform: translate(-2px, 5px); opacity: 1; }   /* out of the cargo, hits the ground */
-  10%, 100% { transform: translate(-2px, 5px); opacity: 0; }
-}
-/* The idle truck's single coin: falls, rolls in front of the parked truck,
-   then RESTS there for almost the whole year — one sale, then nothing. */
-@keyframes coinIdle {
-  0% { transform: translate(0, 0); opacity: 0; }
-  2% { opacity: 1; }
-  6% { transform: translate(0, 5px); opacity: 1; }      /* out of the cargo */
-  11% { transform: translate(13px, 5px); opacity: 1; }  /* rolls to the front... */
-  96% { transform: translate(13px, 5px); opacity: 1; }  /* ...and rests all year */
-  100% { transform: translate(13px, 5px); opacity: 0; } /* year resets */
+  6% { transform: translate(0, 5px); opacity: 1; }                          /* out of the cargo */
+  11% { transform: translate(var(--px, 9px), var(--py, 5px)); opacity: 1; } /* rolls to its spot... */
+  96% { transform: translate(var(--px, 9px), var(--py, 5px)); opacity: 1; } /* ...rests in the pile */
+  100% { transform: translate(var(--px, 9px), var(--py, 5px)); opacity: 0; } /* year resets */
 }
 /* Waiting dots: the parked truck's "..." — time passing with nothing happening */
 @keyframes waitDot {
@@ -274,8 +271,7 @@
 .truck-idle { animation: truckIdle linear infinite; }
 .truck-busy { animation: truckBusy linear infinite; }
 .year-fill { animation: yearFill linear infinite; }
-.truck-coin { animation: coinDrop ease-out infinite; }
-.truck-coin-idle { animation: coinIdle ease-out infinite; }
+.truck-coin { animation: coinPile ease-out infinite backwards; }
 .glyph-waitdot { animation: waitDot 2.4s ease-in-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
@@ -286,7 +282,6 @@
   .truck-busy,
   .year-fill,
   .truck-coin,
-  .truck-coin-idle,
   .glyph-waitdot,
   .glyph-drain,
   .glyph-daytick,
@@ -295,16 +290,15 @@
     animation: none !important;
   }
   /* Static fallbacks: parked trucks, full year bar, day-dot lit, chips hidden.
-     The idle coin stays visible beside the parked truck (the one sale of the
-     year); waiting dots rest at half opacity. */
-  .truck-coin,
+     Every coin rests at its dock spot — the full year-end piles (1 vs 5) ARE
+     the static summary; waiting dots rest at half opacity. */
   .glyph-leak,
   .glyph-leak2 {
     opacity: 0 !important;
   }
-  .truck-coin-idle {
+  .truck-coin {
     opacity: 1 !important;
-    transform: translate(13px, 5px) !important;
+    transform: translate(var(--px, 9px), var(--py, 5px)) !important;
   }
   .glyph-waitdot {
     opacity: 0.5 !important;

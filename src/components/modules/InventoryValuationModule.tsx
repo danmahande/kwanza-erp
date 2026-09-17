@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useEffect, useState, useMemo, useCallback, type CSSProperties } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -1594,14 +1594,14 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 // METRIC GLYPH — looping pictograms inside the value box that show what each
 // metric MEANS, no words required.
 // - turn:  two box trucks on ONE SHARED YEAR CLOCK (the filling timeline under
-//          each stage — one loop = one year, quarter ticks = seasons). GRAY =
-//          today: a single coin-load sells, then the truck stays PARKED all
-//          year — waiting dots pulse above it and the one coin it earned sits
-//          on the ground; the orange timeline is the real year burning down
-//          while nothing moves. GREEN = acceptable pace (echoes the band):
-//          loads stream out all year and the truck is always coming and
-//          going. Same clock on both sides, so counting loads per loop IS
-//          "turns per year".
+//          each stage — one loop = one year, quarter ticks = seasons). Every
+//          load (coin) sells while its truck is parked, then rolls to the
+//          dock and RESTS there, so the pile GROWS as the year fills. GRAY =
+//          today: parked all year (waiting dots pulsing, orange timeline =
+//          the real year burning down) and ends with ONE coin in its pile.
+//          GREEN = acceptable pace (echoes the band): always coming and
+//          going, five coins stacked by year end. Same clock on both sides,
+//          so counting the pile at year end IS "turns per year".
 // - days:  a pile draining day by day (the blinking dot = days passing)
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
@@ -1615,13 +1615,13 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
         <TurnTruckStage
           variant="now"
           year={YEAR}
-          title="One loop = one year. Today: one load sells early, then the truck sits parked the rest of the year."
+          title="One loop = one year. Today: the truck sells one load all year — a single coin piles up while it sits."
         />
         <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
         <TurnTruckStage
           variant="ideal"
           year={YEAR}
-          title="One loop = one year. At the acceptable 4-6 turns, loads flow all year long."
+          title="One loop = one year. At the acceptable 4-6 turns, loads flow all year — count the pile: five coins."
         />
       </>
     )
@@ -1669,19 +1669,24 @@ function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; ye
   )
 }
 
-// TURN TRUCK — 16px box-truck sprite on a one-year timeline. "now" = idle:
-// the truck pays ONE coin-load early in the year and never leaves — it stays
-// parked on its spot (pulsing waiting dots overhead) and the single coin it
-// earned rests on the ground for the rest of the year. "ideal" = busy: five
-// loads (the middle of the 4-6 band) stream out and the truck drives off and
-// straight back for each trip, all inside the same single year. Stillness vs
-// motion IS the turnover story — no words needed.
+// TURN TRUCK — 16px box-truck sprite on a one-year timeline. Every load
+// (coin) sells while the truck is parked, then rolls to the dock on the
+// right and RESTS there for the rest of the year — the pile grows 1..5 as
+// the year fills and resets when the year does. "now" = parked all year
+// (waiting dots overhead), one coin by year end. "ideal" = five trips (the
+// middle of the 4-6 band), five coins stacked by year end. Counting the
+// piles IS the turnover story — no words needed.
 function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }) {
   const ideal = variant === 'ideal'
   const body = ideal ? 'border-green-600 bg-green-100' : 'border-gray-400 bg-gray-200'
   const wheel = ideal ? 'bg-green-700' : 'bg-gray-500'
   const dur = { animationDuration: `${year}s` }
-  const coins = ideal ? [6, 24, 42, 60, 78] : [8] // % of the year each load sells
+  // Each entry: [sell moment % of year, dock rest spot x, y]. The dock's
+  // bottom row fills left to right, its top row stacks on it; "now" uses
+  // only the first spot, so its pile holds a single coin at year end.
+  const loads: Array<[number, string, string]> = ideal
+    ? [[6, '9px', '5px'], [24, '12px', '5px'], [42, '15px', '5px'], [60, '12.5px', '2px'], [78, '15.5px', '2px']]
+    : [[8, '9px', '5px']]
   return (
     <>
       <span className={`absolute bottom-[3px] left-[1px] w-4 h-2 ${ideal ? 'truck-busy' : 'truck-idle'}`} style={dur}>
@@ -1690,11 +1695,18 @@ function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }
         <span className={`absolute -bottom-[2px] left-[2px] w-[3px] h-[3px] rounded-full ${wheel}`} />
         <span className={`absolute -bottom-[2px] left-[10px] w-[3px] h-[3px] rounded-full ${wheel}`} />
       </span>
-      {coins.map((start, i) => (
+      {loads.map(([start, px, py], i) => (
         <span
           key={i}
-          className={`${ideal ? 'truck-coin' : 'truck-coin-idle'} absolute bottom-[6px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm`}
-          style={{ ...dur, animationDelay: `${(-start / 100 * year).toFixed(2)}s` }}
+          className="truck-coin absolute bottom-[6px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
+          style={{
+            ...dur,
+            // Positive delay = the coin waits hidden ("backwards" fill) for
+            // its own sell moment, then rests in the pile until year reset.
+            animationDelay: `${(start / 100 * year).toFixed(2)}s`,
+            '--px': px,
+            '--py': py,
+          } as CSSProperties}
         />
       ))}
       {!ideal && (
