@@ -810,7 +810,9 @@ export default function InventoryValuationModule() {
       key: 'holding' as const,
       label: 'Holding Cost',
       anim: 'hold' as const,
-      glyphSeconds: 3.2,
+      // One loop = one year on the trucks' fixed 6s clock — all three tabs
+      // share the same year, so the glyphs tick together.
+      glyphSeconds: 6,
       status: portfolio.holdingStatus,
       value: fmtPct(portfolio.holdingPct),
       shortValue: fmtPct(portfolio.holdingPct),
@@ -941,8 +943,7 @@ export default function InventoryValuationModule() {
           <Panel title="Performance" number="02" variant="raised">
             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
               Each tab shows one metric compared with its acceptable range. The bar marks the current value, and the
-              table lists the products involved. Click a column header to sort, or click the animation box to see its
-              standard.
+              table lists the products involved. Click a column header to sort.
             </p>
             <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
               {/* Tab strip — property-sheet header on the module's gray chrome */}
@@ -982,7 +983,7 @@ export default function InventoryValuationModule() {
                   <button
                     type="button"
                     onClick={() => setPerfDialogOpen(true)}
-                    title={`Click for the standard: ${activePerf.standard}`}
+                    title={activePerf.standard}
                     aria-label={`${activePerf.label} — show the standard`}
                     className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2 cursor-pointer text-left hover:bg-gray-50 hover:border-gray-400 active:translate-y-px transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35]/50"
                   >
@@ -1094,9 +1095,6 @@ export default function InventoryValuationModule() {
                 <div className="flex items-start gap-2 px-3 py-2.5">
                   <span className="mt-0.5 shrink-0"><LED status={toastTab.status} size={8} /></span>
                   <p className="text-xs text-gray-800 leading-relaxed">{toastTab.standard}</p>
-                </div>
-                <div className="px-3 pb-2 -mt-0.5">
-                  <p className="text-[9px] text-gray-400">Click the animation box to see this again.</p>
                 </div>
               </div>
             )
@@ -1771,63 +1769,42 @@ function MetricGlyph({ kind, seconds, rate, status }: { kind: 'turn' | 'days' | 
       </span>
     )
   }
-  // HOLD — the sitting stock pays rent. One loop = one year (the trucks'
-  // fixed clock). The meter's final fill is the REAL holding rate on a
-  // 0-60% scale (the 15-30% band is painted on the window), and the payment
-  // count follows the rate too: a costly year drops more coins in.
+  // HOLD — while the stock sits still all year, its money drains away. One
+  // loop = one year (the trucks' fixed clock): the amber level starts at
+  // the full value and sinks by the REAL holding rate (--hold-left = the
+  // share that remains). The 15-30% band painted from the top is the
+  // standard, so a surface that stops inside it is healthy; one that sinks
+  // past it turns the money red and blinks the bar like the LED. The stock
+  // blocks never shrink — only the money does.
   const ratePct = rate ?? 0
-  const fill = Math.min(1, Math.max(0.02, ratePct / 60))
-  const coinCount = ratePct > 0 ? Math.max(3, Math.min(12, Math.round((ratePct / 60) * 12))) : 0
+  const holdLeft = Math.min(1, Math.max(0.02, 1 - ratePct / 100))
   const alarm = status === 'critical' ? 'perf-alarm-red' : status === 'monitor' ? 'perf-alarm-amber' : ''
   return (
     <span className="relative w-[34px] h-6 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
-      {/* The scene: stock on the left, fee meter on the right, year bar below */}
-      <span className="absolute inset-x-0 top-0 bottom-[5px]">
-        {/* The stock sits still all year — nobody is buying (waiting dots) */}
-        <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
-        <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
-        <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
-        <span className="absolute bottom-[15px] left-[1px] flex gap-[2px]" aria-hidden>
-          {[0, 1, 2].map(i => (
-            <span
-              key={i}
-              className="glyph-waitdot w-[2px] h-[2px] rounded-full bg-gray-500"
-              style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
-            />
-          ))}
-        </span>
-        {/* The fee meter: green band = the 15-30% standard on a 0-60% scale;
-            the fill climbs to the real rate across the year. The border
-            blinks with the metric's LED status, like the bar's marker. */}
-        <span className={`absolute bottom-0 right-0 w-[13px] h-[16px] rounded-[1px] border border-gray-500 bg-gray-50 ${alarm}`}>
-          <span className="absolute inset-x-[2px] top-[4px] bottom-[2px] bg-gray-100 border border-gray-200 overflow-hidden">
-            <span className="absolute inset-x-0 top-0 h-[50%] bg-red-600/10" />
-            <span className="absolute inset-x-0 bottom-[25%] h-[25%] bg-green-600/20 border-y border-green-600/45" />
-            <span
-              className="meter-fill absolute inset-x-0 bottom-0 top-0 bg-[#FF6B35]/75"
-              style={{ '--meter-fill': `${fill}` } as CSSProperties}
-            />
-          </span>
-          <span className="absolute top-[1px] left-1/2 -translate-x-1/2 w-[5px] h-[2px] rounded-[1px] bg-gray-600" />
-        </span>
-        {/* The rent: coins leap off the stock into the slot, month by month */}
-        {Array.from({ length: coinCount }).map((_, i) => (
+      {/* The stock sits still all year — nobody is buying (waiting dots) */}
+      <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
+      <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
+      <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
+      <span className="absolute bottom-[15px] left-[1px] flex gap-[2px]" aria-hidden>
+        {[0, 1, 2].map(i => (
           <span
             key={i}
-            className="meter-coin absolute bottom-[13px] left-[10px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
-            style={{ animationDelay: `${(((i + 1) / coinCount) * 6).toFixed(2)}s` }}
+            className="glyph-waitdot w-[2px] h-[2px] rounded-full bg-gray-500"
+            style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
           />
         ))}
       </span>
-      {/* The year bar: one loop = one year, quarter ticks = seasons */}
-      <span className="absolute bottom-0 inset-x-0 h-[3px] rounded-[1px] bg-gray-100 border border-gray-200 overflow-hidden" aria-hidden>
-        <span
-          className="year-fill absolute inset-y-0 left-0 w-full bg-[#FF6B35]/70"
-          style={{ transformOrigin: 'left', animationDuration: '6s' }}
-        />
-        <span className="absolute inset-y-0 left-1/4 w-px bg-gray-200" />
-        <span className="absolute inset-y-0 left-2/4 w-px bg-gray-200" />
-        <span className="absolute inset-y-0 left-3/4 w-px bg-gray-200" />
+      {/* Its money as a level: starts full, sinks by the real rate over the
+          year. Green band from the top = the 15-30% standard zone; past it
+          the money turns red and the bar blinks with the metric's LED. */}
+      <span className={`absolute bottom-0 right-0 w-[13px] h-[19px] rounded-[1px] border border-gray-500 bg-gray-50 ${alarm}`}>
+        <span className="absolute inset-x-[2px] top-[2px] bottom-[2px] overflow-hidden bg-gray-100">
+          <span
+            className={`hold-money absolute inset-x-0 bottom-0 top-0 ${status === 'critical' ? 'bg-red-500/90' : 'bg-[#FF6B35]/80'}`}
+            style={{ ...dur, '--hold-left': `${holdLeft}` } as CSSProperties}
+          />
+          <span className="absolute inset-x-0 top-[15%] h-[15%] bg-green-600/20 border-y border-green-600/45" />
+        </span>
       </span>
     </span>
   )
