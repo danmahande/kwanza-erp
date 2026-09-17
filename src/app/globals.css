@@ -189,25 +189,49 @@
 
 /* ═══ Performance metric glyphs — concept pictograms in the value box ═══
    Each Performance tab shows a looping animation that demonstrates what
-   the metric means without words. Loop duration is set inline from the real
-   value, so the speed itself is the data:
-   - turn:  two box trucks — gray (today): one coin-load drops from the cargo,
-            truck drives off, long wait before it loops back (loop speed = the
-            real turnover); green (ideal): a stream of 4-6 loads and it is
-            straight back for the next trip
+   the metric means without words:
+   - turn:  two box trucks on ONE SHARED YEAR CLOCK. The year-fill bar under
+            each stage fills once per loop (quarter ticks = seasons) — one
+            loop = one year. Gray truck: one coin-load sells, truck drives
+            off, stage empty for most of the year, rolls back in late.
+            Green truck: five loads (the 4-6 band middle) stream out across
+            the SAME year and the truck is always coming and going.
+            Counting loads per loop = "turns per year" — no words needed.
    - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
    - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
-@keyframes truckDrive {
-  0%, 60% { transform: translateX(0); }          /* parked while the loads sell */
-  85% { transform: translateX(30px); }           /* drives off stage-right */
-  86%, 92% { transform: translateX(-24px); }     /* looped back to the start, off-stage */
-  100% { transform: translateX(0); }             /* next trip rolls in */
+@keyframes truckIdle {
+  0%, 10% { transform: translateX(0); }        /* parked; the one load sells */
+  15% { transform: translateX(30px); }         /* drives off early in the year */
+  16%, 70% { transform: translateX(-24px); }   /* gone for over half the year */
+  78%, 100% { transform: translateX(0); }      /* rolls back in, then waits */
+}
+@keyframes truckBusy {
+  0%, 8% { transform: translateX(0); }         /* trip 1 */
+  13% { transform: translateX(30px); }
+  14% { transform: translateX(-24px); }
+  18%, 26% { transform: translateX(0); }       /* trip 2 */
+  31% { transform: translateX(30px); }
+  32% { transform: translateX(-24px); }
+  36%, 44% { transform: translateX(0); }       /* trip 3 */
+  49% { transform: translateX(30px); }
+  50% { transform: translateX(-24px); }
+  54%, 62% { transform: translateX(0); }       /* trip 4 */
+  67% { transform: translateX(30px); }
+  68% { transform: translateX(-24px); }
+  72%, 80% { transform: translateX(0); }       /* trip 5 */
+  85% { transform: translateX(30px); }
+  86% { transform: translateX(-24px); }
+  90%, 100% { transform: translateX(0); }
+}
+@keyframes yearFill {
+  0% { transform: scaleX(0); }
+  100% { transform: scaleX(1); }
 }
 @keyframes coinDrop {
   0% { transform: translate(0, 0); opacity: 0; }
-  6% { opacity: 1; }
-  30% { transform: translate(-2px, 8px); opacity: 1; }   /* out of the cargo, hits the ground */
-  55%, 100% { transform: translate(-2px, 8px); opacity: 0; }
+  2% { opacity: 1; }
+  7% { transform: translate(-2px, 5px); opacity: 1; }   /* out of the cargo, hits the ground */
+  10%, 100% { transform: translate(-2px, 5px); opacity: 0; }
 }
 @keyframes glyphDrain {
   0% { transform: scaleX(1); }
@@ -232,14 +256,18 @@
   70% { opacity: 1; }
   100% { transform: translate(5px, 6px); opacity: 0; }
 }
-.truck-drive { animation: truckDrive linear infinite; }
+.truck-idle { animation: truckIdle linear infinite; }
+.truck-busy { animation: truckBusy linear infinite; }
+.year-fill { animation: yearFill linear infinite; }
 .truck-coin { animation: coinDrop ease-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
 .glyph-leak { animation: glyphLeak ease-in infinite; }
 .glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .truck-drive,
+  .truck-idle,
+  .truck-busy,
+  .year-fill,
   .truck-coin,
   .glyph-drain,
   .glyph-daytick,
@@ -247,7 +275,7 @@
   .glyph-leak2 {
     animation: none !important;
   }
-  /* Static fallbacks: parked trucks, full pile, day-dot lit, leak chips hidden */
+  /* Static fallbacks: parked trucks, full year bar, day-dot lit, chips hidden */
   .truck-coin,
   .glyph-leak,
   .glyph-leak2 {

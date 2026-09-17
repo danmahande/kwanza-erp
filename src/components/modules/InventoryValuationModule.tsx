@@ -1592,29 +1592,35 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 
 // ════════════════════════════════════════════════════════════════════════════
 // METRIC GLYPH — looping pictograms inside the value box that show what each
-// metric MEANS, no words required. Loop speed follows the real value, so the
-// motion itself is the data — a slow business literally animates slowly.
-// - turn:  two box trucks. GRAY = today: one load sells, the truck drives off,
-//          then a long wait before the next trip (one loop = one turn at the
-//          real turnover). GREEN = acceptable pace: 4-6 loads stream out and
-//          the truck is straight back for the next trip. Green echoes the
-//          acceptable band on the bars.
+// metric MEANS, no words required.
+// - turn:  two box trucks on ONE SHARED YEAR CLOCK (the filling timeline under
+//          each stage — one loop = one year, quarter ticks = seasons). GRAY =
+//          today: a single coin-load sells, the truck drives off and the stage
+//          sits empty for most of the year. GREEN = acceptable pace (echoes
+//          the band): loads stream out all year and the truck is always coming
+//          and going. Same clock on both sides, so counting loads per loop IS
+//          "turns per year".
 // - days:  a pile draining day by day (the blinking dot = days passing)
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
   const dur = { animationDuration: `${seconds}s` }
   if (kind === 'turn') {
-    // Ideal loop = the middle of the 4-6 turns band; brisk but readable.
-    const idealSeconds = 2.4
+    // The year clock is FIXED (6s) so both trucks share one timeline — the
+    // comparison is same-year-different-load-count, not different speeds.
+    const YEAR = 6
     return (
       <>
-        <span className="relative w-[22px] h-5 shrink-0 overflow-hidden" title="Today: one load sells, the truck drives off, then a long wait before the next trip">
-          <TurnTruck variant="now" seconds={seconds} />
-        </span>
+        <TurnTruckStage
+          variant="now"
+          year={YEAR}
+          title="One loop = one year. Today: one load sells, then the truck sits idle most of the year."
+        />
         <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
-        <span className="relative w-[22px] h-5 shrink-0 overflow-hidden" title="Acceptable pace: 4-6 loads a year - the truck is back for the next trip right away">
-          <TurnTruck variant="ideal" seconds={idealSeconds} />
-        </span>
+        <TurnTruckStage
+          variant="ideal"
+          year={YEAR}
+          title="One loop = one year. At the acceptable 4-6 turns, loads flow all year long."
+        />
       </>
     )
   }
@@ -1637,30 +1643,49 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
   )
 }
 
-// TURN TRUCK — 16px box-truck sprite for the Throughput Turn glyph. Per loop:
-// coins (the loads) drop out of the cargo area while the truck is parked, then
-// the truck drives off stage-right and loops back in for the next trip. The
-// "now" truck is gray with a single load and a slow loop (speed follows the
-// real turnover); the "ideal" truck is green with a stream of loads.
-function TurnTruck({ variant, seconds }: { variant: 'now' | 'ideal'; seconds: number }) {
+// TURN TRUCK STAGE — truck + its one-year timeline bar (fill synced to the
+// truck loop, quarter ticks so the year visibly "passes"). Both stages share
+// the same YEAR duration, so the two clocks always tick together.
+function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; year: number; title: string }) {
+  return (
+    <span className="flex flex-col items-center gap-[2px] shrink-0" title={title}>
+      <span className="relative w-[22px] h-[18px] overflow-hidden">
+        <TurnTruck variant={variant} year={year} />
+      </span>
+      <span className="relative w-[22px] h-[3px] rounded-[1px] bg-gray-100 border border-gray-200 overflow-hidden" aria-hidden>
+        <span className="year-fill absolute inset-y-0 left-0 w-full bg-gray-400/70" style={{ transformOrigin: 'left', animationDuration: `${year}s` }} />
+        <span className="absolute inset-y-0 left-1/4 w-px bg-gray-200" />
+        <span className="absolute inset-y-0 left-2/4 w-px bg-gray-200" />
+        <span className="absolute inset-y-0 left-3/4 w-px bg-gray-200" />
+      </span>
+    </span>
+  )
+}
+
+// TURN TRUCK — 16px box-truck sprite on a one-year timeline. Coins (the loads)
+// drop out of the cargo area while the truck is parked, then it drives off
+// stage-right. "now" = idle: one load, gone for most of the year, rolls back
+// in late. "ideal" = busy: five loads (the middle of the 4-6 band), back for
+// the next trip immediately, all inside the same single year.
+function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }) {
   const ideal = variant === 'ideal'
   const body = ideal ? 'border-green-600 bg-green-100' : 'border-gray-400 bg-gray-200'
   const wheel = ideal ? 'bg-green-700' : 'bg-gray-500'
-  const dur = { animationDuration: `${seconds}s` }
-  const drops = ideal ? [0, 0.07, 0.14, 0.21, 0.28] : [0] // staggered coin exits
+  const dur = { animationDuration: `${year}s` }
+  const coins = ideal ? [6, 24, 42, 60, 78] : [8] // % of the year each load sells
   return (
     <>
-      <span className="truck-drive absolute bottom-[3px] left-[1px] w-4 h-2" style={dur}>
+      <span className={`absolute bottom-[3px] left-[1px] w-4 h-2 ${ideal ? 'truck-busy' : 'truck-idle'}`} style={dur}>
         <span className={`absolute left-0 top-0 w-[9px] h-[7px] rounded-[1px] border ${body}`} />
         <span className={`absolute bottom-0 left-[9px] w-[6px] h-[5px] rounded-[1px] border ${body}`} />
         <span className={`absolute -bottom-[2px] left-[2px] w-[3px] h-[3px] rounded-full ${wheel}`} />
         <span className={`absolute -bottom-[2px] left-[10px] w-[3px] h-[3px] rounded-full ${wheel}`} />
       </span>
-      {drops.map((off, i) => (
+      {coins.map((start, i) => (
         <span
           key={i}
-          className="truck-coin absolute bottom-[10px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
-          style={{ ...dur, animationDelay: `${(-off * seconds).toFixed(2)}s` }}
+          className="truck-coin absolute bottom-[6px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
+          style={{ ...dur, animationDelay: `${(-start / 100 * year).toFixed(2)}s` }}
         />
       ))}
     </>
