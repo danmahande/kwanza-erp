@@ -187,6 +187,38 @@
   }
 }
 
+/* ═══ Performance standard discovery layer — Windows-style notification ═══
+   The animation standards should not depend on someone discovering the
+   hover. Two entry points, both dressed like the OS the module imitates:
+   - toast:  slides up from the bottom-right (taskbar-balloon position) a
+             moment after a tab switch, holds ~5s, fades out on its own.
+   - dialog: clicking the animation box recalls the message as a small
+             Windows-7-style modal with an OK button. */
+@keyframes perfToastLife {
+  0% { transform: translateY(16px); opacity: 0; }
+  7% { transform: translateY(0); opacity: 1; }
+  93% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(14px); opacity: 0; }
+}
+.perf-toast { animation: perfToastLife 5.5s ease-out both; }
+@keyframes perfDialogIn {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.perf-dialog { animation: perfDialogIn 0.16s ease-out both; }
+@keyframes perfBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.perf-dialog-backdrop { animation: perfBackdropIn 0.15s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .perf-toast,
+  .perf-dialog,
+  .perf-dialog-backdrop {
+    animation: none !important;
+  }
+}
+
 /* ═══ Performance metric glyphs — concept pictograms in the value box ═══
    Each Performance tab shows a looping animation that demonstrates what
    the metric means without words:

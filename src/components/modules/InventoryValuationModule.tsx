@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback, type CSSProperties } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, type CSSProperties } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -316,6 +316,42 @@ export default function InventoryValuationModule() {
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null)
   // Active property-sheet tab in the Performance section (Section 02)
   const [perfTab, setPerfTab] = useState<'turnover' | 'dio' | 'holding'>('turnover')
+  // Standard discovery layer: a Windows-style toast announces the tab's
+  // standard shortly after a switch (no hover discovery needed), and the
+  // animation box is clickable — it reopens the message as a small
+  // Windows-7-style dialog with an OK button.
+  const [perfToast, setPerfToast] = useState<typeof perfTab | null>(null)
+  const [perfDialogOpen, setPerfDialogOpen] = useState(false)
+  const perfToastArmed = useRef(false)
+  // Tab switch = arm the toast: after a short pause (a first look at the
+  // animation) the notification states the standard; switching again or
+  // dismissing cancels whatever was pending.
+  useEffect(() => {
+    if (!perfToastArmed.current) {
+      perfToastArmed.current = true
+      return
+    }
+    setPerfToast(null)
+    setPerfDialogOpen(false)
+    const key = perfTab
+    const t = setTimeout(() => setPerfToast(key), 1200)
+    return () => clearTimeout(t)
+  }, [perfTab])
+  // The toast lives out its ~5.5s CSS life, then unmounts.
+  useEffect(() => {
+    if (perfToast === null) return
+    const t = setTimeout(() => setPerfToast(null), 5600)
+    return () => clearTimeout(t)
+  }, [perfToast])
+  // Esc closes the standard dialog, like a real window.
+  useEffect(() => {
+    if (!perfDialogOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setPerfDialogOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [perfDialogOpen])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -723,6 +759,7 @@ export default function InventoryValuationModule() {
       shortValue: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
       unit: sellThroughPhrase(portfolio.turnover),
       benchmark: '4–6 turns a year',
+      standard: 'A stock item should sell 4 to 6 times a year.',
       source: 'APICS/ASCM',
       band: { min: 4, max: 6 },
       domain: 8,
@@ -751,6 +788,7 @@ export default function InventoryValuationModule() {
       shortValue: portfolio.dio > 0 ? `${portfolio.dio.toFixed(0)}d` : '—',
       unit: dioPlainPhrase(portfolio.dio),
       benchmark: '60–90 days',
+      standard: 'The stock in the store should last 60 to 90 days.',
       source: 'APICS/ASCM',
       band: { min: 60, max: 90 },
       domain: 365,
@@ -778,6 +816,7 @@ export default function InventoryValuationModule() {
       shortValue: fmtPct(portfolio.holdingPct),
       unit: `≈ UGX ${Math.round(portfolio.holdingPct * 100)} per UGX 100 of stock, per year`,
       benchmark: '15–30% a year',
+      standard: 'Keeping stock for a year should cost 15 to 30% of its value.',
       source: 'APICS/ASCM',
       band: { min: 15, max: 30 },
       domain: 60,
@@ -902,7 +941,8 @@ export default function InventoryValuationModule() {
           <Panel title="Performance" number="02" variant="raised">
             <p className="text-[11px] text-gray-500 leading-relaxed mb-2">
               Each tab shows one metric compared with its acceptable range. The bar marks the current value, and the
-              table lists the products involved. Click a column header to sort.
+              table lists the products involved. Click a column header to sort, or click the animation box to see its
+              standard.
             </p>
             <div className="rounded-md border border-gray-300 bg-white overflow-hidden shadow-md">
               {/* Tab strip — property-sheet header on the module's gray chrome */}
@@ -939,10 +979,16 @@ export default function InventoryValuationModule() {
                     <LED status={activePerf.status} size={8} />
                     <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
                   </div>
-                  <div className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2">
+                  <button
+                    type="button"
+                    onClick={() => setPerfDialogOpen(true)}
+                    title={`Click for the standard: ${activePerf.standard}`}
+                    aria-label={`${activePerf.label} — show the standard`}
+                    className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2 cursor-pointer text-left hover:bg-gray-50 hover:border-gray-400 active:translate-y-px transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35]/50"
+                  >
                     {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} />}
                     <span className="text-xs font-mono font-bold text-gray-900 truncate">{activePerf.value}</span>
-                  </div>
+                  </button>
                   {activePerf.value !== '—' && (
                     <span className="text-[10px] text-gray-500 shrink-0">{activePerf.unit}</span>
                   )}
@@ -1023,6 +1069,79 @@ export default function InventoryValuationModule() {
               />
             </div>
           </Panel>
+
+          {/* Standard discovery layer — Windows-style. A balloon notification
+              slides up from the bottom-right after a tab switch (no hover
+              discovery needed), holds about five seconds, then fades out
+              alone. Clicking the animation box recalls the message as a
+              small Windows-7-style dialog with an OK button. */}
+          {perfToast !== null && (() => {
+            const toastTab = perfTabs.find(t => t.key === perfToast)
+            if (!toastTab) return null
+            return (
+              <div className="perf-toast fixed bottom-3 right-3 left-3 sm:left-auto sm:w-80 z-50 rounded-[4px] border border-gray-400 bg-white shadow-[0_8px_28px_rgba(0,0,0,0.25)] overflow-hidden">
+                <div className="flex items-center justify-between bg-gradient-to-b from-gray-100 to-gray-200 border-b border-gray-300 pl-2.5 pr-1.5 py-1">
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">{toastTab.label} · standard</span>
+                  <button
+                    type="button"
+                    onClick={() => setPerfToast(null)}
+                    aria-label="Dismiss notification"
+                    className="flex h-4 w-4 items-center justify-center rounded-[2px] text-[10px] leading-none text-gray-500 hover:bg-red-500 hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="flex items-start gap-2 px-3 py-2.5">
+                  <span className="mt-0.5 shrink-0"><LED status={toastTab.status} size={8} /></span>
+                  <p className="text-xs text-gray-800 leading-relaxed">{toastTab.standard}</p>
+                </div>
+                <div className="px-3 pb-2 -mt-0.5">
+                  <p className="text-[9px] text-gray-400">Click the animation box to see this again.</p>
+                </div>
+              </div>
+            )
+          })()}
+
+          {perfDialogOpen && (
+            <div
+              className="perf-dialog-backdrop fixed inset-0 z-50 flex items-center justify-center bg-black/25 p-4"
+              onClick={() => setPerfDialogOpen(false)}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${activePerf.label} standard`}
+                className="perf-dialog w-full max-w-sm rounded-[4px] border border-gray-400 bg-white shadow-[0_12px_40px_rgba(0,0,0,0.32)] overflow-hidden"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between bg-gradient-to-b from-gray-100 to-gray-200 border-b border-gray-300 pl-3 pr-1.5 py-1.5">
+                  <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}</span>
+                  <button
+                    type="button"
+                    onClick={() => setPerfDialogOpen(false)}
+                    aria-label="Close"
+                    className="flex h-4 w-4 items-center justify-center rounded-[2px] text-[10px] leading-none text-gray-500 hover:bg-red-500 hover:text-white transition-colors"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="flex items-start gap-2.5 px-4 py-4">
+                  <span className="mt-1 shrink-0"><LED status={activePerf.status} size={10} /></span>
+                  <p className="text-[13px] text-gray-800 leading-relaxed">{activePerf.standard}</p>
+                </div>
+                <div className="flex justify-end bg-gray-50 border-t border-gray-100 px-3 py-2">
+                  <button
+                    type="button"
+                    autoFocus
+                    onClick={() => setPerfDialogOpen(false)}
+                    className="rounded-[3px] border border-gray-400 bg-gradient-to-b from-white to-gray-100 px-5 py-1 text-xs font-medium text-gray-800 shadow-sm hover:border-[#5b9dd9] hover:from-[#eaf4fd] hover:to-[#d9edfb] active:translate-y-px transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35]/50"
+                  >
+                    OK
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Section 03 — Slow-moving stock — status cards, not text descriptions */}
           <Panel title="Slow-moving Stock Review" number="03" variant="raised">
