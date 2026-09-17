@@ -296,32 +296,45 @@
   11% { opacity: 0; }      /* its one load sells... */
   100% { opacity: 0; }     /* ...and no box ever comes */
 }
-/* DAYS OF SUPPLY — factory tank. Full green = the 90-day max; the moment the
-   level crosses the dashed 90-day line the water flips red and coins fall out
-   of the door (every extra day is money on the shelf), then it drains back to
-   the line and settles green. The green->red cut is synced to the crossing so
-   it reads as an event, not a glitch. */
+/* DAYS OF SUPPLY — factory tank. Water fills as days pass: amber below the
+   60-day mark, green inside the banded 60-90 zone, and the moment it crosses
+   the 90-day mark it flips red while coins bounce out of the door and pile
+   up on the ground — the money lost to overstock. It then sells down and
+   restarts. Every color change lands on a mark crossing, so it reads as an
+   event, not a glitch. */
 @keyframes factoryWater {
-  0% { transform: scaleY(0.82); background-color: #22c55e; }
-  38% { transform: scaleY(0.82); background-color: #22c55e; }
-  41% { transform: scaleY(0.9); background-color: #ef4444; }
-  50% { transform: scaleY(1); background-color: #ef4444; }
-  86% { transform: scaleY(0.9); background-color: #ef4444; }
-  89% { transform: scaleY(0.82); background-color: #22c55e; }
-  100% { transform: scaleY(0.82); background-color: #22c55e; }
+  0% { transform: scaleY(0); background-color: #f59e0b; }
+  16% { transform: scaleY(0.545); background-color: #f59e0b; }
+  19% { transform: scaleY(0.545); background-color: #22c55e; }
+  46% { transform: scaleY(0.818); background-color: #22c55e; }
+  50% { transform: scaleY(0.9); background-color: #ef4444; }
+  60% { transform: scaleY(1); background-color: #ef4444; }
+  80% { transform: scaleY(1); background-color: #ef4444; }
+  88% { transform: scaleY(0.45); background-color: #ef4444; }
+  94%, 100% { transform: scaleY(0); background-color: #f59e0b; }
 }
-/* Coins slip out of the door while the tank sits above the line. */
-@keyframes factoryCoin {
-  0%, 52% { transform: translate(0, 0); opacity: 0; }
-  54% { opacity: 1; }
-  66% { transform: translate(4px, 3px); opacity: 1; }
-  70%, 100% { transform: translate(4px, 3px); opacity: 0; }
+/* Coins escape the door while the tank sits above the 90 mark, then rest in
+   a pile on the ground until the cycle resets. */
+@keyframes factoryCoin1 {
+  0%, 54% { transform: translate(0, 0); opacity: 0; }
+  56% { opacity: 1; }
+  60% { transform: translate(2.5px, -2.5px); opacity: 1; }
+  64%, 92% { transform: translate(5px, 0); opacity: 1; }
+  96%, 100% { transform: translate(5px, 0); opacity: 0; }
 }
 @keyframes factoryCoin2 {
-  0%, 58% { transform: translate(0, 0); opacity: 0; }
-  60% { opacity: 1; }
-  72% { transform: translate(4px, 3px); opacity: 1; }
-  76%, 100% { transform: translate(4px, 3px); opacity: 0; }
+  0%, 62% { transform: translate(0, 0); opacity: 0; }
+  64% { opacity: 1; }
+  68% { transform: translate(4px, -2.5px); opacity: 1; }
+  72%, 92% { transform: translate(8px, 0); opacity: 1; }
+  96%, 100% { transform: translate(8px, 0); opacity: 0; }
+}
+@keyframes factoryCoin3 {
+  0%, 70% { transform: translate(0, 0); opacity: 0; }
+  72% { opacity: 1; }
+  76% { transform: translate(3px, -4px); opacity: 1; }
+  80%, 92% { transform: translate(6px, -3px); opacity: 1; }
+  96%, 100% { transform: translate(6px, -3px); opacity: 0; }
 }
 @keyframes glyphLeak {
   0%, 50% { transform: translate(0, 0); opacity: 0; }
@@ -341,8 +354,9 @@
 .truck-box-once { animation: boxOnce linear infinite; }
 .glyph-waitdot { animation: waitDot 2.4s ease-in-out infinite; }
 .factory-water { animation: factoryWater linear infinite; transform-origin: bottom; }
-.factory-coin { animation: factoryCoin linear infinite; }
+.factory-coin1 { animation: factoryCoin1 linear infinite; }
 .factory-coin2 { animation: factoryCoin2 linear infinite; }
+.factory-coin3 { animation: factoryCoin3 linear infinite; }
 .glyph-leak { animation: glyphLeak ease-in infinite; }
 .glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
 @media (prefers-reduced-motion: reduce) {
@@ -354,27 +368,29 @@
   .truck-box-once,
   .glyph-waitdot,
   .factory-water,
-  .factory-coin,
+  .factory-coin1,
   .factory-coin2,
+  .factory-coin3,
   .glyph-leak,
   .glyph-leak2 {
     animation: none !important;
   }
-  /* Static fallbacks: parked trucks, full year bar, factory full to the
-     90-day line, chips hidden.
+  /* Static fallbacks: parked trucks, full year bar, factory water resting
+     inside the 60-90 band, chips hidden.
      Every coin rests at its dock spot and the ideal truck sits loaded — the
      full year-end piles (1 vs 5) ARE the static summary; the idle truck's
      cargo stays empty (its load was sold, none came); waiting dots rest at
      half opacity. */
   .glyph-leak,
   .glyph-leak2,
-  .factory-coin,
-  .factory-coin2 {
+  .factory-coin1,
+  .factory-coin2,
+  .factory-coin3 {
     opacity: 0 !important;
   }
-  /* Factory rests full of green water at the 90-day line. */
+  /* Factory rests with its water inside the 60-90 band — the standard. */
   .factory-water {
-    transform: scaleY(0.82) !important;
+    transform: scaleY(0.7) !important;
     background-color: #22c55e !important;
   }
   .truck-coin {

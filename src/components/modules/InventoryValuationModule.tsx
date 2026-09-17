@@ -1604,8 +1604,9 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 //          pace (echoes the band): box after box, five coins stacked by year
 //          end. Same clock on both sides, so counting the pile at year end
 //          IS "turns per year".
-// - days:  a factory tank holding green water up to the dashed 90-day line;
-//          cross it and the water flips red while coins fall out of the door
+// - days:  a factory tank filling as days pass — amber under the 60 mark,
+//          green in the banded 60-90 zone, red past the 90 mark while coins
+//          bounce out of the door and pile up = the money lost to overstock
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 // Hover on any glyph states the standard in one plain sentence — no storytelling.
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
@@ -1623,25 +1624,28 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
     )
   }
   if (kind === 'days') {
-    // One loop tells the standard's story: the factory holds green water up
-    // to the dashed 90-day line (full = the max acceptable). The moment the
-    // level crosses the line the water flips red and coins fall out of the
-    // door — every extra day is money sitting on the shelf — then the level
-    // drains back to the line and settles green again.
+    // The full standard, word-free: the tank fills as days pass — amber below
+    // the 60 mark, green inside the banded 60-90 zone (the standard), and the
+    // moment it crosses the 90 mark it flips red while coins bounce out of
+    // the door and pile up on the ground = the money lost to overstock. It
+    // then sells down and the cycle restarts. Coins mean ONLY lost money
+    // here, so the picture stays unambiguous.
     return (
       <span className="relative w-5 h-5 shrink-0" title="The stock in the store should last 60 to 90 days.">
-        {/* Factory body — the tank. Water fills from the bottom. */}
-        <span className="absolute bottom-0 left-0 w-[18px] h-[11px] rounded-[1px] border border-gray-500 bg-gray-50 overflow-hidden">
+        {/* Factory body — the tank */}
+        <span className="absolute bottom-0 left-0 w-[13px] h-[11px] rounded-[1px] border border-gray-500 bg-gray-50 overflow-hidden">
           <span className="factory-water absolute inset-0" style={dur} />
-          <span className="absolute inset-x-0 top-[2px] border-t border-dashed border-white/80" />
+          {/* The 60-90 standard zone, always visible over the water */}
+          <span className="absolute inset-x-0 bottom-[6px] h-[3px] bg-green-600/20 border-y border-green-600/45" />
         </span>
         {/* Sawtooth roof + chimney make it read as a factory, not a jar */}
-        <span className="absolute bottom-[11px] left-0 w-[18px] h-[4px] bg-gray-500 [clip-path:polygon(0_0,33%_100%,33%_0,66%_100%,66%_0,100%_100%,100%_0)]" />
-        <span className="absolute bottom-[14px] left-[13px] w-[3px] h-[5px] rounded-t-[1px] bg-gray-500" />
-        {/* Door + the coins that slip out while over the line */}
-        <span className="absolute bottom-0 left-[13px] w-[2px] h-[2px] bg-gray-600" />
-        <span className="factory-coin absolute bottom-0 left-[12px] w-[3px] h-[3px] rounded-full bg-[#FF6B35]" style={dur} />
-        <span className="factory-coin2 absolute bottom-0 left-[13px] w-[3px] h-[3px] rounded-full bg-[#FF6B35]" style={dur} />
+        <span className="absolute bottom-[11px] left-0 w-[13px] h-[4px] bg-gray-500 [clip-path:polygon(0_0,33%_100%,33%_0,66%_100%,66%_0,100%_100%,100%_0)]" />
+        <span className="absolute bottom-[14px] left-[8px] w-[3px] h-[5px] rounded-t-[1px] bg-gray-500" />
+        {/* Door + the coins that escape and pile up while over the 90 mark */}
+        <span className="absolute bottom-0 left-[9px] w-[2px] h-[2px] bg-gray-600" />
+        <span className="factory-coin1 absolute bottom-0 left-[9px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm" style={dur} />
+        <span className="factory-coin2 absolute bottom-0 left-[9px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm" style={dur} />
+        <span className="factory-coin3 absolute bottom-0 left-[9px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm" style={dur} />
       </span>
     )
   }
