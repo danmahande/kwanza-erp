@@ -232,8 +232,12 @@
             coin by year end. Green truck: five loads (the 4-6 band middle),
             FIVE coins stacked by year end. Counting the pile = "turns per
             year" — no words needed.
-   - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
-   - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
+   - days:  a factory tank fills as days pass — amber under the 60 mark, green
+            inside the banded 60-90 zone, red past the 90 mark while coins
+            bounce out of the door and pile up = the money lost to overstock
+   - hold:  the stock sits still all year (waiting dots) while coins leap off
+            it into a fee meter month by month; the meter's fill climbs to
+            the real holding rate against a painted 15-30% standard band */
 @keyframes truckIdle {
   0%, 6% { transform: translateY(0); }         /* parked; pays its one load */
   9% { transform: translateY(-0.5px); }        /* body lifts as the load leaves */
@@ -368,15 +372,25 @@
   80%, 92% { transform: translate(6px, -3px); opacity: 1; }
   96%, 100% { transform: translate(6px, -3px); opacity: 0; }
 }
-@keyframes glyphLeak {
-  0%, 50% { transform: translate(0, 0); opacity: 0; }
-  58% { opacity: 1; }
-  100% { transform: translate(6px, 8px); opacity: 0; }
+/* HOLDING COST — the sitting stock pays rent all year. One loop = one year
+   (the same fixed 6s clock as the trucks). Coins leap off the still stock
+   into a fee meter month by month; the meter's fill climbs to the REAL
+   holding rate (--meter-fill set inline) against a painted 15-30% standard
+   band on a 0-60% scale, so a rate past the band ends the year deep in the
+   red zone. The meter border blinks with the metric's LED status. */
+@keyframes meterFill {
+  0% { transform: scaleY(0); }
+  100% { transform: scaleY(var(--meter-fill, 0.375)); }
 }
-@keyframes glyphLeak2 {
-  0%, 62% { transform: translate(0, 0); opacity: 0; }
-  70% { opacity: 1; }
-  100% { transform: translate(5px, 6px); opacity: 0; }
+/* One shared payment arc; per-coin animation-delay staggers the months. */
+@keyframes meterCoin {
+  0% { transform: translate(0, 0); opacity: 0; }
+  3% { opacity: 1; }
+  20% { transform: translate(7px, -3px); opacity: 1; }
+  40% { transform: translate(13px, -2px); opacity: 1; }
+  48% { transform: translate(15px, -0.5px); opacity: 1; }
+  54% { transform: translate(16px, 2px); opacity: 1; }
+  58%, 100% { transform: translate(16px, 3px); opacity: 0; }
 }
 .truck-idle { animation: truckIdle linear infinite; }
 .truck-busy { animation: truckBusy linear infinite; }
@@ -389,8 +403,8 @@
 .factory-coin1 { animation: factoryCoin1 linear infinite; }
 .factory-coin2 { animation: factoryCoin2 linear infinite; }
 .factory-coin3 { animation: factoryCoin3 linear infinite; }
-.glyph-leak { animation: glyphLeak ease-in infinite; }
-.glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
+.meter-fill { animation: meterFill 6s linear infinite; transform-origin: bottom; }
+.meter-coin { animation: meterCoin 6s ease-out infinite backwards; }
 @media (prefers-reduced-motion: reduce) {
   .truck-idle,
   .truck-busy,
@@ -403,8 +417,8 @@
   .factory-coin1,
   .factory-coin2,
   .factory-coin3,
-  .glyph-leak,
-  .glyph-leak2 {
+  .meter-fill,
+  .meter-coin {
     animation: none !important;
   }
   /* Static fallbacks: parked trucks, full year bar, factory water resting
@@ -413,17 +427,21 @@
      full year-end piles (1 vs 5) ARE the static summary; the idle truck's
      cargo stays empty (its load was sold, none came); waiting dots rest at
      half opacity. */
-  .glyph-leak,
-  .glyph-leak2,
   .factory-coin1,
   .factory-coin2,
-  .factory-coin3 {
+  .factory-coin3,
+  .meter-coin {
     opacity: 0 !important;
   }
   /* Factory rests with its water inside the 60-90 band — the standard. */
   .factory-water {
     transform: scaleY(0.7) !important;
     background-color: #22c55e !important;
+  }
+  /* The meter rests filled to the real holding rate against the painted
+     standard band — the year-end reading IS the static summary. */
+  .meter-fill {
+    transform: scaleY(var(--meter-fill, 0.375)) !important;
   }
   .truck-coin {
     opacity: 1 !important;

@@ -986,7 +986,7 @@ export default function InventoryValuationModule() {
                     aria-label={`${activePerf.label} — show the standard`}
                     className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2 cursor-pointer text-left hover:bg-gray-50 hover:border-gray-400 active:translate-y-px transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF6B35]/50"
                   >
-                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} />}
+                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} rate={activePerf.anim === 'hold' ? activePerf.portfolioValue : undefined} status={activePerf.status} />}
                     <span className="text-xs font-mono font-bold text-gray-900 truncate">{activePerf.value}</span>
                   </button>
                   {activePerf.value !== '—' && (
@@ -1726,9 +1726,12 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 // - days:  a factory tank filling as days pass — amber under the 60 mark,
 //          green in the banded 60-90 zone, red past the 90 mark while coins
 //          bounce out of the door and pile up = the money lost to overstock
-// - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
+// - hold:  the stock sits still all year (waiting dots) while coins leap off
+//          it into a fee meter month by month; the meter's fill climbs to the
+//          real holding rate against a painted 15-30% standard band — one
+//          loop = one year, the same fixed clock as the trucks
 // Hover on any glyph states the standard in one plain sentence — no storytelling.
-function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
+function MetricGlyph({ kind, seconds, rate, status }: { kind: 'turn' | 'days' | 'hold'; seconds: number; rate?: number; status?: Status }) {
   const dur = { animationDuration: `${seconds}s` }
   if (kind === 'turn') {
     // The year clock is FIXED (6s) so both trucks share one timeline — the
@@ -1768,13 +1771,64 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
       </span>
     )
   }
+  // HOLD — the sitting stock pays rent. One loop = one year (the trucks'
+  // fixed clock). The meter's final fill is the REAL holding rate on a
+  // 0-60% scale (the 15-30% band is painted on the window), and the payment
+  // count follows the rate too: a costly year drops more coins in.
+  const ratePct = rate ?? 0
+  const fill = Math.min(1, Math.max(0.02, ratePct / 60))
+  const coinCount = ratePct > 0 ? Math.max(3, Math.min(12, Math.round((ratePct / 60) * 12))) : 0
+  const alarm = status === 'critical' ? 'perf-alarm-red' : status === 'monitor' ? 'perf-alarm-amber' : ''
   return (
-    <span className="relative w-5 h-5 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
-      <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
-      <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
-      <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
-      <span className="glyph-leak absolute bottom-[10px] left-[9px] w-[3px] h-[3px] rounded-full bg-gray-500" style={dur} />
-      <span className="glyph-leak2 absolute bottom-[5px] left-[12px] w-[3px] h-[3px] rounded-full bg-gray-400" style={dur} />
+    <span className="relative w-[34px] h-6 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
+      {/* The scene: stock on the left, fee meter on the right, year bar below */}
+      <span className="absolute inset-x-0 top-0 bottom-[5px]">
+        {/* The stock sits still all year — nobody is buying (waiting dots) */}
+        <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
+        <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
+        <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
+        <span className="absolute bottom-[15px] left-[1px] flex gap-[2px]" aria-hidden>
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="glyph-waitdot w-[2px] h-[2px] rounded-full bg-gray-500"
+              style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
+            />
+          ))}
+        </span>
+        {/* The fee meter: green band = the 15-30% standard on a 0-60% scale;
+            the fill climbs to the real rate across the year. The border
+            blinks with the metric's LED status, like the bar's marker. */}
+        <span className={`absolute bottom-0 right-0 w-[13px] h-[16px] rounded-[1px] border border-gray-500 bg-gray-50 ${alarm}`}>
+          <span className="absolute inset-x-[2px] top-[4px] bottom-[2px] bg-gray-100 border border-gray-200 overflow-hidden">
+            <span className="absolute inset-x-0 top-0 h-[50%] bg-red-600/10" />
+            <span className="absolute inset-x-0 bottom-[25%] h-[25%] bg-green-600/20 border-y border-green-600/45" />
+            <span
+              className="meter-fill absolute inset-x-0 bottom-0 top-0 bg-[#FF6B35]/75"
+              style={{ '--meter-fill': `${fill}` } as CSSProperties}
+            />
+          </span>
+          <span className="absolute top-[1px] left-1/2 -translate-x-1/2 w-[5px] h-[2px] rounded-[1px] bg-gray-600" />
+        </span>
+        {/* The rent: coins leap off the stock into the slot, month by month */}
+        {Array.from({ length: coinCount }).map((_, i) => (
+          <span
+            key={i}
+            className="meter-coin absolute bottom-[13px] left-[10px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
+            style={{ animationDelay: `${(((i + 1) / coinCount) * 6).toFixed(2)}s` }}
+          />
+        ))}
+      </span>
+      {/* The year bar: one loop = one year, quarter ticks = seasons */}
+      <span className="absolute bottom-0 inset-x-0 h-[3px] rounded-[1px] bg-gray-100 border border-gray-200 overflow-hidden" aria-hidden>
+        <span
+          className="year-fill absolute inset-y-0 left-0 w-full bg-[#FF6B35]/70"
+          style={{ transformOrigin: 'left', animationDuration: '6s' }}
+        />
+        <span className="absolute inset-y-0 left-1/4 w-px bg-gray-200" />
+        <span className="absolute inset-y-0 left-2/4 w-px bg-gray-200" />
+        <span className="absolute inset-y-0 left-3/4 w-px bg-gray-200" />
+      </span>
     </span>
   )
 }
