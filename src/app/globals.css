@@ -297,9 +297,10 @@
   100% { opacity: 0; }     /* ...and no box ever comes */
 }
 @keyframes glyphDrain {
-  0% { transform: scaleX(1); }
-  80% { transform: scaleX(0.12); }
-  90% { transform: scaleX(0.12); }
+  0% { transform: scaleX(1); }     /* today's stock — tank full */
+  78% { transform: scaleX(0.1); }  /* sold down day by day */
+  84% { transform: scaleX(0.1); }  /* dry beat — the restock is coming */
+  94% { transform: scaleX(1); }    /* restock: level rises back */
   100% { transform: scaleX(1); }
 }
 @keyframes glyphDayTick {
@@ -308,6 +309,19 @@
   50%, 74% { opacity: 1; }
   75%, 99% { opacity: 0.2; }
   100% { opacity: 1; }
+}
+/* Restock drops fall into the tank during its refill window (84-94%). */
+@keyframes glyphDrop {
+  0%, 84% { transform: translateY(0); opacity: 0; }
+  86% { opacity: 1; }
+  93% { transform: translateY(10px); opacity: 1; }
+  95%, 100% { transform: translateY(10px); opacity: 0; }
+}
+@keyframes glyphDrop2 {
+  0%, 87% { transform: translateY(0); opacity: 0; }
+  89% { opacity: 1; }
+  96% { transform: translateY(10px); opacity: 1; }
+  98%, 100% { transform: translateY(10px); opacity: 0; }
 }
 @keyframes glyphLeak {
   0%, 50% { transform: translate(0, 0); opacity: 0; }
@@ -328,6 +342,8 @@
 .glyph-waitdot { animation: waitDot 2.4s ease-in-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
+.glyph-drop { animation: glyphDrop linear infinite; }
+.glyph-drop2 { animation: glyphDrop2 linear infinite; }
 .glyph-leak { animation: glyphLeak ease-in infinite; }
 .glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
 @media (prefers-reduced-motion: reduce) {
@@ -340,6 +356,8 @@
   .glyph-waitdot,
   .glyph-drain,
   .glyph-daytick,
+  .glyph-drop,
+  .glyph-drop2,
   .glyph-leak,
   .glyph-leak2 {
     animation: none !important;
@@ -350,7 +368,9 @@
      cargo stays empty (its load was sold, none came); waiting dots rest at
      half opacity. */
   .glyph-leak,
-  .glyph-leak2 {
+  .glyph-leak2,
+  .glyph-drop,
+  .glyph-drop2 {
     opacity: 0 !important;
   }
   .truck-coin {

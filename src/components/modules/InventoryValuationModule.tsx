@@ -940,7 +940,7 @@ export default function InventoryValuationModule() {
                     <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
                   </div>
                   <div className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2">
-                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} />}
+                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} status={activePerf.status} />}
                     <span className="text-xs font-mono font-bold text-gray-900 truncate">{activePerf.value}</span>
                   </div>
                   {activePerf.value !== '—' && (
@@ -1604,10 +1604,11 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 //          pace (echoes the band): box after box, five coins stacked by year
 //          end. Same clock on both sides, so counting the pile at year end
 //          IS "turns per year".
-// - days:  a pile draining day by day (the blinking dot = days passing)
+// - days:  a tank of status-colored water draining day by day (the blinking
+//          dot = days passing); drops fall in at the end — the restock reset
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 // Hover on any glyph states the standard in one plain sentence — no storytelling.
-function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
+function MetricGlyph({ kind, seconds, status }: { kind: 'turn' | 'days' | 'hold'; seconds: number; status?: Status }) {
   const dur = { animationDuration: `${seconds}s` }
   if (kind === 'turn') {
     // The year clock is FIXED (6s) so both trucks share one timeline — the
@@ -1621,14 +1622,25 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
       </span>
     )
   }
-  if (kind === 'days') return (
-    <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The stock in the store should last 60 to 90 days.">
-      <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
-      <span className="relative w-5 h-[7px] rounded-[2px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden">
-        <span className="glyph-drain absolute inset-y-0 left-0 w-full bg-[#FF6B35]/75" style={dur} />
+  if (kind === 'days') {
+    // Water takes the metric's LED color for the WHOLE loop — a color that
+    // flips mid-animation reads as a glitch at this size. One loop: the tank
+    // starts full (today's stock), drains day by day, sits dry for a beat,
+    // then drops fall in while it refills — the restock that resets it.
+    const water = status === 'healthy' ? 'bg-green-500/80'
+      : status === 'monitor' ? 'bg-amber-500/80'
+      : 'bg-red-500/80'
+    return (
+      <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The stock in the store should last 60 to 90 days.">
+        <span className={`glyph-drop absolute top-0 left-[6px] w-[2px] h-[3px] rounded-[1px] ${water}`} style={dur} />
+        <span className={`glyph-drop2 absolute top-0 left-[12px] w-[2px] h-[3px] rounded-[1px] ${water}`} style={dur} />
+        <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
+        <span className="relative w-5 h-[7px] rounded-[2px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden">
+          <span className={`glyph-drain absolute inset-y-0 left-0 w-full ${water}`} style={dur} />
+        </span>
       </span>
-    </span>
-  )
+    )
+  }
   return (
     <span className="relative w-5 h-5 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
       <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
