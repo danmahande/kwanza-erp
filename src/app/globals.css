@@ -188,17 +188,26 @@
 }
 
 /* ═══ Performance metric glyphs — concept pictograms in the value box ═══
-   Each Performance tab shows a 20px looping animation that demonstrates what
+   Each Performance tab shows a looping animation that demonstrates what
    the metric means without words. Loop duration is set inline from the real
    value, so the speed itself is the data:
-   - turn:  stock sells down, holds empty a beat, then refills (one cycle per turn)
+   - turn:  two box trucks — gray (today): one coin-load drops from the cargo,
+            truck drives off, long wait before it loops back (loop speed = the
+            real turnover); green (ideal): a stream of 4-6 loads and it is
+            straight back for the next trip
    - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
    - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
-@keyframes glyphCycle {
-  0% { transform: scaleY(1); }
-  42% { transform: scaleY(0.08); }
-  55% { transform: scaleY(0.08); }
-  100% { transform: scaleY(1); }
+@keyframes truckDrive {
+  0%, 60% { transform: translateX(0); }          /* parked while the loads sell */
+  85% { transform: translateX(30px); }           /* drives off stage-right */
+  86%, 92% { transform: translateX(-24px); }     /* looped back to the start, off-stage */
+  100% { transform: translateX(0); }             /* next trip rolls in */
+}
+@keyframes coinDrop {
+  0% { transform: translate(0, 0); opacity: 0; }
+  6% { opacity: 1; }
+  30% { transform: translate(-2px, 8px); opacity: 1; }   /* out of the cargo, hits the ground */
+  55%, 100% { transform: translate(-2px, 8px); opacity: 0; }
 }
 @keyframes glyphDrain {
   0% { transform: scaleX(1); }
@@ -223,20 +232,23 @@
   70% { opacity: 1; }
   100% { transform: translate(5px, 6px); opacity: 0; }
 }
-.glyph-cycle { animation: glyphCycle cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.truck-drive { animation: truckDrive linear infinite; }
+.truck-coin { animation: coinDrop ease-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
 .glyph-leak { animation: glyphLeak ease-in infinite; }
 .glyph-leak2 { animation: glyphLeak2 ease-in infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .glyph-cycle,
+  .truck-drive,
+  .truck-coin,
   .glyph-drain,
   .glyph-daytick,
   .glyph-leak,
   .glyph-leak2 {
     animation: none !important;
   }
-  /* Static fallbacks: full stock, full pile, day-dot lit, leak chips hidden */
+  /* Static fallbacks: parked trucks, full pile, day-dot lit, leak chips hidden */
+  .truck-coin,
   .glyph-leak,
   .glyph-leak2 {
     opacity: 0 !important;

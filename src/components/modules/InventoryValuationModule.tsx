@@ -1591,20 +1591,33 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// METRIC GLYPH — a 20px looping pictogram inside the value box that shows what
-// the metric MEANS, no words required: turnover = stock selling down and
-// refilling (one loop per turn, slower the slower the business turns), days of
-// supply = a pile draining day by day (the blinking dot = days passing),
-// holding cost = chips leaking off a sitting stock (the falling bits ARE the
-// yearly cost). Loop speed follows the real value, so the motion itself is the
-// data — a slow business literally animates slowly.
+// METRIC GLYPH — looping pictograms inside the value box that show what each
+// metric MEANS, no words required. Loop speed follows the real value, so the
+// motion itself is the data — a slow business literally animates slowly.
+// - turn:  two box trucks. GRAY = today: one load sells, the truck drives off,
+//          then a long wait before the next trip (one loop = one turn at the
+//          real turnover). GREEN = acceptable pace: 4-6 loads stream out and
+//          the truck is straight back for the next trip. Green echoes the
+//          acceptable band on the bars.
+// - days:  a pile draining day by day (the blinking dot = days passing)
+// - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
   const dur = { animationDuration: `${seconds}s` }
-  if (kind === 'turn') return (
-    <span className="relative w-5 h-5 shrink-0 rounded-[3px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden" title="Stock sells down, then refills — one loop per turn">
-      <span className="glyph-cycle absolute inset-[2px] rounded-[2px] bg-[#FF6B35]/75" style={{ transformOrigin: 'bottom', ...dur }} />
-    </span>
-  )
+  if (kind === 'turn') {
+    // Ideal loop = the middle of the 4-6 turns band; brisk but readable.
+    const idealSeconds = 2.4
+    return (
+      <>
+        <span className="relative w-[22px] h-5 shrink-0 overflow-hidden" title="Today: one load sells, the truck drives off, then a long wait before the next trip">
+          <TurnTruck variant="now" seconds={seconds} />
+        </span>
+        <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
+        <span className="relative w-[22px] h-5 shrink-0 overflow-hidden" title="Acceptable pace: 4-6 loads a year - the truck is back for the next trip right away">
+          <TurnTruck variant="ideal" seconds={idealSeconds} />
+        </span>
+      </>
+    )
+  }
   if (kind === 'days') return (
     <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The pile shrinks as days pass, then a restock resets it">
       <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
@@ -1621,6 +1634,36 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
       <span className="glyph-leak absolute bottom-[10px] left-[9px] w-[3px] h-[3px] rounded-full bg-gray-500" style={dur} />
       <span className="glyph-leak2 absolute bottom-[5px] left-[12px] w-[3px] h-[3px] rounded-full bg-gray-400" style={dur} />
     </span>
+  )
+}
+
+// TURN TRUCK — 16px box-truck sprite for the Throughput Turn glyph. Per loop:
+// coins (the loads) drop out of the cargo area while the truck is parked, then
+// the truck drives off stage-right and loops back in for the next trip. The
+// "now" truck is gray with a single load and a slow loop (speed follows the
+// real turnover); the "ideal" truck is green with a stream of loads.
+function TurnTruck({ variant, seconds }: { variant: 'now' | 'ideal'; seconds: number }) {
+  const ideal = variant === 'ideal'
+  const body = ideal ? 'border-green-600 bg-green-100' : 'border-gray-400 bg-gray-200'
+  const wheel = ideal ? 'bg-green-700' : 'bg-gray-500'
+  const dur = { animationDuration: `${seconds}s` }
+  const drops = ideal ? [0, 0.07, 0.14, 0.21, 0.28] : [0] // staggered coin exits
+  return (
+    <>
+      <span className="truck-drive absolute bottom-[3px] left-[1px] w-4 h-2" style={dur}>
+        <span className={`absolute left-0 top-0 w-[9px] h-[7px] rounded-[1px] border ${body}`} />
+        <span className={`absolute bottom-0 left-[9px] w-[6px] h-[5px] rounded-[1px] border ${body}`} />
+        <span className={`absolute -bottom-[2px] left-[2px] w-[3px] h-[3px] rounded-full ${wheel}`} />
+        <span className={`absolute -bottom-[2px] left-[10px] w-[3px] h-[3px] rounded-full ${wheel}`} />
+      </span>
+      {drops.map((off, i) => (
+        <span
+          key={i}
+          className="truck-coin absolute bottom-[10px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
+          style={{ ...dur, animationDelay: `${(-off * seconds).toFixed(2)}s` }}
+        />
+      ))}
+    </>
   )
 }
 
