@@ -1594,14 +1594,16 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 // METRIC GLYPH — looping pictograms inside the value box that show what each
 // metric MEANS, no words required.
 // - turn:  two box trucks on ONE SHARED YEAR CLOCK (the filling timeline under
-//          each stage — one loop = one year, quarter ticks = seasons). Every
-//          load (coin) sells while its truck is parked, then rolls to the
-//          dock and RESTS there, so the pile GROWS as the year fills. GRAY =
-//          today: parked all year (waiting dots pulsing, orange timeline =
-//          the real year burning down) and ends with ONE coin in its pile.
-//          GREEN = acceptable pace (echoes the band): always coming and
-//          going, five coins stacked by year end. Same clock on both sides,
-//          so counting the pile at year end IS "turns per year".
+//          each stage — one loop = one year, quarter ticks = seasons). A box
+//          is lowered into the cargo before every trip and rides out with
+//          the truck; each load (coin) sells while the truck is parked, then
+//          rolls to the dock and RESTS there, so the pile GROWS as the year
+//          fills. GRAY = today: its one box sells and no box ever comes
+//          (cargo empty, waiting dots pulsing, orange timeline = the real
+//          year burning down) — ONE coin in its pile. GREEN = acceptable
+//          pace (echoes the band): box after box, five coins stacked by year
+//          end. Same clock on both sides, so counting the pile at year end
+//          IS "turns per year".
 // - days:  a pile draining day by day (the blinking dot = days passing)
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
@@ -1615,13 +1617,13 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
         <TurnTruckStage
           variant="now"
           year={YEAR}
-          title="One loop = one year. Today: the truck sells one load all year — a single coin piles up while it sits."
+          title="One loop = one year. Today: one load sells and no box ever comes — one coin piles up while the truck sits."
         />
         <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
         <TurnTruckStage
           variant="ideal"
           year={YEAR}
-          title="One loop = one year. At the acceptable 4-6 turns, loads flow all year — count the pile: five coins."
+          title="One loop = one year. At the acceptable 4-6 turns a box goes in before every trip — count the pile: five coins."
         />
       </>
     )
@@ -1669,13 +1671,14 @@ function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; ye
   )
 }
 
-// TURN TRUCK — 16px box-truck sprite on a one-year timeline. Every load
+// TURN TRUCK — 16px box-truck sprite on a one-year timeline. A 4px box is
+// lowered into the cargo before every trip and rides out with the truck
+// ("ideal"); the "now" truck starts with one box, sells it, and its cargo
+// stays empty for the rest of the year — no box ever comes. Every load
 // (coin) sells while the truck is parked, then rolls to the dock on the
-// right and RESTS there for the rest of the year — the pile grows 1..5 as
-// the year fills and resets when the year does. "now" = parked all year
-// (waiting dots overhead), one coin by year end. "ideal" = five trips (the
-// middle of the 4-6 band), five coins stacked by year end. Counting the
-// piles IS the turnover story — no words needed.
+// right and RESTS there — the pile grows 1..5 as the year fills and resets
+// when the year does. Loaded-then-gone vs empty-all-year, counted in coins:
+// the turnover story needs no words.
 function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }) {
   const ideal = variant === 'ideal'
   const body = ideal ? 'border-green-600 bg-green-100' : 'border-gray-400 bg-gray-200'
@@ -1694,6 +1697,13 @@ function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }
         <span className={`absolute bottom-0 left-[9px] w-[6px] h-[5px] rounded-[1px] border ${body}`} />
         <span className={`absolute -bottom-[2px] left-[2px] w-[3px] h-[3px] rounded-full ${wheel}`} />
         <span className={`absolute -bottom-[2px] left-[10px] w-[3px] h-[3px] rounded-full ${wheel}`} />
+        {/* The load: lowered in before every trip (ideal) / sold once and
+            never replaced (now). Sits inside the cargo, so it rides along
+            when the truck drives off and is gone by the time it returns. */}
+        <span
+          className={`absolute left-[2px] top-[1px] w-1 h-1 rounded-[1px] border border-gray-500 bg-white ${ideal ? 'truck-box-load' : 'truck-box-once'}`}
+          style={dur}
+        />
       </span>
       {loads.map(([start, px, py], i) => (
         <span

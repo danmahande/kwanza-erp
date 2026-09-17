@@ -192,12 +192,14 @@
    the metric means without words:
    - turn:  two box trucks on ONE SHARED YEAR CLOCK. The year-fill bar under
             each stage fills once per loop (quarter ticks = seasons) — one
-            loop = one year. Every load (coin) sells while its truck is
-            parked, then rolls to the dock and RESTS there: the pile GROWS
-            as the year fills. Gray truck (orange timeline = the real year):
-            parked all year, ONE coin by year end. Green truck: five loads
-            (the 4-6 band middle), FIVE coins stacked by year end.
-            Counting the pile = "turns per year" — no words needed.
+            loop = one year. A box is lowered into the cargo before every
+            trip and rides out with the truck; each load (coin) sells while
+            the truck is parked, then rolls to the dock and RESTS there: the
+            pile GROWS as the year fills. Gray truck (orange timeline = the
+            real year): its one box sells and the cargo stays empty — ONE
+            coin by year end. Green truck: five loads (the 4-6 band middle),
+            FIVE coins stacked by year end. Counting the pile = "turns per
+            year" — no words needed.
    - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
    - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
 @keyframes truckIdle {
@@ -245,6 +247,55 @@
   0%, 100% { opacity: 0.2; }
   50% { opacity: 0.9; }
 }
+/* Loading the cargo: a box is lowered into the cargo bed just before each
+   sell moment, rides out with the truck, and is gone (delivered) by the
+   time the empty truck returns. Five segments synced to truckBusy's park
+   windows (trips park at 0/18/36/54/72%, sell at +6%, depart at +8..13%).
+   boxOnce = the idle truck: starts the year with one box, sells it, and
+   its cargo stays empty — no box ever comes. */
+@keyframes boxLoad {
+  /* trip 1 */
+  0% { opacity: 0; transform: translateY(-7px); }
+  2% { opacity: 1; }
+  6% { transform: translateY(0); }
+  13% { opacity: 1; transform: translateY(0); }
+  14.5% { opacity: 0; }
+  15.5% { transform: translateY(-7px); }
+  /* trip 2 */
+  18% { opacity: 0; transform: translateY(-7px); }
+  20% { opacity: 1; }
+  24% { transform: translateY(0); }
+  31% { opacity: 1; transform: translateY(0); }
+  32.5% { opacity: 0; }
+  33.5% { transform: translateY(-7px); }
+  /* trip 3 */
+  36% { opacity: 0; transform: translateY(-7px); }
+  38% { opacity: 1; }
+  42% { transform: translateY(0); }
+  49% { opacity: 1; transform: translateY(0); }
+  50.5% { opacity: 0; }
+  51.5% { transform: translateY(-7px); }
+  /* trip 4 */
+  54% { opacity: 0; transform: translateY(-7px); }
+  56% { opacity: 1; }
+  60% { transform: translateY(0); }
+  67% { opacity: 1; transform: translateY(0); }
+  68.5% { opacity: 0; }
+  69.5% { transform: translateY(-7px); }
+  /* trip 5 */
+  72% { opacity: 0; transform: translateY(-7px); }
+  74% { opacity: 1; }
+  78% { transform: translateY(0); }
+  85% { opacity: 1; transform: translateY(0); }
+  86.5% { opacity: 0; }
+  87.5% { transform: translateY(-7px); }
+  100% { opacity: 0; transform: translateY(-7px); }
+}
+@keyframes boxOnce {
+  0%, 8% { opacity: 1; }   /* starts the year loaded */
+  11% { opacity: 0; }      /* its one load sells... */
+  100% { opacity: 0; }     /* ...and no box ever comes */
+}
 @keyframes glyphDrain {
   0% { transform: scaleX(1); }
   80% { transform: scaleX(0.12); }
@@ -272,6 +323,8 @@
 .truck-busy { animation: truckBusy linear infinite; }
 .year-fill { animation: yearFill linear infinite; }
 .truck-coin { animation: coinPile ease-out infinite backwards; }
+.truck-box-load { animation: boxLoad linear infinite; }
+.truck-box-once { animation: boxOnce linear infinite; }
 .glyph-waitdot { animation: waitDot 2.4s ease-in-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
@@ -282,6 +335,8 @@
   .truck-busy,
   .year-fill,
   .truck-coin,
+  .truck-box-load,
+  .truck-box-once,
   .glyph-waitdot,
   .glyph-drain,
   .glyph-daytick,
@@ -290,8 +345,10 @@
     animation: none !important;
   }
   /* Static fallbacks: parked trucks, full year bar, day-dot lit, chips hidden.
-     Every coin rests at its dock spot — the full year-end piles (1 vs 5) ARE
-     the static summary; waiting dots rest at half opacity. */
+     Every coin rests at its dock spot and the ideal truck sits loaded — the
+     full year-end piles (1 vs 5) ARE the static summary; the idle truck's
+     cargo stays empty (its load was sold, none came); waiting dots rest at
+     half opacity. */
   .glyph-leak,
   .glyph-leak2 {
     opacity: 0 !important;
@@ -299,6 +356,13 @@
   .truck-coin {
     opacity: 1 !important;
     transform: translate(var(--px, 9px), var(--py, 5px)) !important;
+  }
+  .truck-box-load {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  .truck-box-once {
+    opacity: 0 !important;
   }
   .glyph-waitdot {
     opacity: 0.5 !important;
