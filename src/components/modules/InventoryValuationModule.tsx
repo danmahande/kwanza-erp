@@ -940,7 +940,7 @@ export default function InventoryValuationModule() {
                     <span className="text-[11px] font-semibold text-gray-700">{activePerf.label}:</span>
                   </div>
                   <div className="relative h-7 w-32 shrink-0 bg-gray-100 border border-gray-300 rounded-sm shadow-inner flex items-center gap-1.5 px-2">
-                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} status={activePerf.status} />}
+                    {activePerf.value !== '—' && <MetricGlyph kind={activePerf.anim} seconds={activePerf.glyphSeconds} />}
                     <span className="text-xs font-mono font-bold text-gray-900 truncate">{activePerf.value}</span>
                   </div>
                   {activePerf.value !== '—' && (
@@ -1604,11 +1604,11 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 //          pace (echoes the band): box after box, five coins stacked by year
 //          end. Same clock on both sides, so counting the pile at year end
 //          IS "turns per year".
-// - days:  a tank of status-colored water draining day by day (the blinking
-//          dot = days passing); drops fall in at the end — the restock reset
+// - days:  a factory tank holding green water up to the dashed 90-day line;
+//          cross it and the water flips red while coins fall out of the door
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
 // Hover on any glyph states the standard in one plain sentence — no storytelling.
-function MetricGlyph({ kind, seconds, status }: { kind: 'turn' | 'days' | 'hold'; seconds: number; status?: Status }) {
+function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
   const dur = { animationDuration: `${seconds}s` }
   if (kind === 'turn') {
     // The year clock is FIXED (6s) so both trucks share one timeline — the
@@ -1623,21 +1623,25 @@ function MetricGlyph({ kind, seconds, status }: { kind: 'turn' | 'days' | 'hold'
     )
   }
   if (kind === 'days') {
-    // Water takes the metric's LED color for the WHOLE loop — a color that
-    // flips mid-animation reads as a glitch at this size. One loop: the tank
-    // starts full (today's stock), drains day by day, sits dry for a beat,
-    // then drops fall in while it refills — the restock that resets it.
-    const water = status === 'healthy' ? 'bg-green-500/80'
-      : status === 'monitor' ? 'bg-amber-500/80'
-      : 'bg-red-500/80'
+    // One loop tells the standard's story: the factory holds green water up
+    // to the dashed 90-day line (full = the max acceptable). The moment the
+    // level crosses the line the water flips red and coins fall out of the
+    // door — every extra day is money sitting on the shelf — then the level
+    // drains back to the line and settles green again.
     return (
-      <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The stock in the store should last 60 to 90 days.">
-        <span className={`glyph-drop absolute top-0 left-[6px] w-[2px] h-[3px] rounded-[1px] ${water}`} style={dur} />
-        <span className={`glyph-drop2 absolute top-0 left-[12px] w-[2px] h-[3px] rounded-[1px] ${water}`} style={dur} />
-        <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
-        <span className="relative w-5 h-[7px] rounded-[2px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden">
-          <span className={`glyph-drain absolute inset-y-0 left-0 w-full ${water}`} style={dur} />
+      <span className="relative w-5 h-5 shrink-0" title="The stock in the store should last 60 to 90 days.">
+        {/* Factory body — the tank. Water fills from the bottom. */}
+        <span className="absolute bottom-0 left-0 w-[18px] h-[11px] rounded-[1px] border border-gray-500 bg-gray-50 overflow-hidden">
+          <span className="factory-water absolute inset-0" style={dur} />
+          <span className="absolute inset-x-0 top-[2px] border-t border-dashed border-white/80" />
         </span>
+        {/* Sawtooth roof + chimney make it read as a factory, not a jar */}
+        <span className="absolute bottom-[11px] left-0 w-[18px] h-[4px] bg-gray-500 [clip-path:polygon(0_0,33%_100%,33%_0,66%_100%,66%_0,100%_100%,100%_0)]" />
+        <span className="absolute bottom-[14px] left-[13px] w-[3px] h-[5px] rounded-t-[1px] bg-gray-500" />
+        {/* Door + the coins that slip out while over the line */}
+        <span className="absolute bottom-0 left-[13px] w-[2px] h-[2px] bg-gray-600" />
+        <span className="factory-coin absolute bottom-0 left-[12px] w-[3px] h-[3px] rounded-full bg-[#FF6B35]" style={dur} />
+        <span className="factory-coin2 absolute bottom-0 left-[13px] w-[3px] h-[3px] rounded-full bg-[#FF6B35]" style={dur} />
       </span>
     )
   }
