@@ -1606,6 +1606,7 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 //          IS "turns per year".
 // - days:  a pile draining day by day (the blinking dot = days passing)
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
+// Hover on any glyph states the standard in one plain sentence — no storytelling.
 function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; seconds: number }) {
   const dur = { animationDuration: `${seconds}s` }
   if (kind === 'turn') {
@@ -1613,23 +1614,15 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
     // comparison is same-year-different-load-count, not different speeds.
     const YEAR = 6
     return (
-      <>
-        <TurnTruckStage
-          variant="now"
-          year={YEAR}
-          title="One loop = one year. Today: one load sells and no box ever comes — one coin piles up while the truck sits."
-        />
+      <span className="flex items-center gap-1.5 shrink-0" title="A stock item should sell 4 to 6 times a year.">
+        <TurnTruckStage variant="now" year={YEAR} />
         <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
-        <TurnTruckStage
-          variant="ideal"
-          year={YEAR}
-          title="One loop = one year. At the acceptable 4-6 turns a box goes in before every trip — count the pile: five coins."
-        />
-      </>
+        <TurnTruckStage variant="ideal" year={YEAR} />
+      </span>
     )
   }
   if (kind === 'days') return (
-    <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The pile shrinks as days pass, then a restock resets it">
+    <span className="relative w-5 h-5 shrink-0 flex flex-col items-center justify-end gap-[3px]" title="The stock in the store should last 60 to 90 days.">
       <span className="glyph-daytick w-[5px] h-[5px] rounded-full bg-gray-400" style={dur} />
       <span className="relative w-5 h-[7px] rounded-[2px] border border-gray-300 bg-gray-50 shadow-inner overflow-hidden">
         <span className="glyph-drain absolute inset-y-0 left-0 w-full bg-[#FF6B35]/75" style={dur} />
@@ -1637,7 +1630,7 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
     </span>
   )
   return (
-    <span className="relative w-5 h-5 shrink-0" title="Stock sits on the shelf while money leaks away — the falling chips are the yearly cost">
+    <span className="relative w-5 h-5 shrink-0" title="Keeping stock for a year should cost 15 to 30% of its value.">
       <span className="absolute bottom-0 left-0 w-[14px] h-[4px] rounded-[1px] bg-[#FF6B35]/80" />
       <span className="absolute bottom-[5px] left-0 w-[12px] h-[4px] rounded-[1px] bg-[#FF6B35]/65" />
       <span className="absolute bottom-[10px] left-0 w-[9px] h-[4px] rounded-[1px] bg-[#FF6B35]/50" />
@@ -1652,9 +1645,9 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
 // the same YEAR duration, so the two clocks always tick together. The "now"
 // timeline burns orange (the real year passing while stock sits); the ideal
 // one stays gray.
-function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; year: number; title: string }) {
+function TurnTruckStage({ variant, year }: { variant: 'now' | 'ideal'; year: number }) {
   return (
-    <span className="flex flex-col items-center gap-[2px] shrink-0" title={title}>
+    <span className="flex flex-col items-center gap-[2px] shrink-0">
       <span className="relative w-[22px] h-[18px] overflow-hidden">
         <TurnTruck variant={variant} year={year} />
       </span>
