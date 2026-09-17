@@ -192,18 +192,18 @@
    the metric means without words:
    - turn:  two box trucks on ONE SHARED YEAR CLOCK. The year-fill bar under
             each stage fills once per loop (quarter ticks = seasons) — one
-            loop = one year. Gray truck: one coin-load sells, truck drives
-            off, stage empty for most of the year, rolls back in late.
+            loop = one year. Gray truck (orange timeline = the real year):
+            pays ONE coin-load early, then stays PARKED all year — pulsing
+            waiting dots overhead, its single coin resting on the ground.
             Green truck: five loads (the 4-6 band middle) stream out across
             the SAME year and the truck is always coming and going.
             Counting loads per loop = "turns per year" — no words needed.
    - days:  pile drains day by day while the day-dot blinks (= days passing), then restock
    - hold:  chips repeatedly detach from the sitting stock and fall away (= yearly cost) */
 @keyframes truckIdle {
-  0%, 10% { transform: translateX(0); }        /* parked; the one load sells */
-  15% { transform: translateX(30px); }         /* drives off early in the year */
-  16%, 70% { transform: translateX(-24px); }   /* gone for over half the year */
-  78%, 100% { transform: translateX(0); }      /* rolls back in, then waits */
+  0%, 6% { transform: translateY(0); }         /* parked; pays its one load */
+  9% { transform: translateY(-0.5px); }        /* body lifts as the load leaves */
+  12%, 100% { transform: translateY(0); }      /* stays parked the whole year */
 }
 @keyframes truckBusy {
   0%, 8% { transform: translateX(0); }         /* trip 1 */
@@ -233,6 +233,21 @@
   7% { transform: translate(-2px, 5px); opacity: 1; }   /* out of the cargo, hits the ground */
   10%, 100% { transform: translate(-2px, 5px); opacity: 0; }
 }
+/* The idle truck's single coin: falls, rolls in front of the parked truck,
+   then RESTS there for almost the whole year — one sale, then nothing. */
+@keyframes coinIdle {
+  0% { transform: translate(0, 0); opacity: 0; }
+  2% { opacity: 1; }
+  6% { transform: translate(0, 5px); opacity: 1; }      /* out of the cargo */
+  11% { transform: translate(13px, 5px); opacity: 1; }  /* rolls to the front... */
+  96% { transform: translate(13px, 5px); opacity: 1; }  /* ...and rests all year */
+  100% { transform: translate(13px, 5px); opacity: 0; } /* year resets */
+}
+/* Waiting dots: the parked truck's "..." — time passing with nothing happening */
+@keyframes waitDot {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.9; }
+}
 @keyframes glyphDrain {
   0% { transform: scaleX(1); }
   80% { transform: scaleX(0.12); }
@@ -260,6 +275,8 @@
 .truck-busy { animation: truckBusy linear infinite; }
 .year-fill { animation: yearFill linear infinite; }
 .truck-coin { animation: coinDrop ease-out infinite; }
+.truck-coin-idle { animation: coinIdle ease-out infinite; }
+.glyph-waitdot { animation: waitDot 2.4s ease-in-out infinite; }
 .glyph-drain { animation: glyphDrain linear infinite; transform-origin: left; }
 .glyph-daytick { animation: glyphDayTick linear infinite; }
 .glyph-leak { animation: glyphLeak ease-in infinite; }
@@ -269,16 +286,27 @@
   .truck-busy,
   .year-fill,
   .truck-coin,
+  .truck-coin-idle,
+  .glyph-waitdot,
   .glyph-drain,
   .glyph-daytick,
   .glyph-leak,
   .glyph-leak2 {
     animation: none !important;
   }
-  /* Static fallbacks: parked trucks, full year bar, day-dot lit, chips hidden */
+  /* Static fallbacks: parked trucks, full year bar, day-dot lit, chips hidden.
+     The idle coin stays visible beside the parked truck (the one sale of the
+     year); waiting dots rest at half opacity. */
   .truck-coin,
   .glyph-leak,
   .glyph-leak2 {
     opacity: 0 !important;
+  }
+  .truck-coin-idle {
+    opacity: 1 !important;
+    transform: translate(13px, 5px) !important;
+  }
+  .glyph-waitdot {
+    opacity: 0.5 !important;
   }
 }

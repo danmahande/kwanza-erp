@@ -1595,10 +1595,12 @@ function PerformanceRow({ label, status, value, benchmark, barPct, benchmarkPct,
 // metric MEANS, no words required.
 // - turn:  two box trucks on ONE SHARED YEAR CLOCK (the filling timeline under
 //          each stage — one loop = one year, quarter ticks = seasons). GRAY =
-//          today: a single coin-load sells, the truck drives off and the stage
-//          sits empty for most of the year. GREEN = acceptable pace (echoes
-//          the band): loads stream out all year and the truck is always coming
-//          and going. Same clock on both sides, so counting loads per loop IS
+//          today: a single coin-load sells, then the truck stays PARKED all
+//          year — waiting dots pulse above it and the one coin it earned sits
+//          on the ground; the orange timeline is the real year burning down
+//          while nothing moves. GREEN = acceptable pace (echoes the band):
+//          loads stream out all year and the truck is always coming and
+//          going. Same clock on both sides, so counting loads per loop IS
 //          "turns per year".
 // - days:  a pile draining day by day (the blinking dot = days passing)
 // - hold:  chips leaking off a sitting stock (the falling bits ARE the yearly cost)
@@ -1613,7 +1615,7 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
         <TurnTruckStage
           variant="now"
           year={YEAR}
-          title="One loop = one year. Today: one load sells, then the truck sits idle most of the year."
+          title="One loop = one year. Today: one load sells early, then the truck sits parked the rest of the year."
         />
         <span className="w-px h-4 shrink-0 bg-gray-200" aria-hidden />
         <TurnTruckStage
@@ -1645,7 +1647,9 @@ function MetricGlyph({ kind, seconds }: { kind: 'turn' | 'days' | 'hold'; second
 
 // TURN TRUCK STAGE — truck + its one-year timeline bar (fill synced to the
 // truck loop, quarter ticks so the year visibly "passes"). Both stages share
-// the same YEAR duration, so the two clocks always tick together.
+// the same YEAR duration, so the two clocks always tick together. The "now"
+// timeline burns orange (the real year passing while stock sits); the ideal
+// one stays gray.
 function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; year: number; title: string }) {
   return (
     <span className="flex flex-col items-center gap-[2px] shrink-0" title={title}>
@@ -1653,7 +1657,10 @@ function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; ye
         <TurnTruck variant={variant} year={year} />
       </span>
       <span className="relative w-[22px] h-[3px] rounded-[1px] bg-gray-100 border border-gray-200 overflow-hidden" aria-hidden>
-        <span className="year-fill absolute inset-y-0 left-0 w-full bg-gray-400/70" style={{ transformOrigin: 'left', animationDuration: `${year}s` }} />
+        <span
+          className={`year-fill absolute inset-y-0 left-0 w-full ${variant === 'now' ? 'bg-[#FF6B35]/70' : 'bg-gray-400/70'}`}
+          style={{ transformOrigin: 'left', animationDuration: `${year}s` }}
+        />
         <span className="absolute inset-y-0 left-1/4 w-px bg-gray-200" />
         <span className="absolute inset-y-0 left-2/4 w-px bg-gray-200" />
         <span className="absolute inset-y-0 left-3/4 w-px bg-gray-200" />
@@ -1662,11 +1669,13 @@ function TurnTruckStage({ variant, year, title }: { variant: 'now' | 'ideal'; ye
   )
 }
 
-// TURN TRUCK — 16px box-truck sprite on a one-year timeline. Coins (the loads)
-// drop out of the cargo area while the truck is parked, then it drives off
-// stage-right. "now" = idle: one load, gone for most of the year, rolls back
-// in late. "ideal" = busy: five loads (the middle of the 4-6 band), back for
-// the next trip immediately, all inside the same single year.
+// TURN TRUCK — 16px box-truck sprite on a one-year timeline. "now" = idle:
+// the truck pays ONE coin-load early in the year and never leaves — it stays
+// parked on its spot (pulsing waiting dots overhead) and the single coin it
+// earned rests on the ground for the rest of the year. "ideal" = busy: five
+// loads (the middle of the 4-6 band) stream out and the truck drives off and
+// straight back for each trip, all inside the same single year. Stillness vs
+// motion IS the turnover story — no words needed.
 function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }) {
   const ideal = variant === 'ideal'
   const body = ideal ? 'border-green-600 bg-green-100' : 'border-gray-400 bg-gray-200'
@@ -1684,10 +1693,21 @@ function TurnTruck({ variant, year }: { variant: 'now' | 'ideal'; year: number }
       {coins.map((start, i) => (
         <span
           key={i}
-          className="truck-coin absolute bottom-[6px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm"
+          className={`${ideal ? 'truck-coin' : 'truck-coin-idle'} absolute bottom-[6px] left-[4px] w-[3px] h-[3px] rounded-full bg-[#FF6B35] shadow-sm`}
           style={{ ...dur, animationDelay: `${(-start / 100 * year).toFixed(2)}s` }}
         />
       ))}
+      {!ideal && (
+        <span className="absolute top-[1px] left-[2px] flex gap-[2px]" aria-hidden>
+          {[0, 1, 2].map(i => (
+            <span
+              key={i}
+              className="glyph-waitdot w-[2px] h-[2px] rounded-full bg-gray-500"
+              style={{ animationDelay: `${(i * 0.35).toFixed(2)}s` }}
+            />
+          ))}
+        </span>
+      )}
     </>
   )
 }
