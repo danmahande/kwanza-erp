@@ -1997,11 +1997,6 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
               <th className="sticky top-0 z-10 bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-left font-semibold text-gray-600">
                 Product
               </th>
-              {columns.map(c => (
-                <th key={c.label} className="sticky top-0 z-10 hidden md:table-cell bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-right font-semibold text-gray-600 whitespace-nowrap">
-                  {c.label}
-                </th>
-              ))}
               <th className="sticky top-0 z-10 bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-right">
                 <button
                   onClick={() => setFlip(!flip)}
@@ -2012,6 +2007,11 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
                   <ChevronDown size={9} className={`transition-transform ${flip ? 'rotate-180' : ''}`} />
                 </button>
               </th>
+              {columns.map(c => (
+                <th key={c.label} className="sticky top-0 z-10 hidden md:table-cell bg-gray-100 border-b border-r border-gray-300 px-2 py-1 text-right font-semibold text-gray-600 whitespace-nowrap">
+                  {c.label}
+                </th>
+              ))}
               <th className="sticky top-0 z-10 bg-gray-100 border-b border-gray-300 px-2 py-1 text-left font-semibold text-green-600 w-[28%]">
                 Acceptable
               </th>
@@ -2031,14 +2031,14 @@ function PerfProductList({ products, metricLabel, metricOf, fmtMetric, statusOf,
                       <span className="text-[8px] font-mono text-gray-500 border border-gray-300 bg-gray-100 rounded-sm px-1 shrink-0">{p.abcClass}</span>
                     </div>
                   </td>
+                  <td className="border-b border-gray-200 px-2 py-[3px] text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
+                    {fmtMetric(v)}
+                  </td>
                   {columns.map(c => (
                     <td key={c.label} className="hidden md:table-cell border-b border-gray-200 px-2 py-[3px] text-right font-mono text-gray-500 whitespace-nowrap">
                       {c.get(p)}
                     </td>
                   ))}
-                  <td className="border-b border-gray-200 px-2 py-[3px] text-right font-mono font-semibold text-gray-900 whitespace-nowrap">
-                    {fmtMetric(v)}
-                  </td>
                   <td className="border-b border-gray-200 px-2 py-[5px]">
                     <BenchmarkBar
                       value={v}
