@@ -48,28 +48,28 @@ export function turnoverNarrative(args: {
   status: Status
 }): string {
   const { turnover, status } = args
-  const benchmark = '4–6 turns per year (APICS/ASCM)'
+  const benchmark = '4–6 times a year (APICS/ASCM)'
 
   if (turnover === 0) {
-    return `Throughput Turn: no data (no units shipped in the trailing 365 days). The benchmark is ${benchmark}. Once orders start shipping, this metric will compute.`
+    return `Selling speed: no data (no units shipped in the trailing 365 days). The benchmark is ${benchmark}. Once orders start shipping, this metric will compute.`
   }
 
   if (status === 'healthy') {
-    return `Throughput Turn is ${turnover.toFixed(2)}× per year — within the acceptable range of ${benchmark}. This means stock moves through the warehouse ${turnover.toFixed(2)} times per year, or roughly every ${(365 / turnover).toFixed(0)} days. Stock is moving at a sustainable pace.`
+    return `Selling speed is ${turnover.toFixed(2)}× per year — within the acceptable range of ${benchmark}. This means stock moves through the warehouse ${turnover.toFixed(2)} times per year, or roughly every ${(365 / turnover).toFixed(0)} days. Stock is moving at a sustainable pace.`
   }
 
   if (status === 'monitor') {
     if (turnover < 4) {
-      return `Throughput Turn is ${turnover.toFixed(2)}× per year — below the ${benchmark} benchmark. Stock is sitting in the warehouse longer than ideal (roughly ${(365 / turnover).toFixed(0)} days per unit). This ties up merchant capital and increases holding costs. Consider clearing slow-moving items or reducing reorder quantities.`
+      return `Selling speed is ${turnover.toFixed(2)}× per year — below the ${benchmark} benchmark. Stock is sitting in the warehouse longer than ideal (roughly ${(365 / turnover).toFixed(0)} days per unit). This ties up merchant capital and increases holding costs. Consider clearing slow-moving items or reducing reorder quantities.`
     }
-    return `Throughput Turn is ${turnover.toFixed(2)}× per year — above the ${benchmark} benchmark. Stock is moving fast (roughly every ${(365 / turnover).toFixed(0)} days), but this may indicate understocking — you could be missing sales. Review reorder points.`
+    return `Selling speed is ${turnover.toFixed(2)}× per year — above the ${benchmark} benchmark. Stock is moving fast (roughly every ${(365 / turnover).toFixed(0)} days), but this may indicate understocking — you could be missing sales. Review reorder points.`
   }
 
   // critical
-  return `Throughput Turn is ${turnover.toFixed(2)}× per year — critically slow. The benchmark is ${benchmark}. At this rate, stock sits in the warehouse for roughly ${(365 / turnover).toFixed(0)} days before shipping. This strains merchant cash flow and increases obsolescence risk. Either demand has collapsed, or you're holding too much stock. Action required.`
+  return `Selling speed is ${turnover.toFixed(2)}× per year — critically slow. The benchmark is ${benchmark}. At this rate, stock sits in the warehouse for roughly ${(365 / turnover).toFixed(0)} days before shipping. This strains merchant cash flow and increases obsolescence risk. Either demand has collapsed, or you're holding too much stock. Action required.`
 }
 
-// ── Days of Supply (replaces DIO — 3PL-appropriate, no COGS needed) ──
+// ── Days of stock (replaces DIO — 3PL-appropriate, no COGS needed) ──
 export function dioNarrative(args: {
   dio: number
   status: Status
@@ -78,22 +78,22 @@ export function dioNarrative(args: {
   const benchmark = '60–90 days (APICS/ASCM)'
 
   if (dio === 0) {
-    return `Days of Supply: no data. The benchmark is ${benchmark}.`
+    return `Days of stock: no data. The benchmark is ${benchmark}.`
   }
 
   if (status === 'healthy') {
-    return `Days of Supply: ${dio.toFixed(0)} days — within the ${benchmark} benchmark. On average, a unit spends ${dio.toFixed(0)} days in the warehouse before shipping. Stock converts to shipments at a healthy pace.`
+    return `Days of stock: ${dio.toFixed(0)} days — within the ${benchmark} benchmark. On average, a unit spends ${dio.toFixed(0)} days in the warehouse before shipping. Stock converts to shipments at a healthy pace.`
   }
 
   if (status === 'monitor') {
     if (dio > 90) {
-      return `Days of Supply: ${dio.toFixed(0)} days — above the ${benchmark} benchmark. Units are sitting on shelves longer than typical for this industry (about ${((dio - 90) / 30).toFixed(0)} extra month(s) beyond the upper benchmark). Capital is tied up and obsolescence risk increases.`
+      return `Days of stock: ${dio.toFixed(0)} days — above the ${benchmark} benchmark. Units are sitting on shelves longer than typical for this industry (about ${((dio - 90) / 30).toFixed(0)} extra month(s) beyond the upper benchmark). Capital is tied up and obsolescence risk increases.`
     }
-    return `Days of Supply: ${dio.toFixed(0)} days — below the ${benchmark} benchmark. Stock is shipping very quickly, which is good for cash flow but may indicate understocking risk.`
+    return `Days of stock: ${dio.toFixed(0)} days — below the ${benchmark} benchmark. Stock is shipping very quickly, which is good for cash flow but may indicate understocking risk.`
   }
 
   // critical
-  return `Days of Supply: ${dio.toFixed(0)} days — critically high. The benchmark is ${benchmark}. At this rate, units spend ${(dio / 365).toFixed(1)} year(s) in the warehouse before shipping. This is unsustainable — each day beyond 90 represents capital that could be deployed elsewhere, and increases the risk of NRV write-downs under IAS 2.`
+  return `Days of stock: ${dio.toFixed(0)} days — critically high. The benchmark is ${benchmark}. At this rate, units spend ${(dio / 365).toFixed(1)} year(s) in the warehouse before shipping. This is unsustainable — each day beyond 90 represents capital that could be deployed elsewhere, and increases the risk of NRV write-downs under IAS 2.`
 }
 
 // ── Holding Cost (source: APICS/ASCM, not ACCA/CIMA) ──
@@ -224,16 +224,16 @@ export function sectionHeading(number: string, title: string): string {
 // ════════════════════════════════════════════════════════════════════════════
 
 export function turnoverCompact(turnover: number, status: Status): string {
-  if (turnover === 0) return 'Throughput Turn — no data'
+  if (turnover === 0) return 'Selling speed — no data'
   const daysPerTurn = 365 / turnover
   const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (turnover < 4 ? 'slow' : 'fast') : 'critically slow'
-  return `Throughput Turn ${turnover.toFixed(2)}×/yr · ${label} · stock moves every ${daysPerTurn.toFixed(0)}d · benchmark 4–6×`
+  return `Selling speed ${turnover.toFixed(2)}×/yr · ${label} · stock moves every ${daysPerTurn.toFixed(0)}d · benchmark 4–6×`
 }
 
 export function dioCompact(dio: number, status: Status): string {
-  if (dio === 0) return 'Days of Supply — no data'
+  if (dio === 0) return 'Days of stock — no data'
   const label = status === 'healthy' ? 'healthy' : status === 'monitor' ? (dio > 90 ? 'above benchmark' : 'below benchmark') : 'critically high'
-  return `Days of Supply ${dio.toFixed(0)}d · ${label} · benchmark 60–90d`
+  return `Days of stock ${dio.toFixed(0)}d · ${label} · benchmark 60–90d`
 }
 
 export function holdingCompact(pct: number, status: Status): string {

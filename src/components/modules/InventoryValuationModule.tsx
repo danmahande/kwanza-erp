@@ -168,11 +168,11 @@ const METHODS: Array<{ key: MethodKey; label: string; full: string; ias: string;
 // ── Benchmarks — corrected sources per research/inventory_benchmarks.md ──
 // Sources: APICS/ASCM Dictionary, IAS 2, ISA 320, Silver-Pyke-Thomas textbook
 const BENCHMARKS = {
-  // Throughput Turn (3PL-appropriate, replaces COGS-based Inventory Turnover)
+  // Selling Speed (3PL-appropriate, replaces COGS-based Inventory Turnover)
   // Source: APICS/ASCM body of knowledge (not IFRS/ACCA — 3PLs have no COGS)
   // Range applies to durable goods / general manufacturing; 3PL equivalent.
-  throughputTurn: { min: 4, max: 6, label: '4–6 turns/year', source: 'APICS/ASCM' },
-  // Days of Supply (3PL-appropriate, replaces DIO which requires COGS)
+  throughputTurn: { min: 4, max: 6, label: '4–6 times a year', source: 'APICS/ASCM' },
+  // Days of Stock (3PL-appropriate, replaces DIO which requires COGS)
   // Source: APICS/ASCM — operational metric, not financial
   daysOfSupply: { min: 60, max: 90, label: '60–90 days', source: 'APICS/ASCM' },
   // Holding cost 4-component split: Capital/Storage/Service/Risk
@@ -234,27 +234,27 @@ function holdingStatus(pct: number): Status {
 }
 
 /**
- * Plain-English translation of a turnover figure: how long one full
- * sell-through of the stock takes at the current pace. Chosen over the
- * raw "turns" unit because time is instantly graspable for non-accountants
- * (e.g. 0.05x → "≈ a full sell-through every 21 years").
+ * Plain-English translation of a turnover figure: how long the whole
+ * stock takes to sell at the current pace. Chosen over the raw "turns"
+ * unit because time is instantly graspable for non-accountants
+ * (e.g. 0.05x → "≈ the whole stock sells every 21 years").
  */
 function sellThroughPhrase(turnover: number): string {
   if (turnover <= 0) return ''
   const days = 365 / turnover
   if (days >= 730) {
     const y = Math.round(days / 365)
-    return `≈ a full sell-through every ${y} ${y === 1 ? 'year' : 'years'}`
+    return `≈ the whole stock sells every ${y} ${y === 1 ? 'year' : 'years'}`
   }
   if (days >= 60) {
     const m = Math.round(days / 30)
-    return `≈ a full sell-through every ${m} ${m === 1 ? 'month' : 'months'}`
+    return `≈ the whole stock sells every ${m} ${m === 1 ? 'month' : 'months'}`
   }
-  return `≈ a full sell-through every ${Math.max(1, Math.round(days))} days`
+  return `≈ the whole stock sells every ${Math.max(1, Math.round(days))} days`
 }
 
 /**
- * Plain-English companion to the Days of Supply figure. Normal ranges read
+ * Plain-English companion to the Days of Stock figure. Normal ranges read
  * as "of stock at today's pace"; extreme stock cover is translated into
  * years, which is what makes the number land (e.g. 7,566 days → "≈ 21 years").
  */
@@ -735,8 +735,8 @@ export default function InventoryValuationModule() {
     { label: 'INV AT COST', value: fmtUGX(kpis.totalInventoryAtCost, true) },
     { label: 'CARRYING VALUE', value: fmtUGX(kpis.totalCarryingValue, true), highlight: kpis.totalNrvWriteDown > 0, highlightColor: 'orange' as const },
     { label: 'NRV WRITE-DOWN', value: fmtUGX(kpis.totalNrvWriteDown, true), highlight: kpis.totalNrvWriteDown > 0, highlightColor: 'red' as const },
-    { label: 'TURNOVER', value: `${kpis.portfolioTurnover.toFixed(2)}×` },
-    { label: 'DIO', value: kpis.portfolioDio > 0 ? `${kpis.portfolioDio.toFixed(0)}d` : '—' },
+    { label: 'SELL SPEED', value: `${kpis.portfolioTurnover.toFixed(2)}×` },
+    { label: 'DAYS OF STOCK', value: kpis.portfolioDio > 0 ? `${kpis.portfolioDio.toFixed(0)}d` : '—' },
     { label: 'HOLDING %', value: fmtPct(kpis.holdingCostPct), highlight: kpis.holdingCostPct > 0.30, highlightColor: 'red' as const },
     { label: 'COGS (365d)', value: fmtUGX(kpis.cogsTrailing, true) },
   ]
@@ -750,7 +750,7 @@ export default function InventoryValuationModule() {
   const perfTabs = [
     {
       key: 'turnover' as const,
-      label: 'Throughput Turn',
+      label: 'Selling Speed',
       anim: 'turn' as const,
       // Concept-glyph loop speed follows the real value: slow turnover = slow cycle.
       glyphSeconds: Math.min(9, Math.max(1.5, 2.5 / Math.max(portfolio.turnover, 0.01))),
@@ -758,12 +758,12 @@ export default function InventoryValuationModule() {
       value: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
       shortValue: portfolio.turnover > 0 ? `${portfolio.turnover.toFixed(2)}×` : '—',
       unit: sellThroughPhrase(portfolio.turnover),
-      benchmark: '4–6 turns a year',
+      benchmark: '4–6 times a year',
       standard: 'A stock item should sell 4 to 6 times a year.',
       source: 'APICS/ASCM',
       band: { min: 4, max: 6 },
       domain: 8,
-      metricLabel: 'Turns/yr',
+      metricLabel: 'Times/yr',
       portfolioValue: portfolio.turnover,
       metricOf: (p: ProductValuation) => p.inventoryTurnover,
       fmtMetric: (n: number) => (n > 0 ? `${n.toFixed(2)}×` : '—'),
@@ -779,7 +779,7 @@ export default function InventoryValuationModule() {
     },
     {
       key: 'dio' as const,
-      label: 'Days of Supply',
+      label: 'Days of Stock',
       anim: 'days' as const,
       // The pile drains over one loop per supply horizon: long supply = glacial drain.
       glyphSeconds: Math.min(10, Math.max(2, portfolio.dio / 12)),
@@ -802,7 +802,7 @@ export default function InventoryValuationModule() {
       detail: dioNarrative({ dio: portfolio.dio, status: portfolio.dioStatus }),
       affectedProducts: affectedProducts.dio,
       columns: [
-        { label: 'Turns/yr', get: (p: ProductValuation) => (p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—') },
+        { label: 'Times/yr', get: (p: ProductValuation) => (p.inventoryTurnover > 0 ? `${p.inventoryTurnover.toFixed(2)}×` : '—') },
         { label: 'Carrying value', get: (p: ProductValuation) => fmtUGX(p.carryingValue, true) },
       ],
     },
@@ -1411,7 +1411,7 @@ export default function InventoryValuationModule() {
       <div className="mt-6 pt-4 border-t border-gray-100 text-[10px] text-gray-400 leading-relaxed">
         <p className="font-semibold uppercase tracking-wider text-gray-500 mb-1">Benchmark sources</p>
         <p>
-          Throughput Turn &amp; Days of Supply: <span className="font-mono">APICS/ASCM Supply Chain Dictionary</span> (operational metrics, not IFRS).
+          Selling Speed &amp; Days of Stock: <span className="font-mono">APICS/ASCM Supply Chain Dictionary</span> (named there as throughput turn &amp; days of supply — operational metrics, not IFRS).
           Holding cost 4-component split: <span className="font-mono">APICS/ASCM body of knowledge</span> (Capital/Storage/Service/Risk).
           Costing methods &amp; NRV test: <span className="font-mono">IAS 2 — Inventories</span> (IFRS Foundation).
           MPV materiality threshold: <span className="font-mono">ISA 320</span> (judgment-based internal policy, no fixed %).
@@ -2874,8 +2874,8 @@ function HelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
           <div>
             <p className="text-xs font-bold text-gray-700 uppercase tracking-wider mb-2">Benchmarks</p>
             <div className="space-y-1 text-xs text-gray-600">
-              <div className="flex justify-between"><span>Throughput Turn</span><span className="font-mono">{BENCHMARKS.throughputTurn.label} ({BENCHMARKS.throughputTurn.source})</span></div>
-              <div className="flex justify-between"><span>Days of Supply</span><span className="font-mono">{BENCHMARKS.daysOfSupply.label} ({BENCHMARKS.daysOfSupply.source})</span></div>
+              <div className="flex justify-between"><span>Selling Speed</span><span className="font-mono">{BENCHMARKS.throughputTurn.label} ({BENCHMARKS.throughputTurn.source})</span></div>
+              <div className="flex justify-between"><span>Days of Stock</span><span className="font-mono">{BENCHMARKS.daysOfSupply.label} ({BENCHMARKS.daysOfSupply.source})</span></div>
               <div className="flex justify-between"><span>Holding cost</span><span className="font-mono">{BENCHMARKS.holding.label} ({BENCHMARKS.holding.source})</span></div>
               <div className="flex justify-between"><span>NRV write-down</span><span className="font-mono">{BENCHMARKS.nrv.label} ({BENCHMARKS.nrv.source})</span></div>
               <div className="flex justify-between"><span>Variance materiality</span><span className="font-mono">{BENCHMARKS.variance.label} ({BENCHMARKS.variance.source})</span></div>
